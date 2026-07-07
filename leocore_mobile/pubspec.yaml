@@ -1,0 +1,38 @@
+name: leocore_mobile
+description: "LeoCore ERP Mobile — companion app for LeoCore ERP (Bahrain)."
+publish_to: 'none'
+version: 2.4.1+1
+
+environment:
+  sdk: ^3.5.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  provider: ^6.1.2
+  google_fonts: ^6.2.1
+  intl: any
+  dio: ^5.7.0
+  flutter_secure_storage: ^9.2.2
+  mobile_scanner: ^5.2.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.14.1
+
+flutter:
+  uses-material-design: true
+
+# Launcher icon generation: `dart run flutter_launcher_icons`
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon/ic_full.png"
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/icon/ic_fore.png"
+  remove_alpha_ios: true
