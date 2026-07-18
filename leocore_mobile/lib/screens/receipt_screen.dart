@@ -186,7 +186,7 @@ class ReceiptScreen extends StatelessWidget {
                 Expanded(
                     flex: 10,
                     child: OutlineButton2('Print',
-                        borderColor: lc.line, onTap: app.shareStmt)),
+                        borderColor: lc.line, onTap: () => app.showToast('Receipt printing is coming soon'))),
                 const SizedBox(width: 10),
                 Expanded(
                     flex: 13,

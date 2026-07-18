@@ -1,11 +1,18 @@
 import 'dart:async';
-import 'dart:io' show Platform;
+import 'dart:io' show File, Platform;
 
 import 'package:flutter/foundation.dart';
+import 'package:in_app_review/in_app_review.dart';
+import 'package:in_app_update/in_app_update.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:printing/printing.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../api/api_client.dart';
 import '../api/auth_api.dart';
+import '../api/biometrics.dart';
 import '../api/repositories.dart';
 import '../api/secure_store.dart';
 import '../data/mock_data.dart';
@@ -62,9 +69,16 @@ class AppState extends ChangeNotifier {
 
   // ── networking ─────────────────────────────────────────────────────
   final SecureStore _store = SecureStore();
+  final Biometrics _bio = Biometrics();
   late final ApiClient api = ApiClient(_store)..onSessionExpired = _onSessionExpired;
   late final AuthApi _auth = AuthApi(api, _store);
   late final LeoRepository _repo = LeoRepository(api);
+
+  /// Device has usable fingerprint/biometric hardware + enrolment.
+  bool biometricAvailable = false;
+
+  /// A saved session exists but is locked behind fingerprint unlock.
+  bool sessionLocked = false;
 
   bool demoMode = true; // becomes false after a successful live login
   bool loggingIn = false;
@@ -96,6 +110,8 @@ class AppState extends ChangeNotifier {
   ReportData? salesRep;
   ReportData? purchaseRep;
   bool reportsLoading = false;
+  /// Real last-7-days sales trend for the Home chart (live mode).
+  List<({String label, double total})>? homeTrend;
   List<({int id, String code, String name})> _warehouses = [];
   int warehouseId = 0;
 
@@ -288,6 +304,19 @@ class AppState extends ChangeNotifier {
   String get kpiOutstanding => kpis?.outstandingAr != null ? Money.fmt(kpis!.outstandingAr!) : (demoMode ? '13,276.500' : '—');
   String get kpiLowStock => kpis?.lowStock != null ? '${kpis!.lowStock}' : (demoMode ? '7' : '—');
 
+  // KPI sub-chips. In live mode only show figures the API actually returns —
+  // an empty string hides the chip rather than showing invented numbers.
+  String get kpiSalesChip => demoMode
+      ? '▲ 12.4% vs yesterday'
+      : (kpis?.salesThisMonth != null ? 'MTD ${Money.fmt(kpis!.salesThisMonth!)}' : '');
+  String get kpiCollectionsChip => demoMode ? '6 receipts' : '';
+  String get kpiArChip => demoMode
+      ? '3,275.250 over 60d'
+      : (kpis?.customers != null ? '${kpis!.customers} customers' : '');
+  String get kpiLowChip => demoMode
+      ? '2 out of stock'
+      : (kpis?.items != null ? '${kpis!.items} items tracked' : '');
+
   // ── stock count / cart (demo dataset) ──────────────────────────────
   List<Product> get countProducts => MockData.expected.keys.map(MockData.byId).toList();
   int countExpected(int id) => MockData.expected[id] ?? 0;
@@ -356,24 +385,40 @@ class AppState extends ChangeNotifier {
 
   Future<void> _restoreSession() async {
     final s = await _store.serverUrl;
-    if (s != null && s.isNotEmpty) {
-      serverUrl = s;
-      notifyListeners();
-    }
+    if (s != null && s.isNotEmpty) serverUrl = s;
+    biometrics = await _store.bioEnabled;
+    biometricAvailable = await _bio.available();
+    notifyListeners();
+
     final access = await _store.accessToken;
     final refresh = await _store.refreshToken;
-    if (access != null && refresh != null && access.isNotEmpty) {
-      await api.useServer(serverUrl);
-      api.setAccessToken(access);
-      demoMode = false;
-      screen = Screen.home;
+    final hasSession = access != null && refresh != null && access.isNotEmpty;
+    if (!hasSession) return;
+
+    // With fingerprint unlock on, hold the session locked behind a biometric
+    // prompt instead of dropping straight into the app.
+    if (biometrics && biometricAvailable) {
+      sessionLocked = true;
+      screen = Screen.login;
       notifyListeners();
-      try {
-        me = await _auth.me();
-        notifyListeners();
-      } catch (_) {/* keep going; token may still be valid for data */}
-      await _loadAll();
+      return;
     }
+    await _openSession(access);
+  }
+
+  /// Activates a stored session and loads the workspace.
+  Future<void> _openSession(String access) async {
+    await api.useServer(serverUrl);
+    api.setAccessToken(access);
+    demoMode = false;
+    sessionLocked = false;
+    screen = Screen.home;
+    notifyListeners();
+    try {
+      me = await _auth.me();
+      notifyListeners();
+    } catch (_) {/* token may still be valid for data */}
+    await _loadAll();
   }
 
   void _onSessionExpired() {
@@ -410,6 +455,18 @@ class AppState extends ChangeNotifier {
       if (_warehouses.isNotEmpty) {
         warehouseId = _warehouses.first.id;
         wh = _warehouses.first.name;
+      }
+      // Real 7-day trend for the Home chart.
+      final now = DateTime.now();
+      final fmt = DateFormat('yyyy-MM-dd');
+      try {
+        final r = await _repo.salesReport(
+          from: fmt.format(DateTime(now.year, now.month, now.day).subtract(const Duration(days: 6))),
+          to: fmt.format(now),
+        );
+        homeTrend = r.trend;
+      } catch (_) {
+        homeTrend = [];
       }
       if (_products!.isNotEmpty) pid = _products!.first.id;
       if (_customers!.isNotEmpty) cid = _customers!.first.id;
@@ -590,18 +647,30 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  /// Offline demo (mapped to the "Unlock with Face ID" action).
-  void doBiometric() {
-    demoMode = true;
-    _products = null;
-    _customers = null;
-    _statement = null;
-    _ledger = null;
-    kpis = null;
+  /// Fingerprint unlock — prompts for a biometric, then reopens the stored
+  /// session. Requires a prior password sign-in (we never store the password).
+  Future<void> doBiometric() async {
+    if (!biometricAvailable) {
+      biometricAvailable = await _bio.available();
+      if (!biometricAvailable) {
+        showToast('No fingerprint enrolled on this device');
+        return;
+      }
+    }
+    final access = await _store.accessToken;
+    final refresh = await _store.refreshToken;
+    if (access == null || refresh == null || access.isEmpty) {
+      showToast('Sign in with your password first');
+      return;
+    }
+    final res = await _bio.authenticate('Unlock LeoCore ERP');
+    if (!res.ok) {
+      if (res.error != null) showToast(res.error!);
+      return;
+    }
     loginErr = false;
     loginErrMsg = null;
-    screen = Screen.home;
-    showToast('Signed in — demo data');
+    await _openSession(access);
   }
 
   Future<void> doLogout() async {
@@ -613,6 +682,7 @@ class AppState extends ChangeNotifier {
     if (!demoMode) {
       await _auth.logout();
     }
+    sessionLocked = false;
     demoMode = true;
     _products = null;
     _customers = null;
@@ -753,7 +823,7 @@ class AppState extends ChangeNotifier {
     } else {
       cart.add(CartLine(pid, 1));
     }
-    showToast(note ?? 'Added to cart');
+    showToast(note ?? 'Added to memo');
   }
 
   void addCurrentToCart() => addToCart(product.id);
@@ -809,10 +879,178 @@ class AppState extends ChangeNotifier {
     if (!demoMode) _loadStatement(id);
   }
 
-  void callCust() => showToast('Calling ${customer.phone}…');
-  void waCust() => showToast('Opening WhatsApp…');
-  void navCust() => showToast('Opening Maps…');
-  void shareStmt() => showToast('Statement PDF shared');
+  Future<void> callCust() async {
+    final phone = customer.phone.trim();
+    if (phone.isEmpty) {
+      showToast('No phone number on file');
+      return;
+    }
+    final uri = Uri(scheme: 'tel', path: phone.replaceAll(RegExp(r'[^0-9+]'), ''));
+    if (!await launchUrl(uri)) showToast('Could not open the dialer');
+  }
+
+  Future<void> waCust() async {
+    final digits = customer.phone.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.isEmpty) {
+      showToast('No phone number on file');
+      return;
+    }
+    final uri = Uri.parse('https://wa.me/$digits');
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      showToast('WhatsApp is not installed');
+    }
+  }
+
+  Future<void> navCust() async {
+    final q = Uri.encodeComponent(
+        [customer.name, customer.area].where((s) => s.isNotEmpty).join(', '));
+    final uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$q');
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      showToast('Could not open Maps');
+    }
+  }
+
+  // ── statement PDF (download → share / print) ───────────────────────
+  /// True while the statement PDF is being fetched from the server, so the
+  /// Share / Print buttons can show an inline spinner.
+  bool statementSharing = false; // busy while sharing
+  bool statementPrinting = false; // busy while printing
+
+  bool get statementBusy => statementSharing || statementPrinting;
+
+  /// Downloads the statement PDF and returns validated bytes + a safe
+  /// filename, or `null` if it isn't a real PDF (with a toast explaining why).
+  /// Shared by [shareStmt] and [printStmt].
+  Future<({Uint8List bytes, String filename})?> _fetchStatementPdf() async {
+    final id = statementParty == 'supplier' ? supplierId : cid;
+    final asOn = statementAsOn == null ? null : DateFormat('yyyy-MM-dd').format(statementAsOn!);
+    final res = await _repo.statementPdf(statementParty, id, asOn: asOn);
+    if (res.bytes.isEmpty) {
+      showToast('The statement came back empty');
+      return null;
+    }
+    // Guard: the server must actually return a PDF. If PDF export isn't
+    // enabled it returns JSON — don't hand the user a broken .pdf.
+    final isPdf = res.contentType.toLowerCase().contains('pdf') ||
+        (res.bytes.length >= 4 &&
+            res.bytes[0] == 0x25 && res.bytes[1] == 0x50 &&
+            res.bytes[2] == 0x44 && res.bytes[3] == 0x46); // %PDF
+    if (!isPdf) {
+      showToast('PDF export is not enabled on your server yet');
+      return null;
+    }
+    final safe = res.filename.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+    return (bytes: Uint8List.fromList(res.bytes), filename: safe);
+  }
+
+  Future<void> shareStmt() async {
+    if (demoMode) {
+      showToast('Statement PDF is available after live sign-in');
+      return;
+    }
+    if (statementBusy) return;
+    statementSharing = true;
+    notifyListeners();
+    try {
+      final pdf = await _fetchStatementPdf();
+      if (pdf == null) return;
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/${pdf.filename}');
+      await file.writeAsBytes(pdf.bytes, flush: true);
+      await Share.shareXFiles(
+        [XFile(file.path, mimeType: 'application/pdf', name: pdf.filename)],
+        subject: 'Account statement — $statementPartyName',
+      );
+    } on ApiException catch (e) {
+      showToast(e.message);
+    } catch (_) {
+      showToast('Could not generate the statement PDF');
+    } finally {
+      statementSharing = false;
+      notifyListeners();
+    }
+  }
+
+  /// Hands the downloaded PDF to the phone's print framework, where the user
+  /// can pick a printer (or "Save as PDF").
+  Future<void> printStmt() async {
+    if (demoMode) {
+      showToast('Statement PDF is available after live sign-in');
+      return;
+    }
+    if (statementBusy) return;
+    statementPrinting = true;
+    notifyListeners();
+    try {
+      final pdf = await _fetchStatementPdf();
+      if (pdf == null) return;
+      await Printing.layoutPdf(
+        name: pdf.filename,
+        onLayout: (_) async => pdf.bytes,
+      );
+    } on ApiException catch (e) {
+      showToast(e.message);
+    } catch (_) {
+      showToast('Could not open the print dialog');
+    } finally {
+      statementPrinting = false;
+      notifyListeners();
+    }
+  }
+
+  // ── in-app review ──────────────────────────────────────────────────
+  final InAppReview _review = InAppReview.instance;
+
+  Future<void> rateApp() async {
+    try {
+      if (await _review.isAvailable()) {
+        await _review.requestReview();
+      } else {
+        await _review.openStoreListing();
+      }
+    } catch (_) {
+      showToast('Could not open the store');
+    }
+  }
+
+  /// Gentle, once-per-install review prompt after a positive moment.
+  Future<void> _maybeAskReview() async {
+    if (demoMode) return;
+    if (await _store.reviewAsked) return;
+    await _store.setReviewAsked();
+    try {
+      if (await _review.isAvailable()) await _review.requestReview();
+    } catch (_) {}
+  }
+
+  // ── in-app update ──────────────────────────────────────────────────
+  bool updateAvailable = false;
+  bool updateDismissed = false;
+
+  Future<void> checkForUpdate() async {
+    try {
+      final info = await InAppUpdate.checkForUpdate();
+      if (info.updateAvailability == UpdateAvailability.updateAvailable) {
+        updateAvailable = true;
+        notifyListeners();
+      }
+    } catch (_) {/* not installed from Play, or offline — ignore */}
+  }
+
+  void dismissUpdate() {
+    updateDismissed = true;
+    notifyListeners();
+  }
+
+  Future<void> startUpdate() async {
+    updateDismissed = true;
+    notifyListeners();
+    try {
+      await InAppUpdate.performImmediateUpdate();
+    } catch (_) {
+      showToast('Update could not be started');
+    }
+  }
 
   // scan
   Screen _scanReturn = Screen.home; // where "close" returns after scanning
@@ -989,10 +1227,11 @@ class AppState extends ChangeNotifier {
 
   void completeSale() {
     if (cart.isEmpty) {
-      showToast('Add items to the cart first');
+      showToast('Add items to the memo first');
       return;
     }
     nav(Screen.receipt);
+    _maybeAskReview();
   }
 
   void newSale() {
@@ -1192,6 +1431,10 @@ class AppState extends ChangeNotifier {
   void toggleBio() {
     biometrics = !biometrics;
     notifyListeners();
+    _store.setBioEnabled(biometrics);
+    if (biometrics && !biometricAvailable) {
+      showToast('No fingerprint enrolled on this device');
+    }
   }
 
   void toggleOffline() {

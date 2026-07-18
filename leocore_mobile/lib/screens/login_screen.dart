@@ -112,7 +112,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   ],
                 ),
                 const SizedBox(height: 18),
-                Text('ERP Mobile · Sign in to your workspace',
+                Text(
+                    app.sessionLocked
+                        ? 'ERP Mobile · Locked — unlock with your fingerprint'
+                        : 'ERP Mobile · Sign in to your workspace',
                     style: TextStyle(
                         fontSize: 14,
                         height: 1.5,
@@ -283,10 +286,10 @@ class _LoginScreenState extends State<LoginScreen> {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.face_retouching_natural,
-                                    color: lc.gold, size: 22),
+                                Icon(Icons.fingerprint,
+                                    color: lc.gold, size: 24),
                                 const SizedBox(width: 10),
-                                Text('Unlock with Face ID',
+                                Text('Unlock with fingerprint',
                                     style: TextStyle(
                                         fontSize: 15,
                                         fontWeight: FontWeight.w600,
@@ -300,7 +303,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 18),
                   Center(
-                      child: Text('LeoCore ERP · v2.4.1 · erp.leocore.bh',
+                      child: Text('LeoCore ERP · v2.4.1 · leocoreerp.seksolution.com',
                           style: TextStyle(fontSize: 12, color: lc.mut))),
                 ],
               ),

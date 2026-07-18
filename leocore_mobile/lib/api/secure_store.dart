@@ -14,9 +14,19 @@ class SecureStore {
   static const _kRefresh = 'refresh_token';
   static const _kScope = 'token_scope';
   static const _kDeviceId = 'device_id';
+  static const _kBio = 'biometric_unlock';
+  static const _kReview = 'review_asked';
 
   Future<String?> get serverUrl => _storage.read(key: _kServer);
   Future<void> setServerUrl(String v) => _storage.write(key: _kServer, value: v);
+
+  /// Whether the user has enabled fingerprint unlock (defaults to on).
+  Future<bool> get bioEnabled async => (await _storage.read(key: _kBio)) != '0';
+  Future<void> setBioEnabled(bool v) => _storage.write(key: _kBio, value: v ? '1' : '0');
+
+  /// One-time flag so we only auto-prompt for a review once per install.
+  Future<bool> get reviewAsked async => (await _storage.read(key: _kReview)) == '1';
+  Future<void> setReviewAsked() => _storage.write(key: _kReview, value: '1');
 
   Future<String?> get accessToken => _storage.read(key: _kAccess);
   Future<String?> get refreshToken => _storage.read(key: _kRefresh);

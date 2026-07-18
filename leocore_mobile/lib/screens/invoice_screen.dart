@@ -334,7 +334,7 @@ class _EmptyCart extends StatelessWidget {
           children: [
             Icon(Icons.shopping_cart_outlined, size: 48, color: lc.line),
             const SizedBox(height: 12),
-            const Text('Cart is empty', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+            const Text('No items yet', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
             const SizedBox(height: 8),
             Text('Scan a barcode or add items from Products.', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: lc.mut)),
           ],

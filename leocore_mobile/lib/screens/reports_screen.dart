@@ -22,7 +22,7 @@ class ReportsScreen extends StatelessWidget {
         ScreenHeader(
           title: 'Reports',
           onBack: () => app.nav(Screen.home),
-          actions: [IconChip(Icons.ios_share, fg: lc.ink, onTap: app.shareStmt)],
+          actions: [IconChip(Icons.ios_share, fg: lc.ink, onTap: () => app.showToast('Report export is coming soon'))],
         ),
         // Range chips
         SizedBox(
@@ -137,7 +137,11 @@ class ReportsScreen extends StatelessWidget {
           children: [
             Text(label.toUpperCase(), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.5, color: lc.mut)),
             const SizedBox(height: 4),
-            Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, fontFeatures: [FontFeature.tabularFigures()])),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(value, maxLines: 1, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, fontFeatures: [FontFeature.tabularFigures()])),
+            ),
             const SizedBox(height: 4),
             Text(delta, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: deltaColor)),
           ],

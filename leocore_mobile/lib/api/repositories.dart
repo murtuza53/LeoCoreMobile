@@ -184,6 +184,20 @@ class LeoRepository {
     return mapStatement(j);
   }
 
+  /// Streams the statement as a PDF (party = 'customer' | 'supplier').
+  Future<({List<int> bytes, String filename, String contentType})> statementPdf(
+    String party,
+    int id, {
+    String? asOn,
+  }) {
+    final seg = party == 'supplier' ? 'suppliers' : 'customers';
+    return _client.downloadBytes(
+      '/$seg/$id/statement',
+      query: {'format': 'pdf', if (asOn != null) 'asOn': asOn},
+      fallbackName: 'statement_$id.pdf',
+    );
+  }
+
   // ── Reports ────────────────────────────────────────────────────────────
   Future<ReportData> salesReport({required String from, required String to}) async {
     final j = await _client.getJson('/reports/sales', query: {'from': from, 'to': to});

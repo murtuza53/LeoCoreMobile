@@ -89,15 +89,15 @@ class HomeScreen extends StatelessWidget {
               const SizedBox(height: 14),
               // KPI grid 2×2
               Row(children: [
-                Expanded(child: _Kpi(label: "Today's sales", value: app.kpiSales, unit: 'BHD', chip: '▲ 12.4% vs yesterday', chipFg: lc.ok, chipBg: lc.okbg, onTap: app.mReports ? app.goReports : null)),
+                Expanded(child: _Kpi(label: "Today's sales", value: app.kpiSales, unit: 'BHD', chip: app.kpiSalesChip, chipFg: lc.ok, chipBg: lc.okbg, onTap: app.mReports ? app.goReports : null)),
                 const SizedBox(width: 10),
-                Expanded(child: _Kpi(label: 'Collections', value: app.kpiCollections, unit: 'BHD', chip: '6 receipts', chipFg: lc.mut, chipBg: lc.soft)),
+                Expanded(child: _Kpi(label: 'Collections', value: app.kpiCollections, unit: 'BHD', chip: app.kpiCollectionsChip, chipFg: lc.mut, chipBg: lc.soft)),
               ]),
               const SizedBox(height: 10),
               Row(children: [
-                Expanded(child: _Kpi(label: 'Outstanding AR', value: app.kpiOutstanding, unit: 'BHD', valueColor: lc.prim2, chip: '3,275.250 over 60d', chipFg: lc.bad, chipBg: lc.badbg, onTap: () => app.nav(Screen.customers))),
+                Expanded(child: _Kpi(label: 'Outstanding AR', value: app.kpiOutstanding, unit: 'BHD', valueColor: lc.prim2, chip: app.kpiArChip, chipFg: lc.bad, chipBg: lc.badbg, onTap: () => app.nav(Screen.customers))),
                 const SizedBox(width: 10),
-                Expanded(child: _Kpi(label: 'Low stock', value: app.kpiLowStock, unit: 'items', valueColor: lc.warn, chip: '2 out of stock', chipFg: lc.warn, chipBg: lc.warnbg, onTap: app.goLow)),
+                Expanded(child: _Kpi(label: 'Low stock', value: app.kpiLowStock, unit: 'items', valueColor: lc.warn, chip: app.kpiLowChip, chipFg: lc.warn, chipBg: lc.warnbg, onTap: app.goLow)),
               ]),
               const SizedBox(height: 14),
               _SalesTrendCard(),
@@ -157,8 +157,10 @@ class _Kpi extends StatelessWidget {
               Text(unit, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: lc.mut)),
             ],
           ),
-          const SizedBox(height: 6),
-          Pill(chip, bg: chipBg, fg: chipFg, size: 11),
+          if (chip.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Pill(chip, bg: chipBg, fg: chipFg, size: 11),
+          ],
         ],
       ),
     );
@@ -169,6 +171,11 @@ class _SalesTrendCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final lc = context.lc;
+    final app = context.watch<AppState>();
+    final live = !app.demoMode;
+    final trend = app.homeTrend;
+    final hasTrend = trend != null && trend.any((t) => t.total > 0);
+
     return LcCard(
       shadow: true,
       padding: const EdgeInsets.fromLTRB(14, 16, 14, 10),
@@ -185,14 +192,69 @@ class _SalesTrendCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          AspectRatio(
-            aspectRatio: 340 / 130,
-            child: CustomPaint(painter: _TrendPainter(lc)),
-          ),
+          if (!live)
+            AspectRatio(aspectRatio: 340 / 130, child: CustomPaint(painter: _TrendPainter(lc)))
+          else if (hasTrend)
+            AspectRatio(aspectRatio: 340 / 130, child: CustomPaint(painter: _LiveTrendPainter(lc, trend)))
+          else
+            SizedBox(
+              height: 96,
+              child: Center(
+                child: Text('No sales in the last 7 days', style: TextStyle(fontSize: 13, color: lc.mut)),
+              ),
+            ),
         ],
       ),
     );
   }
+}
+
+/// Paints the real daily-sales trend returned by `/reports/sales`.
+class _LiveTrendPainter extends CustomPainter {
+  final LcColors lc;
+  final List<({String label, double total})> data;
+  _LiveTrendPainter(this.lc, this.data);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final grid = Paint()..color = lc.line..strokeWidth = 1;
+    const left = 34.0, right = 10.0, top = 10.0, bottom = 26.0;
+    final w = size.width, h = size.height;
+    final plotW = w - left - right, plotH = h - top - bottom;
+    for (var i = 0; i < 4; i++) {
+      final y = top + plotH * i / 3;
+      canvas.drawLine(Offset(left, y), Offset(w - right, y), grid);
+    }
+    final maxV = data.map((e) => e.total).fold<double>(1, (a, b) => b > a ? b : a);
+    Offset pt(int i) {
+      final x = left + (data.length == 1 ? plotW / 2 : plotW * i / (data.length - 1));
+      final y = top + plotH * (1 - (data[i].total / maxV));
+      return Offset(x, y);
+    }
+
+    final path = Path();
+    for (var i = 0; i < data.length; i++) {
+      final p = pt(i);
+      i == 0 ? path.moveTo(p.dx, p.dy) : path.lineTo(p.dx, p.dy);
+    }
+    final area = Path.from(path)
+      ..lineTo(pt(data.length - 1).dx, top + plotH)
+      ..lineTo(pt(0).dx, top + plotH)
+      ..close();
+    canvas.drawPath(area, Paint()..color = lc.prim.withValues(alpha: 0.09));
+    canvas.drawPath(
+        path,
+        Paint()
+          ..color = lc.icon
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.2
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round);
+    canvas.drawCircle(pt(data.length - 1), 4.5, Paint()..color = lc.gold);
+  }
+
+  @override
+  bool shouldRepaint(covariant _LiveTrendPainter old) => old.data != data || old.lc != lc;
 }
 
 class _TrendPainter extends CustomPainter {

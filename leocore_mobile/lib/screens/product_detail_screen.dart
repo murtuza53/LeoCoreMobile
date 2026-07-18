@@ -230,7 +230,7 @@ class ProductDetailScreen extends StatelessWidget {
               children: [
                 Expanded(
                     flex: 15,
-                    child: PrimaryButton('Add to cart',
+                    child: PrimaryButton('Add to memo',
                         icon: Icons.shopping_cart_outlined,
                         onTap: app.addCurrentToCart)),
                 const SizedBox(width: 10),

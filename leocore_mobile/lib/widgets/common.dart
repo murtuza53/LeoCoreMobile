@@ -205,22 +205,31 @@ class IconChip extends StatelessWidget {
   final Color? bg;
   final Color? fg;
   final Border? border;
-  const IconChip(this.icon, {super.key, this.onTap, this.size = 42, this.bg, this.fg, this.border});
+  final bool busy;
+  const IconChip(this.icon, {super.key, this.onTap, this.size = 42, this.bg, this.fg, this.border, this.busy = false});
   @override
   Widget build(BuildContext context) {
     final lc = context.lc;
+    final tint = fg ?? lc.ink;
     return GestureDetector(
-      onTap: onTap,
+      onTap: busy ? null : onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
         width: size,
         height: size,
+        alignment: Alignment.center,
         decoration: BoxDecoration(
           color: bg ?? lc.card,
           borderRadius: BorderRadius.circular(12),
           border: border ?? Border.all(color: lc.line),
         ),
-        child: Icon(icon, size: size * 0.44, color: fg ?? lc.ink),
+        child: busy
+            ? SizedBox(
+                width: size * 0.4,
+                height: size * 0.4,
+                child: CircularProgressIndicator(strokeWidth: 2.2, color: tint),
+              )
+            : Icon(icon, size: size * 0.44, color: tint),
       ),
     );
   }
@@ -254,28 +263,35 @@ class PrimaryButton extends StatelessWidget {
   final VoidCallback? onTap;
   final IconData? icon;
   final double height;
-  const PrimaryButton(this.label, {super.key, this.onTap, this.icon, this.height = 52});
+  final bool busy;
+  const PrimaryButton(this.label, {super.key, this.onTap, this.icon, this.height = 52, this.busy = false});
   @override
   Widget build(BuildContext context) {
     final lc = context.lc;
     return GestureDetector(
-      onTap: onTap,
+      onTap: busy ? null : onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
         height: height,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: lc.prim,
+          color: busy ? lc.prim.withValues(alpha: 0.7) : lc.prim,
           borderRadius: BorderRadius.circular(12),
           boxShadow: [BoxShadow(color: lc.prim.withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 4))],
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (icon != null) ...[Icon(icon, color: Colors.white, size: 20), const SizedBox(width: 9)],
-            Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white)),
-          ],
-        ),
+        child: busy
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white),
+              )
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (icon != null) ...[Icon(icon, color: Colors.white, size: 20), const SizedBox(width: 9)],
+                  Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white)),
+                ],
+              ),
       ),
     );
   }
@@ -287,12 +303,13 @@ class OutlineButton2 extends StatelessWidget {
   final VoidCallback? onTap;
   final Color? borderColor;
   final double height;
-  const OutlineButton2(this.label, {super.key, this.onTap, this.borderColor, this.height = 52});
+  final bool busy;
+  const OutlineButton2(this.label, {super.key, this.onTap, this.borderColor, this.height = 52, this.busy = false});
   @override
   Widget build(BuildContext context) {
     final lc = context.lc;
     return GestureDetector(
-      onTap: onTap,
+      onTap: busy ? null : onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
         height: height,
@@ -301,7 +318,13 @@ class OutlineButton2 extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: borderColor ?? lc.prim, width: 1.5),
         ),
-        child: Text(label, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: lc.tprim)),
+        child: busy
+            ? SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2.2, color: lc.tprim),
+              )
+            : Text(label, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: lc.tprim)),
       ),
     );
   }

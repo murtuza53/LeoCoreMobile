@@ -91,7 +91,14 @@ class SettingsScreen extends StatelessWidget {
                     GestureDetector(
                       onTap: app.toggleBio,
                       behavior: HitTestBehavior.opaque,
-                      child: _toggleRow(context, 'Biometric unlock', 'Face ID for sign-in and voids', app.biometrics, lc.ok),
+                      child: _toggleRow(
+                          context,
+                          'Fingerprint unlock',
+                          app.biometricAvailable
+                              ? 'Require your fingerprint to reopen the app'
+                              : 'No fingerprint enrolled on this device',
+                          app.biometrics,
+                          lc.ok),
                     ),
                     _divider(lc),
                     GestureDetector(
@@ -153,6 +160,28 @@ class SettingsScreen extends StatelessWidget {
                       _deviceRow(context, 'Zebra TC26 · Store', 'Last sync 3 days ago', active: false, last: true),
                     ] else
                       _deviceRow(context, app.deviceLabel, 'This device · signed in', active: true, last: true),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              // Rate the app
+              LcCard(
+                onTap: app.rateApp,
+                padding: const EdgeInsets.all(14),
+                child: Row(
+                  children: [
+                    Icon(Icons.star_rate_rounded, size: 22, color: lc.gold),
+                    const SizedBox(width: 13),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Rate LeoCore ERP', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                          Text('Enjoying the app? Leave a review', style: TextStyle(fontSize: 12, color: Color(0xFF6F695C))),
+                        ],
+                      ),
+                    ),
+                    Icon(Icons.chevron_right, size: 18, color: lc.mut),
                   ],
                 ),
               ),

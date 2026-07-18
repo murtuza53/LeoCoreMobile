@@ -96,6 +96,26 @@ class ApiClient {
     await _send('POST', path, body: body, auth: auth);
   }
 
+  /// Downloads binary content (e.g. a PDF). Returns the bytes plus the filename
+  /// parsed from Content-Disposition (falls back to [fallbackName]).
+  Future<({List<int> bytes, String filename, String contentType})> downloadBytes(
+    String path, {
+    Map<String, dynamic>? query,
+    required String fallbackName,
+  }) async {
+    final res = await _send('GET', path, query: query, responseBytes: true);
+    final data = res.data;
+    final List<int> bytes = data is List<int> ? data : (data is String ? data.codeUnits : const []);
+    var name = fallbackName;
+    final cd = res.headers.value('content-disposition');
+    if (cd != null) {
+      final m = RegExp(r'filename\*?=(?:UTF-8'')?"?([^";]+)"?', caseSensitive: false).firstMatch(cd);
+      if (m != null) name = Uri.decodeComponent(m.group(1)!.trim());
+    }
+    final ct = res.headers.value('content-type') ?? '';
+    return (bytes: bytes, filename: name, contentType: ct);
+  }
+
   Future<Response<dynamic>> _send(
     String method,
     String path, {
@@ -103,12 +123,14 @@ class ApiClient {
     Object? body,
     bool auth = true,
     bool isRetry = false,
+    bool responseBytes = false,
   }) async {
     if (_baseUrl == null || _baseUrl!.isEmpty) {
       throw const ApiException('NO_SERVER', 'No server address configured.');
     }
     final options = Options(
       method: method,
+      responseType: responseBytes ? ResponseType.bytes : ResponseType.json,
       headers: {
         if (auth && _accessToken != null) 'Authorization': 'Bearer $_accessToken',
       },
@@ -130,7 +152,7 @@ class ApiClient {
       // Try one rotating refresh, then retry the original request.
       final refreshed = await _tryRefresh();
       if (refreshed) {
-        return _send(method, path, query: query, body: body, auth: auth, isRetry: true);
+        return _send(method, path, query: query, body: body, auth: auth, isRetry: true, responseBytes: responseBytes);
       }
       onSessionExpired?.call();
     }

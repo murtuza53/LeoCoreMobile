@@ -41,8 +41,8 @@ class StatementScreen extends StatelessWidget {
           subtitle: app.statementPartyName,
           onBack: () => app.nav(app.statementReturn),
           actions: [
-            IconChip(Icons.ios_share, fg: lc.ink, onTap: app.shareStmt),
-            IconChip(Icons.print_outlined, fg: lc.ink, onTap: app.shareStmt),
+            IconChip(Icons.ios_share, fg: lc.ink, onTap: app.shareStmt, busy: app.statementSharing),
+            IconChip(Icons.print_outlined, fg: lc.ink, onTap: app.printStmt, busy: app.statementPrinting),
           ],
         ),
         // As-on date row (tap to pick)
@@ -134,7 +134,18 @@ class StatementScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 12),
-              PrimaryButton('Share PDF via WhatsApp', icon: Icons.ios_share, onTap: app.shareStmt),
+              PrimaryButton(
+                app.statementSharing ? 'Preparing PDF…' : 'Share PDF via WhatsApp',
+                icon: Icons.ios_share,
+                onTap: app.shareStmt,
+                busy: app.statementSharing,
+              ),
+              const SizedBox(height: 10),
+              OutlineButton2(
+                'Print statement',
+                onTap: app.printStmt,
+                busy: app.statementPrinting,
+              ),
             ],
           ),
         ),
