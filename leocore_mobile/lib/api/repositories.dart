@@ -124,6 +124,45 @@ class StatementResult {
   });
 }
 
+/// A created sales document (cash-invoice draft or quotation).
+///
+/// The server prices the lines and assigns the number, so every total here
+/// comes back from it rather than being computed on the device.
+class SalesDocResult {
+  final int id;
+  final String number;
+  final String status; // "Draft" for cash invoices, "Open" for quotations
+  final String date;
+  final String expiryDate; // quotations only
+  final double subTotal;
+  final double discount;
+  final double vatAmount;
+  final double grandTotal;
+  const SalesDocResult({
+    required this.id,
+    required this.number,
+    this.status = '',
+    this.date = '',
+    this.expiryDate = '',
+    this.subTotal = 0,
+    this.discount = 0,
+    this.vatAmount = 0,
+    this.grandTotal = 0,
+  });
+
+  factory SalesDocResult.fromJson(Map j) => SalesDocResult(
+        id: _i(j, ['id']),
+        number: _s(j, ['number']),
+        status: _s(j, ['status']),
+        date: _fmtDate(_s(j, ['date'])),
+        expiryDate: _fmtDate(_s(j, ['expiryDate'])),
+        subTotal: _d(j, ['subTotal']),
+        discount: _d(j, ['discount']),
+        vatAmount: _d(j, ['vatAmount']),
+        grandTotal: _d(j, ['grandTotal']),
+      );
+}
+
 /// Repository over the read + item-master endpoints.
 class LeoRepository {
   LeoRepository(this._client);
@@ -196,6 +235,74 @@ class LeoRepository {
       query: {'format': 'pdf', if (asOn != null) 'asOn': asOn},
       fallbackName: 'statement_$id.pdf',
     );
+  }
+
+  // ── Sales documents (cash-invoice draft & quotations) ──────────────────
+  /// Result of creating a sales document.
+  ///
+  /// The server prices the lines, so the totals come back from it.
+  Future<SalesDocResult> createCashInvoiceDraft({
+    required int warehouseId,
+    int? customerId,
+    required List<({int itemId, int qty})> lines,
+    required String idempotencyKey,
+  }) async {
+    final j = await _client.postJson(
+      '/sales/cash-invoice/draft',
+      idempotencyKey: idempotencyKey,
+      body: {
+        'warehouseId': warehouseId,
+        if (customerId != null) 'customerId': customerId,
+        'lines': [for (final l in lines) {'itemId': l.itemId, 'qty': l.qty}],
+      },
+    );
+    return SalesDocResult.fromJson(j);
+  }
+
+  Future<SalesDocResult> createQuotation({
+    required int customerId,
+    required List<({int itemId, int qty})> lines,
+    required String idempotencyKey,
+  }) async {
+    final j = await _client.postJson(
+      '/sales/quotations',
+      idempotencyKey: idempotencyKey,
+      body: {
+        'customerId': customerId,
+        'lines': [for (final l in lines) {'itemId': l.itemId, 'qty': l.qty}],
+      },
+    );
+    return SalesDocResult.fromJson(j);
+  }
+
+  Future<({List<int> bytes, String filename, String contentType})> quotationPdf(int id) {
+    return _client.downloadBytes('/sales/quotations/$id/pdf', fallbackName: 'quotation_$id.pdf');
+  }
+
+  // ── Product photos ─────────────────────────────────────────────────────
+  /// Uploads a photo for [productId] as multipart (field name `images`) and
+  /// returns the product's images as the server now holds them.
+  Future<List<ProductImage>> uploadProductImage(int productId, String filePath) async {
+    final j = await _client.postMultipart(
+      '/products/$productId/images',
+      field: 'images',
+      filePaths: [filePath],
+    );
+    return mapProductImages(j['images']);
+  }
+
+  Future<void> deleteProductImage(int productId, int imageId) =>
+      _client.deleteNoContent('/products/$productId/images/$imageId');
+
+  static List<ProductImage> mapProductImages(dynamic raw) {
+    if (raw is! List) return const [];
+    return raw.whereType<Map>().map((m) {
+      return ProductImage(
+        id: _i(m, ['id']),
+        url: _s(m, ['url']),
+        isPrimary: _pick(m, ['isPrimary']) == true,
+      );
+    }).where((i) => i.url.isNotEmpty).toList();
   }
 
   // ── Reports ────────────────────────────────────────────────────────────
@@ -313,6 +420,7 @@ class LeoRepository {
       stock: onHand,
       barcode: _s(j, ['barcode']),
       wh: wh,
+      images: mapProductImages(_pick(j, ['images'])),
     );
   }
 

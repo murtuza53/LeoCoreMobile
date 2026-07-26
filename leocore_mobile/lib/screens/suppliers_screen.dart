@@ -35,16 +35,16 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
 
     return Column(
       children: [
-        ScreenHeader(title: 'Suppliers', onBack: () => app.nav(Screen.home)),
+        ScreenHeader(title: context.tr('Suppliers'), onBack: () => app.nav(Screen.home)),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
-          child: SearchField(hint: 'Search suppliers', controller: _search, onChanged: app.setSupplierQuery),
+          child: SearchField(hint: context.tr('Search suppliers'), controller: _search, onChanged: app.setSupplierQuery),
         ),
         Expanded(
           child: app.suppliersLoading && rows.isEmpty
               ? Center(child: CircularProgressIndicator(color: lc.prim, strokeWidth: 2.4))
               : rows.isEmpty
-                  ? Center(child: Text(app.demoMode ? 'Suppliers are available on live sign-in' : 'No suppliers', style: TextStyle(fontSize: 14, color: lc.mut)))
+                  ? Center(child: Text(app.demoMode ? context.tr('Suppliers are available on live sign-in') : context.tr('No suppliers'), style: TextStyle(fontSize: 14, color: lc.mut)))
                   : ListView.separated(
                       padding: const EdgeInsets.fromLTRB(16, 2, 16, 60),
                       itemCount: rows.length,
@@ -76,7 +76,7 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
                               ),
                               const SizedBox(width: 8),
                               Row(children: [
-                                Text('Statement', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: lc.tprim)),
+                                Text(context.tr('Statement'), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: lc.tprim)),
                                 Icon(Icons.chevron_right, size: 18, color: lc.mut),
                               ]),
                             ],

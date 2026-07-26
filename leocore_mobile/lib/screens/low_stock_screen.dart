@@ -23,11 +23,11 @@ class LowStockScreen extends StatelessWidget {
 
     return Column(
       children: [
-        ScreenHeader(title: 'Stock alerts', onBack: () => app.nav(Screen.home)),
+        ScreenHeader(title: context.tr('Stock alerts'), onBack: () => app.nav(Screen.home)),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 6, 16, 10),
           child: Segmented(
-            options: ['Low stock · $lowCount', 'Dead stock · $deadCount'],
+            options: ['${context.tr('Low stock')} · $lowCount', '${context.tr('Dead stock')} · $deadCount'],
             selected: app.stockTab == 'low' ? 0 : 1,
             onSelect: (i) => app.pickStockTab(i == 0 ? 'low' : 'dead'),
           ),
@@ -47,17 +47,17 @@ class LowStockScreen extends StatelessWidget {
     final lc = context.lc;
     if (!demo) {
       final rows = app.lowStockRows ?? const <StockRowData>[];
-      if (rows.isEmpty) return _empty(context, 'No low-stock items');
+      if (rows.isEmpty) return _empty(context, context.tr('No low-stock items'));
       return ListView.separated(
         padding: const EdgeInsets.fromLTRB(16, 2, 16, 60),
         itemCount: rows.length,
         separatorBuilder: (_, __) => const SizedBox(height: 8),
         itemBuilder: (_, i) {
           final r = rows[i];
-          final (sev, sevFg) = r.onHand == 0 ? ('Critical', lc.bad) : r.onHand <= 10 ? ('High', lc.warn) : ('Medium', lc.gold);
+          final (sev, sevFg) = r.onHand == 0 ? (context.tr('Critical'), lc.bad) : r.onHand <= 10 ? (context.tr('High'), lc.warn) : (context.tr('Medium'), lc.gold);
           final (badge, bBg, bFg) = r.onHand == 0
-              ? ('Out of stock', lc.badbg, lc.bad)
-              : ('Low · ${r.onHand}', lc.warnbg, lc.warn);
+              ? (context.tr('Out of stock'), lc.badbg, lc.bad)
+              : ('${context.tr('Low')} · ${r.onHand}', lc.warnbg, lc.warn);
           return LcCard(
             onTap: () => app.openProduct(r.id),
             padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
@@ -98,7 +98,7 @@ class LowStockScreen extends StatelessWidget {
       separatorBuilder: (_, __) => const SizedBox(height: 8),
       itemBuilder: (_, i) {
         final p = low[i];
-        final (sev, sevFg) = p.stock == 0 ? ('Critical', lc.bad) : p.stock <= 10 ? ('High', lc.warn) : ('Medium', lc.gold);
+        final (sev, sevFg) = p.stock == 0 ? (context.tr('Critical'), lc.bad) : p.stock <= 10 ? (context.tr('High'), lc.warn) : (context.tr('Medium'), lc.gold);
         final reorder = p.stock == 0 ? 48 : 24;
         return LcCard(
           onTap: () => app.openProduct(p.id),
@@ -113,7 +113,7 @@ class LowStockScreen extends StatelessWidget {
                   children: [
                     Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600)),
                     const SizedBox(height: 2),
-                    Text('${p.code} · reorder $reorder pcs', style: TextStyle(fontSize: 11.5, color: lc.mut)),
+                    Text('${p.code} · ${context.tr('reorder')} $reorder ${context.tr('pcs')}', style: TextStyle(fontSize: 11.5, color: lc.mut)),
                   ],
                 ),
               ),
@@ -137,7 +137,7 @@ class LowStockScreen extends StatelessWidget {
     final lc = context.lc;
     if (!demo) {
       final rows = app.deadStockRows ?? const <StockRowData>[];
-      if (rows.isEmpty) return _empty(context, 'No dead stock');
+      if (rows.isEmpty) return _empty(context, context.tr('No dead stock'));
       return ListView.separated(
         padding: const EdgeInsets.fromLTRB(16, 2, 16, 60),
         itemCount: rows.length,
@@ -163,13 +163,13 @@ class LowStockScreen extends StatelessWidget {
                     children: [
                       Text(r.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600)),
                       const SizedBox(height: 2),
-                      Text('${r.code} · ${r.onHand} pcs on hand', style: TextStyle(fontSize: 11.5, color: lc.mut)),
+                      Text('${r.code} · ${r.onHand} ${context.tr('pcs on hand')}', style: TextStyle(fontSize: 11.5, color: lc.mut)),
                     ],
                   ),
                 ),
                 const SizedBox(width: 8),
                 if (r.daysIdle > 0)
-                  Text('${r.daysIdle} days idle', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: lc.bad)),
+                  Text('${r.daysIdle} ${context.tr('days idle')}', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: lc.bad)),
               ],
             ),
           );
@@ -201,7 +201,7 @@ class LowStockScreen extends StatelessWidget {
                   children: [
                     Text(d.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600)),
                     const SizedBox(height: 2),
-                    Text('${d.code} · ${d.qty} pcs on hand', style: TextStyle(fontSize: 11.5, color: lc.mut)),
+                    Text('${d.code} · ${d.qty} ${context.tr('pcs on hand')}', style: TextStyle(fontSize: 11.5, color: lc.mut)),
                   ],
                 ),
               ),
@@ -209,7 +209,7 @@ class LowStockScreen extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text('${d.days} days idle', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: lc.bad)),
+                  Text('${d.days} ${context.tr('days idle')}', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: lc.bad)),
                   const SizedBox(height: 4),
                   Text('${MockData.money(d.val)} BHD', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: lc.mut)),
                 ],

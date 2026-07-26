@@ -36,11 +36,11 @@ class _StatementPickerScreenState extends State<StatementPickerScreen> {
 
     return Column(
       children: [
-        ScreenHeader(title: 'Account statement', subtitle: 'Choose a customer', onBack: () => app.nav(Screen.home)),
+        ScreenHeader(title: context.tr('Account statement'), subtitle: context.tr('Choose a customer'), onBack: () => app.nav(Screen.home)),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
           child: SearchField(
-            hint: 'Search customer by name or area',
+            hint: context.tr('Search customer by name or area'),
             controller: _search,
             onChanged: app.setStatementQuery,
           ),
@@ -49,7 +49,7 @@ class _StatementPickerScreenState extends State<StatementPickerScreen> {
           child: app.customers.isEmpty && app.dataLoading
               ? Center(child: CircularProgressIndicator(color: lc.prim, strokeWidth: 2.4))
               : rows.isEmpty
-                  ? Center(child: Text('No matching customers', style: TextStyle(fontSize: 14, color: lc.mut)))
+                  ? Center(child: Text(context.tr('No matching customers'), style: TextStyle(fontSize: 14, color: lc.mut)))
                   : ListView.separated(
                       padding: const EdgeInsets.fromLTRB(16, 2, 16, 40),
                       itemCount: rows.length,

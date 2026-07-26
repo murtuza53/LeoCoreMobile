@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'dart:io' show File, Platform;
+import 'dart:math' show Random;
 
 import 'package:flutter/foundation.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:in_app_review/in_app_review.dart';
 import 'package:in_app_update/in_app_update.dart';
 import 'package:intl/intl.dart';
+import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
@@ -16,6 +19,7 @@ import '../api/biometrics.dart';
 import '../api/repositories.dart';
 import '../api/secure_store.dart';
 import '../data/mock_data.dart';
+import '../l10n/ar.dart';
 import '../models/models.dart';
 import '../utils/money.dart';
 
@@ -33,6 +37,7 @@ enum Screen {
   count,
   low,
   invoice,
+  quotation,
   receipt,
   reports,
   settings,
@@ -120,11 +125,15 @@ class AppState extends ChangeNotifier {
   Role role = Role.manager;
   String lang = 'en';
 
+  /// Context-free translator for strings built inside the state layer (toasts,
+  /// derived labels). Widgets use `context.tr(...)`; both read [kArabic].
+  String t(String en) => lang == 'ar' ? (kArabic[en] ?? en) : en;
+
   // ── navigation ─────────────────────────────────────────────────────
   Screen screen = Screen.login;
 
   // ── login ──────────────────────────────────────────────────────────
-  String loginUser = 'yousif.m';
+  String loginUser = '';
   String loginPass = '';
   bool loginErr = false;
   bool keep = true;
@@ -161,14 +170,36 @@ class AppState extends ChangeNotifier {
   // ── low / dead stock ───────────────────────────────────────────────
   String stockTab = 'low';
 
-  // ── cart / invoice ─────────────────────────────────────────────────
-  List<CartLine> cart = []; // a cash sale starts empty
-  // Multi-tender payments: each line is a method + amount.
-  List<({String method, double amount})> payments = [];
-  String payMethod = 'Cash';
-  String payAmount = '';
+  // ── cash sale (draft) ──────────────────────────────────────────────
+  // A cash sale starts empty and is saved to the ERP as a DRAFT — payment is
+  // taken later in the full app, so the mobile app collects no tenders.
+  List<CartLine> cart = [];
+  bool savingDraft = false;
 
-  static const paymentMethods = ['Cash', 'Card / Benefit', 'Bank Transfer'];
+  // ── quotation ──────────────────────────────────────────────────────
+  List<CartLine> quoteLines = [];
+  int quoteCustomerId = 0;
+  String quoteCustomerQuery = '';
+  bool savingQuote = false;
+  bool quotePdfBusy = false;
+
+  /// The document returned by the server after a successful save.
+  SalesDocResult? savedDoc;
+
+  /// Which document the scanner / "add item" actions feed into.
+  String activeDoc = 'cash'; // cash | quotation
+
+  // Idempotency keys are held per in-progress document so a retry after a
+  // timeout replays the original request instead of duplicating it.
+  String? _draftIdemKey;
+  String? _quoteIdemKey;
+
+  static String _newIdemKey() {
+    final r = Random();
+    return List<int>.generate(16, (_) => r.nextInt(256))
+        .map((b) => b.toRadixString(16).padLeft(2, '0'))
+        .join();
+  }
 
   // ── reports ────────────────────────────────────────────────────────
   String reportRange = '7d';
@@ -326,16 +357,12 @@ class AppState extends ChangeNotifier {
   double get subtotal => cart.fold(0, (a, l) => a + productById(l.pid).price * l.qty);
   double get vat => subtotal * 0.10;
   double get total => subtotal + vat;
-  double get totalPaid => payments.fold(0.0, (a, p) => a + p.amount);
-  double get balanceDue {
-    final b = total - totalPaid;
-    return b > 0 ? b : 0;
-  }
 
-  double get change {
-    final c = totalPaid - total;
-    return c > 0 ? c : 0;
-  }
+  /// Quotation line totals (same 10% VAT basis as the cash sale preview).
+  /// These are indicative only — the server prices the document on save.
+  double get quoteSubtotal => quoteLines.fold(0, (a, l) => a + productById(l.pid).price * l.qty);
+  double get quoteVat => quoteSubtotal * 0.10;
+  double get quoteTotal => quoteSubtotal + quoteVat;
 
   // Barcode scan result
   Product? scanned;
@@ -386,6 +413,8 @@ class AppState extends ChangeNotifier {
   Future<void> _restoreSession() async {
     final s = await _store.serverUrl;
     if (s != null && s.isNotEmpty) serverUrl = s;
+    final savedLang = await _store.lang;
+    if (savedLang == 'en' || savedLang == 'ar') lang = savedLang!;
     biometrics = await _store.bioEnabled;
     biometricAvailable = await _bio.available();
     notifyListeners();
@@ -538,7 +567,10 @@ class AppState extends ChangeNotifier {
         nav(statementReturn);
         return true;
       case Screen.receipt:
-        nav(Screen.invoice);
+        nav(savedDoc?.status == 'Open' ? Screen.quotation : Screen.invoice);
+        return true;
+      case Screen.quotation:
+        nav(Screen.home);
         return true;
       case Screen.settings:
         nav(Screen.more);
@@ -568,7 +600,7 @@ class AppState extends ChangeNotifier {
       return true;
     }
     _lastBackPress = now;
-    showToast('Press back again to exit');
+    showToast(t('Press back again to exit'));
     return false;
   }
 
@@ -653,14 +685,14 @@ class AppState extends ChangeNotifier {
     if (!biometricAvailable) {
       biometricAvailable = await _bio.available();
       if (!biometricAvailable) {
-        showToast('No fingerprint enrolled on this device');
+        showToast(t('No fingerprint enrolled on this device'));
         return;
       }
     }
     final access = await _store.accessToken;
     final refresh = await _store.refreshToken;
     if (access == null || refresh == null || access.isEmpty) {
-      showToast('Sign in with your password first');
+      showToast(t('Sign in with your password first'));
       return;
     }
     final res = await _bio.authenticate('Unlock LeoCore ERP');
@@ -804,26 +836,36 @@ class AppState extends ChangeNotifier {
           defaultPrice: double.tryParse(editPrice.replaceAll(',', '')),
         );
         _products = await _repo.products(pageSize: 200);
-        showToast('Product updated');
+        showToast(t('Product updated'));
       } on ApiException catch (e) {
         showToast(e.message);
       } catch (_) {
-        showToast('Could not update product');
+        showToast(t('Could not update product'));
       }
     } else {
-      showToast('Product updated');
+      showToast(t('Product updated'));
     }
   }
 
-  // cart
+  // cart — adds to whichever document is currently being built
   void addToCart(int pid, [String? note]) {
+    if (activeDoc == 'quotation') {
+      final existing = quoteLines.where((l) => l.pid == pid).toList();
+      if (existing.isNotEmpty) {
+        existing.first.qty += 1;
+      } else {
+        quoteLines.add(CartLine(pid, 1));
+      }
+      showToast(note ?? t('Added to quotation'));
+      return;
+    }
     final existing = cart.where((l) => l.pid == pid).toList();
     if (existing.isNotEmpty) {
       existing.first.qty += 1;
     } else {
       cart.add(CartLine(pid, 1));
     }
-    showToast(note ?? 'Added to memo');
+    showToast(note ?? t('Added to memo'));
   }
 
   void addCurrentToCart() => addToCart(product.id);
@@ -868,7 +910,7 @@ class AppState extends ChangeNotifier {
 
   void applyFilter() {
     filterSheet = false;
-    showToast('Filters applied');
+    showToast(t('Filters applied'));
   }
 
   // customers
@@ -882,22 +924,22 @@ class AppState extends ChangeNotifier {
   Future<void> callCust() async {
     final phone = customer.phone.trim();
     if (phone.isEmpty) {
-      showToast('No phone number on file');
+      showToast(t('No phone number on file'));
       return;
     }
     final uri = Uri(scheme: 'tel', path: phone.replaceAll(RegExp(r'[^0-9+]'), ''));
-    if (!await launchUrl(uri)) showToast('Could not open the dialer');
+    if (!await launchUrl(uri)) showToast(t('Could not open the dialer'));
   }
 
   Future<void> waCust() async {
     final digits = customer.phone.replaceAll(RegExp(r'[^0-9]'), '');
     if (digits.isEmpty) {
-      showToast('No phone number on file');
+      showToast(t('No phone number on file'));
       return;
     }
     final uri = Uri.parse('https://wa.me/$digits');
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      showToast('WhatsApp is not installed');
+      showToast(t('WhatsApp is not installed'));
     }
   }
 
@@ -906,7 +948,7 @@ class AppState extends ChangeNotifier {
         [customer.name, customer.area].where((s) => s.isNotEmpty).join(', '));
     final uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$q');
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      showToast('Could not open Maps');
+      showToast(t('Could not open Maps'));
     }
   }
 
@@ -918,15 +960,12 @@ class AppState extends ChangeNotifier {
 
   bool get statementBusy => statementSharing || statementPrinting;
 
-  /// Downloads the statement PDF and returns validated bytes + a safe
-  /// filename, or `null` if it isn't a real PDF (with a toast explaining why).
-  /// Shared by [shareStmt] and [printStmt].
-  Future<({Uint8List bytes, String filename})?> _fetchStatementPdf() async {
-    final id = statementParty == 'supplier' ? supplierId : cid;
-    final asOn = statementAsOn == null ? null : DateFormat('yyyy-MM-dd').format(statementAsOn!);
-    final res = await _repo.statementPdf(statementParty, id, asOn: asOn);
+  /// Validates a downloaded response is really a PDF and returns safe bytes +
+  /// filename, or `null` (with an explanatory toast) if it isn't.
+  ({Uint8List bytes, String filename})? _validatePdf(
+      ({List<int> bytes, String filename, String contentType}) res) {
     if (res.bytes.isEmpty) {
-      showToast('The statement came back empty');
+      showToast(t('The statement came back empty'));
       return null;
     }
     // Guard: the server must actually return a PDF. If PDF export isn't
@@ -936,16 +975,73 @@ class AppState extends ChangeNotifier {
             res.bytes[0] == 0x25 && res.bytes[1] == 0x50 &&
             res.bytes[2] == 0x44 && res.bytes[3] == 0x46); // %PDF
     if (!isPdf) {
-      showToast('PDF export is not enabled on your server yet');
+      showToast(t('PDF export is not enabled on your server yet'));
       return null;
     }
     final safe = res.filename.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
     return (bytes: Uint8List.fromList(res.bytes), filename: safe);
   }
 
+  /// Path of the most recently downloaded PDF (so the UI can re-share it).
+  String? lastPdfPath;
+
+  /// Writes the PDF to the documents directory (so it persists as a real
+  /// downloaded file) and opens it in the device's PDF viewer. Falls back to
+  /// the share sheet when no viewer is installed.
+  Future<void> _deliverPdf(Uint8List bytes, String filename) async {
+    final dir = await getApplicationDocumentsDirectory();
+    final file = File('${dir.path}/$filename');
+    await file.writeAsBytes(bytes, flush: true);
+    lastPdfPath = file.path;
+    final res = await OpenFilex.open(file.path, type: 'application/pdf');
+    if (res.type != ResultType.done) {
+      // No PDF viewer installed — hand it to the share sheet instead.
+      await Share.shareXFiles([XFile(file.path, mimeType: 'application/pdf', name: filename)]);
+    } else {
+      showToast('${t('Downloaded')} · $filename');
+    }
+  }
+
+  /// Shares the most recently downloaded PDF via the system share sheet.
+  Future<void> shareLastPdf() async {
+    final p = lastPdfPath;
+    if (p == null) return;
+    await Share.shareXFiles([XFile(p, mimeType: 'application/pdf')]);
+  }
+
+  Future<({Uint8List bytes, String filename})?> _fetchStatementPdf() async {
+    final id = statementParty == 'supplier' ? supplierId : cid;
+    final asOn = statementAsOn == null ? null : DateFormat('yyyy-MM-dd').format(statementAsOn!);
+    final res = await _repo.statementPdf(statementParty, id, asOn: asOn);
+    return _validatePdf(res);
+  }
+
+  /// Downloads the statement PDF and opens it — the primary statement action.
+  Future<void> downloadStmt() async {
+    if (demoMode) {
+      showToast(t('Statement PDF is available after live sign-in'));
+      return;
+    }
+    if (statementBusy) return;
+    statementSharing = true;
+    notifyListeners();
+    try {
+      final pdf = await _fetchStatementPdf();
+      if (pdf == null) return;
+      await _deliverPdf(pdf.bytes, pdf.filename);
+    } on ApiException catch (e) {
+      showToast(e.message);
+    } catch (_) {
+      showToast(t('Could not generate the statement PDF'));
+    } finally {
+      statementSharing = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> shareStmt() async {
     if (demoMode) {
-      showToast('Statement PDF is available after live sign-in');
+      showToast(t('Statement PDF is available after live sign-in'));
       return;
     }
     if (statementBusy) return;
@@ -964,7 +1060,7 @@ class AppState extends ChangeNotifier {
     } on ApiException catch (e) {
       showToast(e.message);
     } catch (_) {
-      showToast('Could not generate the statement PDF');
+      showToast(t('Could not generate the statement PDF'));
     } finally {
       statementSharing = false;
       notifyListeners();
@@ -975,7 +1071,7 @@ class AppState extends ChangeNotifier {
   /// can pick a printer (or "Save as PDF").
   Future<void> printStmt() async {
     if (demoMode) {
-      showToast('Statement PDF is available after live sign-in');
+      showToast(t('Statement PDF is available after live sign-in'));
       return;
     }
     if (statementBusy) return;
@@ -991,9 +1087,80 @@ class AppState extends ChangeNotifier {
     } on ApiException catch (e) {
       showToast(e.message);
     } catch (_) {
-      showToast('Could not open the print dialog');
+      showToast(t('Could not open the print dialog'));
     } finally {
       statementPrinting = false;
+      notifyListeners();
+    }
+  }
+
+  // ── product photos ─────────────────────────────────────────────────
+  final ImagePicker _picker = ImagePicker();
+
+  /// Locally captured photo awaiting (or having failed) upload, so the user
+  /// still sees what they took even if the server rejects it.
+  String? pendingPhotoPath;
+  bool photoUploading = false;
+
+  /// Absolute URL for a server-relative image path.
+  String imageUrl(String relative) {
+    if (relative.startsWith('http')) return relative;
+    return '${api.origin}$relative';
+  }
+
+  Map<String, String> get imageHeaders => api.authHeaders;
+
+  /// Takes a photo with the camera, or picks one via the Android Photo Picker
+  /// (which needs no media-library permission), then uploads it.
+  Future<void> addProductPhoto({required bool fromCamera}) async {
+    if (demoMode) {
+      showToast(t('Product photos require live sign-in'));
+      return;
+    }
+    if (photoUploading) return;
+    try {
+      final XFile? shot = await _picker.pickImage(
+        source: fromCamera ? ImageSource.camera : ImageSource.gallery,
+        imageQuality: 85,
+        maxWidth: 1600,
+      );
+      if (shot == null) return; // user cancelled
+      pendingPhotoPath = shot.path;
+      photoUploading = true;
+      notifyListeners();
+
+      final images = await _repo.uploadProductImage(pid, shot.path);
+      // Refresh the detail so the new photo shows from the server.
+      _productDetail = product.copyWith(images: images);
+      pendingPhotoPath = null;
+      showToast(t('Photo uploaded'));
+    } on ApiException catch (e) {
+      // The endpoint may not be enabled on every server yet — keep the photo
+      // on screen and tell the user plainly rather than dropping it.
+      if (e.status == 404 || e.code == 'HTTP_404') {
+        showToast(t('Photo upload is not enabled on your server yet'));
+      } else {
+        showToast(e.message);
+      }
+    } catch (_) {
+      showToast(t('Could not upload the photo'));
+    } finally {
+      photoUploading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> removeProductPhoto(int imageId) async {
+    if (demoMode) return;
+    try {
+      await _repo.deleteProductImage(pid, imageId);
+      _productDetail = product.copyWith(
+        images: product.images.where((i) => i.id != imageId).toList(),
+      );
+      showToast(t('Photo removed'));
+    } on ApiException catch (e) {
+      showToast(e.message);
+    } finally {
       notifyListeners();
     }
   }
@@ -1009,7 +1176,7 @@ class AppState extends ChangeNotifier {
         await _review.openStoreListing();
       }
     } catch (_) {
-      showToast('Could not open the store');
+      showToast(t('Could not open the store'));
     }
   }
 
@@ -1048,7 +1215,7 @@ class AppState extends ChangeNotifier {
     try {
       await InAppUpdate.performImmediateUpdate();
     } catch (_) {
-      showToast('Update could not be started');
+      showToast(t('Update could not be started'));
     }
   }
 
@@ -1088,13 +1255,13 @@ class AppState extends ChangeNotifier {
     } on ApiException catch (e) {
       found = null;
       scanLoading = false;
-      showToast(e.status == 404 ? 'No product matches "$trimmed"' : e.message);
+      showToast(e.status == 404 ? '${t('No product matches')} "$trimmed"' : e.message);
       notifyListeners();
       return;
     } catch (_) {
       found = null;
       scanLoading = false;
-      showToast('No product matches "$trimmed"');
+      showToast('${t('No product matches')} "$trimmed"');
       notifyListeners();
       return;
     }
@@ -1171,7 +1338,7 @@ class AppState extends ChangeNotifier {
 
   void submitCount() {
     countSubmitted = true;
-    showToast('Count session submitted');
+    showToast(t('Count session submitted'));
   }
 
   void closeCountDone() {
@@ -1186,59 +1353,171 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  // invoice / receipt — multi-tender payments
-  void setPayMethod(String m) {
-    payMethod = m;
-    notifyListeners();
-  }
-
-  void setPayAmount(String v) {
-    payAmount = v;
-    notifyListeners();
-  }
-
-  /// Add the entered amount under the selected method as a new payment line.
-  void addPayment() {
-    final amt = double.tryParse(payAmount.trim().replaceAll(',', ''));
-    if (amt == null || amt <= 0) {
-      showToast('Enter a payment amount');
+  // ── cash sale → save as DRAFT ──────────────────────────────────────
+  /// Saves the memo to the ERP as a cash-invoice **draft**. Payment is taken
+  /// later in the full app, so nothing is tendered here.
+  Future<void> saveDraft() async {
+    if (cart.isEmpty) {
+      showToast(t('Add items to the memo first'));
       return;
     }
-    payments = [...payments, (method: payMethod, amount: amt)];
-    payAmount = '';
+    if (demoMode) {
+      showToast(t('Saving drafts requires live sign-in'));
+      return;
+    }
+    final wh = warehouseId > 0 ? warehouseId : (_warehouses.isNotEmpty ? _warehouses.first.id : 0);
+    if (wh <= 0) {
+      showToast(t('Select a warehouse first'));
+      return;
+    }
+    if (savingDraft) return;
+    savingDraft = true;
     notifyListeners();
-  }
-
-  /// Quick "pay the remaining balance" with the selected method.
-  void payRemaining() {
-    if (balanceDue <= 0) return;
-    payments = [...payments, (method: payMethod, amount: balanceDue)];
-    notifyListeners();
-  }
-
-  void removePayment(int index) {
-    final p = [...payments];
-    if (index >= 0 && index < p.length) {
-      p.removeAt(index);
-      payments = p;
+    // Reuse the key across retries so a timeout can't create two drafts.
+    _draftIdemKey ??= _newIdemKey();
+    try {
+      final doc = await _repo.createCashInvoiceDraft(
+        warehouseId: wh,
+        lines: [for (final l in cart) (itemId: l.pid, qty: l.qty)],
+        idempotencyKey: _draftIdemKey!,
+      );
+      savedDoc = doc;
+      _draftIdemKey = null; // consumed — the next document gets a fresh key
+      cart = [];
+      nav(Screen.receipt);
+      _maybeAskReview();
+    } on ApiException catch (e) {
+      showToast(e.message);
+    } catch (_) {
+      showToast(t('Could not save the draft'));
+    } finally {
+      savingDraft = false;
       notifyListeners();
     }
   }
 
-  void completeSale() {
-    if (cart.isEmpty) {
-      showToast('Add items to the memo first');
-      return;
-    }
-    nav(Screen.receipt);
-    _maybeAskReview();
-  }
-
   void newSale() {
     cart = [];
-    payments = [];
-    payAmount = '';
+    savedDoc = null;
+    activeDoc = 'cash';
     nav(Screen.invoice);
+  }
+
+  // ── quotation ──────────────────────────────────────────────────────
+  Customer? get quoteCustomer => quoteCustomerId == 0
+      ? null
+      : customers.where((c) => c.id == quoteCustomerId).firstOrNull;
+
+  /// Customer picker rows for the quotation screen.
+  List<Customer> get quoteCustomerRows {
+    final q = quoteCustomerQuery.trim().toLowerCase();
+    if (q.isEmpty) return customers;
+    return customers
+        .where((c) => c.name.toLowerCase().contains(q) || c.area.toLowerCase().contains(q))
+        .toList();
+  }
+
+  void setQuoteCustomerQuery(String v) {
+    quoteCustomerQuery = v;
+    notifyListeners();
+  }
+
+  void pickQuoteCustomer(int id) {
+    quoteCustomerId = id;
+    notifyListeners();
+  }
+
+  void openQuotation() {
+    activeDoc = 'quotation';
+    savedDoc = null;
+    nav(Screen.quotation);
+  }
+
+  void newQuotation() {
+    quoteLines = [];
+    quoteCustomerId = 0;
+    quoteCustomerQuery = '';
+    savedDoc = null;
+    activeDoc = 'quotation';
+    nav(Screen.quotation);
+  }
+
+  void incQuoteLine(int pid) {
+    final l = quoteLines.where((e) => e.pid == pid);
+    if (l.isNotEmpty) l.first.qty += 1;
+    notifyListeners();
+  }
+
+  void decQuoteLine(int pid) {
+    final l = quoteLines.where((e) => e.pid == pid);
+    if (l.isEmpty) return;
+    if (l.first.qty > 1) {
+      l.first.qty -= 1;
+    } else {
+      quoteLines = quoteLines.where((e) => e.pid != pid).toList();
+    }
+    notifyListeners();
+  }
+
+  /// Saves the quotation, then downloads its PDF so it can be sent.
+  Future<void> saveQuotation() async {
+    if (quoteCustomerId == 0) {
+      showToast(t('Choose a customer first'));
+      return;
+    }
+    if (quoteLines.isEmpty) {
+      showToast(t('Add items to the quotation first'));
+      return;
+    }
+    if (demoMode) {
+      showToast(t('Quotations require live sign-in'));
+      return;
+    }
+    if (savingQuote) return;
+    savingQuote = true;
+    notifyListeners();
+    _quoteIdemKey ??= _newIdemKey();
+    try {
+      final doc = await _repo.createQuotation(
+        customerId: quoteCustomerId,
+        lines: [for (final l in quoteLines) (itemId: l.pid, qty: l.qty)],
+        idempotencyKey: _quoteIdemKey!,
+      );
+      savedDoc = doc;
+      _quoteIdemKey = null;
+      quoteLines = [];
+      showToast('${t('Quotation saved')} · ${doc.number}');
+      notifyListeners();
+      // Immediately fetch the PDF so the user can send it.
+      await downloadQuotationPdf(doc.id);
+    } on ApiException catch (e) {
+      showToast(e.message);
+    } catch (_) {
+      showToast(t('Could not save the quotation'));
+    } finally {
+      savingQuote = false;
+      notifyListeners();
+    }
+  }
+
+  /// Downloads the quotation PDF and opens it (falls back to the share sheet).
+  Future<void> downloadQuotationPdf(int id) async {
+    if (quotePdfBusy) return;
+    quotePdfBusy = true;
+    notifyListeners();
+    try {
+      final res = await _repo.quotationPdf(id);
+      final pdf = _validatePdf(res);
+      if (pdf == null) return;
+      await _deliverPdf(pdf.bytes, pdf.filename);
+    } on ApiException catch (e) {
+      showToast(e.message);
+    } catch (_) {
+      showToast(t('Could not download the quotation PDF'));
+    } finally {
+      quotePdfBusy = false;
+      notifyListeners();
+    }
   }
 
   // ── suppliers ──────────────────────────────────────────────────────
@@ -1411,12 +1690,14 @@ class AppState extends ChangeNotifier {
 
   // settings
   void pickLang(String l) {
+    if (l != 'en' && l != 'ar') return;
     lang = l;
+    _store.setLang(l);
     notifyListeners();
-    if (l == 'ar') {
-      showToast('Arabic RTL sample — full mirroring in a later build');
-    }
   }
+
+  /// Text direction for the active language (Arabic is right-to-left).
+  bool get isRtl => lang == 'ar';
 
   void pickLight() {
     isDark = false;
@@ -1433,7 +1714,7 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     _store.setBioEnabled(biometrics);
     if (biometrics && !biometricAvailable) {
-      showToast('No fingerprint enrolled on this device');
+      showToast(t('No fingerprint enrolled on this device'));
     }
   }
 

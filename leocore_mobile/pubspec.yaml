@@ -1,7 +1,7 @@
 name: leocore_mobile
 description: "LeoCore ERP Mobile — companion app for LeoCore ERP (Bahrain)."
 publish_to: 'none'
-version: 2.4.1+3
+version: 2.6.0+7
 
 environment:
   sdk: ^3.5.0
@@ -26,6 +26,10 @@ dependencies:
   in_app_update: ^4.2.3
   package_info_plus: ^8.1.2
   printing: ^5.13.4
+  open_filex: ^4.5.0
+  # Uses the Android Photo Picker on API 33+, so gallery access needs no
+  # READ_MEDIA_* permissions (Play "Photo and Video Permissions" policy).
+  image_picker: ^1.1.2
 
 dev_dependencies:
   flutter_test:

@@ -114,8 +114,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 18),
                 Text(
                     app.sessionLocked
-                        ? 'ERP Mobile · Locked — unlock with your fingerprint'
-                        : 'ERP Mobile · Sign in to your workspace',
+                        ? context.tr('ERP Mobile · Locked — unlock with your fingerprint')
+                        : context.tr('ERP Mobile · Sign in to your workspace'),
                     style: TextStyle(
                         fontSize: 14,
                         height: 1.5,
@@ -158,13 +158,13 @@ class _LoginScreenState extends State<LoginScreen> {
                                           height: 1.45,
                                           color: lc.bad),
                                       children: [
-                                        const TextSpan(
-                                            text: 'Sign-in failed. ',
-                                            style: TextStyle(
+                                        TextSpan(
+                                            text: context.tr('Sign-in failed. '),
+                                            style: const TextStyle(
                                                 fontWeight: FontWeight.w700)),
                                         TextSpan(
                                             text: app.loginErrMsg ??
-                                                'Check your password or contact your administrator.'),
+                                                context.tr('Check your password or contact your administrator.')),
                                       ],
                                     ),
                                   ),
@@ -174,7 +174,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           const SizedBox(height: 16),
                         ],
-                        label('Username'),
+                        label(context.tr('Username')),
                         TextField(
                             controller: _user,
                             focusNode: _userFocus,
@@ -182,7 +182,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             decoration: dec(),
                             style: TextStyle(fontSize: 15, color: lc.ink)),
                         const SizedBox(height: 16),
-                        label('Password'),
+                        label(context.tr('Password')),
                         TextField(
                           controller: _pass,
                           focusNode: _passFocus,
@@ -196,13 +196,13 @@ class _LoginScreenState extends State<LoginScreen> {
                                 size: 20,
                                 color: lc.mut,
                               ),
-                              tooltip: _obscure ? 'Show password' : 'Hide password',
+                              tooltip: _obscure ? context.tr('Show password') : context.tr('Hide password'),
                             ),
                           ),
                           style: TextStyle(fontSize: 15, color: lc.ink),
                         ),
                         const SizedBox(height: 16),
-                        label('Server location'),
+                        label(context.tr('Server location')),
                         Container(
                           height: 48,
                           padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -239,7 +239,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text('Keep me signed in',
+                                Text(context.tr('Keep me signed in'),
                                     style:
                                         TextStyle(fontSize: 14, color: lc.ink)),
                                 _Toggle(on: app.keep, onColor: lc.ok),
@@ -261,14 +261,14 @@ class _LoginScreenState extends State<LoginScreen> {
                                     child: CircularProgressIndicator(
                                         strokeWidth: 2.4, color: Colors.white)),
                               )
-                            : PrimaryButton('Sign in', onTap: app.doLogin),
+                            : PrimaryButton(context.tr('Sign in'), onTap: app.doLogin),
                         const SizedBox(height: 16),
                         Row(children: [
                           Expanded(child: Divider(color: lc.line, height: 1)),
                           Padding(
                               padding:
                                   const EdgeInsets.symmetric(horizontal: 12),
-                              child: Text('or',
+                              child: Text(context.tr('or'),
                                   style:
                                       TextStyle(fontSize: 12, color: lc.mut))),
                           Expanded(child: Divider(color: lc.line, height: 1)),
@@ -289,7 +289,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 Icon(Icons.fingerprint,
                                     color: lc.gold, size: 24),
                                 const SizedBox(width: 10),
-                                Text('Unlock with fingerprint',
+                                Text(context.tr('Unlock with fingerprint'),
                                     style: TextStyle(
                                         fontSize: 15,
                                         fontWeight: FontWeight.w600,

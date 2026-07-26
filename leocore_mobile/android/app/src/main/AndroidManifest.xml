@@ -1,8 +1,18 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
     <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
     <uses-feature android:name="android.hardware.fingerprint" android:required="false"/>
+
+    <!-- The open_filex plugin declares the media-library permissions below so
+         it can open media files. LeoCore ERP only ever opens PDFs that it has
+         itself just written to its own app-private documents directory, so it
+         never reads the user's photo/video/audio library. Strip them at merge
+         time to satisfy Google Play's Photo and Video Permissions policy. -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" tools:node="remove"/>
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" tools:node="remove"/>
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" tools:node="remove"/>
     <application
         android:label="LeoCore ERP"
         android:name="${applicationName}"

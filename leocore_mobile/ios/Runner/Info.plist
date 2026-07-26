@@ -4,6 +4,43 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+
+	<!-- ── Privacy usage descriptions (App Store review requires one string per
+	     API the app touches; the text is shown in the system permission prompt) ── -->
+	<key>NSCameraUsageDescription</key>
+	<string>LeoCore ERP uses the camera to scan product barcodes and to take product photos.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>LeoCore ERP lets you choose a product photo from your library to attach to an item.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>LeoCore ERP uses Face ID to unlock the app and keep your business data private.</string>
+
+	<!-- Languages the app ships (English + Arabic RTL) so the App Store lists them. -->
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>ar</string>
+	</array>
+
+	<!-- Standard TLS/HTTPS only → exempt from export compliance, so App Store
+	     Connect stops asking on every upload. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+
+	<!-- Schemes the app asks iOS to open (call / WhatsApp / maps). Required for
+	     url_launcher's canLaunchUrl checks on iOS. -->
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>tel</string>
+		<string>telprompt</string>
+		<string>sms</string>
+		<string>mailto</string>
+		<string>https</string>
+		<string>http</string>
+		<string>whatsapp</string>
+		<string>maps</string>
+		<string>comgooglemaps</string>
+	</array>
+
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>

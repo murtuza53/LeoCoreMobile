@@ -90,9 +90,9 @@ class WarehouseSheet extends StatelessWidget {
     return BottomSheetShell(
       onDismiss: app.closeWhSheet,
       children: [
-        const Padding(
-          padding: EdgeInsets.only(bottom: 6),
-          child: Text('Company & warehouse', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Text(context.tr('Company & warehouse'), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
         ),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -156,15 +156,15 @@ class FilterSheet extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text('Filters', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+            Text(context.tr('Filters'), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
             GestureDetector(
               onTap: app.clearSearch,
-              child: Text('Reset', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: lc.tprim)),
+              child: Text(context.tr('Reset'), style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: lc.tprim)),
             ),
           ],
         ),
         const SizedBox(height: 14),
-        const SectionLabel('Category', size: 11.5),
+        SectionLabel(context.tr('Category'), size: 11.5),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,
@@ -172,20 +172,20 @@ class FilterSheet extends StatelessWidget {
           children: [for (final c in app.categoryChips) chip(c, app.cat == c, () => app.pickCat(c))],
         ),
         const SizedBox(height: 14),
-        const SectionLabel('Stock status', size: 11.5),
+        SectionLabel(context.tr('Stock status'), size: 11.5),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,
           runSpacing: 8,
           children: [
-            chip('All', true, () {}),
-            chip('In stock', false, () {}),
-            chip('Low', false, () {}),
-            chip('Out of stock', false, () {}),
+            chip(context.tr('All'), true, () {}),
+            chip(context.tr('In stock'), false, () {}),
+            chip(context.tr('Low'), false, () {}),
+            chip(context.tr('Out of stock'), false, () {}),
           ],
         ),
         const SizedBox(height: 16),
-        PrimaryButton('Apply filters', height: 50, onTap: app.applyFilter),
+        PrimaryButton(context.tr('Apply filters'), height: 50, onTap: app.applyFilter),
       ],
     );
   }
@@ -237,12 +237,12 @@ class _EditSheetState extends State<EditSheet> {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Edit barcode & price', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+            Text(context.tr('Edit barcode & price'), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
             Text(app.product.name, style: TextStyle(fontSize: 12, color: lc.mut)),
           ],
         ),
         const SizedBox(height: 14),
-        Text('Barcode (EAN-13)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: lc.mut)),
+        Text(context.tr('Barcode (EAN-13)'), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: lc.mut)),
         const SizedBox(height: 6),
         Row(
           children: [
@@ -259,7 +259,7 @@ class _EditSheetState extends State<EditSheet> {
           ],
         ),
         const SizedBox(height: 14),
-        Text('Selling price (BHD, incl. VAT)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: lc.mut)),
+        Text(context.tr('Selling price (BHD, incl. VAT)'), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: lc.mut)),
         const SizedBox(height: 6),
         TextField(
           controller: _price,
@@ -271,9 +271,9 @@ class _EditSheetState extends State<EditSheet> {
         const SizedBox(height: 14),
         Row(
           children: [
-            Expanded(child: OutlineButton2('Cancel', height: 50, borderColor: lc.line, onTap: app.closeEdit)),
+            Expanded(child: OutlineButton2(context.tr('Cancel'), height: 50, borderColor: lc.line, onTap: app.closeEdit)),
             const SizedBox(width: 10),
-            Expanded(child: PrimaryButton('Save changes', height: 50, onTap: app.saveEdit)),
+            Expanded(child: PrimaryButton(context.tr('Save changes'), height: 50, onTap: app.saveEdit)),
           ],
         ),
       ],

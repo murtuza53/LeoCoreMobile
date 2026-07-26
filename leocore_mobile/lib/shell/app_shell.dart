@@ -11,6 +11,7 @@ import '../screens/low_stock_screen.dart';
 import '../screens/more_screen.dart';
 import '../screens/product_detail_screen.dart';
 import '../screens/products_screen.dart';
+import '../screens/quotation_screen.dart';
 import '../screens/receipt_screen.dart';
 import '../screens/reports_screen.dart';
 import '../screens/scan_screen.dart';
@@ -52,19 +53,19 @@ class _AppShellState extends State<AppShell> {
       builder: (ctx) => AlertDialog(
         backgroundColor: lc.card,
         icon: Icon(Icons.system_update_rounded, color: lc.prim, size: 34),
-        title: const Text('Update available', textAlign: TextAlign.center, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+        title: Text(context.tr('Update available'), textAlign: TextAlign.center, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
         content: Text(
-          'A newer version of LeoCore ERP is available. Update now for the latest features and fixes.',
+          context.tr('A newer version of LeoCore ERP is available. Update now for the latest features and fixes.'),
           textAlign: TextAlign.center,
           style: TextStyle(fontSize: 13.5, height: 1.5, color: lc.mut),
         ),
         actionsAlignment: MainAxisAlignment.center,
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text('Later', style: TextStyle(color: lc.mut))),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(context.tr('Later'), style: TextStyle(color: lc.mut))),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: lc.prim),
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Update now'),
+            child: Text(context.tr('Update now')),
           ),
         ],
       ),
@@ -102,6 +103,7 @@ class _AppShellState extends State<AppShell> {
       Screen.count => const CountScreen(),
       Screen.low => const LowStockScreen(),
       Screen.invoice => const InvoiceScreen(),
+      Screen.quotation => const QuotationScreen(),
       Screen.receipt => const ReceiptScreen(),
       Screen.reports => const ReportsScreen(),
       Screen.settings => const SettingsScreen(),

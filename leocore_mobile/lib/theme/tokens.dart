@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../l10n/ar.dart';
+import '../state/app_state.dart';
 
 /// Semantic color tokens for LeoCore ERP Mobile.
 ///
@@ -183,4 +187,17 @@ class LcColors extends ThemeExtension<LcColors> {
 /// Convenience accessor: `context.lc`.
 extension LcContext on BuildContext {
   LcColors get lc => Theme.of(this).extension<LcColors>()!;
+}
+
+/// Localization accessor: `context.tr('English source string')`.
+///
+/// Returns the Arabic translation when the active language is Arabic and a
+/// translation exists; otherwise returns the English source unchanged. The
+/// language switch rebuilds the whole [MaterialApp] (locale is bound in
+/// `main.dart`), so a plain `read` here is safe and re-evaluates on switch.
+extension L10nContext on BuildContext {
+  String tr(String en) {
+    if (read<AppState>().lang == 'ar') return kArabic[en] ?? en;
+    return en;
+  }
 }

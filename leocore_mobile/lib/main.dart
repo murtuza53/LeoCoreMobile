@@ -30,6 +30,7 @@ class _MaterialRoot extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = context.select<AppState, bool>((s) => s.isDark);
+    final lang = context.select<AppState, String>((s) => s.lang);
     final lc = isDark ? LcColors.dark : LcColors.light;
     final brightness = isDark ? Brightness.dark : Brightness.light;
 
@@ -47,6 +48,7 @@ class _MaterialRoot extends StatelessWidget {
         GlobalCupertinoLocalizations.delegate,
       ],
       supportedLocales: const [Locale('en'), Locale('ar')],
+      locale: Locale(lang),
       home: const AppShell(),
     );
   }

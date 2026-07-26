@@ -82,22 +82,22 @@ class HomeScreen extends StatelessWidget {
                 textBaseline: TextBaseline.alphabetic,
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Good morning, ${app.userFirstName}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                  Text('${context.tr('Good morning,')} ${app.userFirstName}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
                   Text('04 Jul 2026', style: TextStyle(fontSize: 12, color: lc.mut)),
                 ],
               ),
               const SizedBox(height: 14),
               // KPI grid 2×2
               Row(children: [
-                Expanded(child: _Kpi(label: "Today's sales", value: app.kpiSales, unit: 'BHD', chip: app.kpiSalesChip, chipFg: lc.ok, chipBg: lc.okbg, onTap: app.mReports ? app.goReports : null)),
+                Expanded(child: _Kpi(label: context.tr("Today's sales"), value: app.kpiSales, unit: 'BHD', chip: app.kpiSalesChip, chipFg: lc.ok, chipBg: lc.okbg, onTap: app.mReports ? app.goReports : null)),
                 const SizedBox(width: 10),
-                Expanded(child: _Kpi(label: 'Collections', value: app.kpiCollections, unit: 'BHD', chip: app.kpiCollectionsChip, chipFg: lc.mut, chipBg: lc.soft)),
+                Expanded(child: _Kpi(label: context.tr('Collections'), value: app.kpiCollections, unit: 'BHD', chip: app.kpiCollectionsChip, chipFg: lc.mut, chipBg: lc.soft)),
               ]),
               const SizedBox(height: 10),
               Row(children: [
-                Expanded(child: _Kpi(label: 'Outstanding AR', value: app.kpiOutstanding, unit: 'BHD', valueColor: lc.prim2, chip: app.kpiArChip, chipFg: lc.bad, chipBg: lc.badbg, onTap: () => app.nav(Screen.customers))),
+                Expanded(child: _Kpi(label: context.tr('Outstanding AR'), value: app.kpiOutstanding, unit: 'BHD', valueColor: lc.prim2, chip: app.kpiArChip, chipFg: lc.bad, chipBg: lc.badbg, onTap: () => app.nav(Screen.customers))),
                 const SizedBox(width: 10),
-                Expanded(child: _Kpi(label: 'Low stock', value: app.kpiLowStock, unit: 'items', valueColor: lc.warn, chip: app.kpiLowChip, chipFg: lc.warn, chipBg: lc.warnbg, onTap: app.goLow)),
+                Expanded(child: _Kpi(label: context.tr('Low stock'), value: app.kpiLowStock, unit: context.tr('items'), valueColor: lc.warn, chip: app.kpiLowChip, chipFg: lc.warn, chipBg: lc.warnbg, onTap: app.goLow)),
               ]),
               const SizedBox(height: 14),
               _SalesTrendCard(),
@@ -105,7 +105,7 @@ class HomeScreen extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const SectionLabel('Workspace'),
+                  SectionLabel(context.tr('Workspace')),
                   Pill(app.role.label, bg: lc.goldbg, fg: lc.tprim, size: 11),
                 ],
               ),
@@ -187,8 +187,8 @@ class _SalesTrendCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
             children: [
-              const Text('Sales — last 7 days', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
-              Text('BHD, net of VAT', style: TextStyle(fontSize: 11.5, color: lc.mut)),
+              Text(context.tr('Sales — last 7 days'), style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
+              Text(context.tr('BHD, net of VAT'), style: TextStyle(fontSize: 11.5, color: lc.mut)),
             ],
           ),
           const SizedBox(height: 8),
@@ -200,7 +200,7 @@ class _SalesTrendCard extends StatelessWidget {
             SizedBox(
               height: 96,
               child: Center(
-                child: Text('No sales in the last 7 days', style: TextStyle(fontSize: 13, color: lc.mut)),
+                child: Text(context.tr('No sales in the last 7 days'), style: TextStyle(fontSize: 13, color: lc.mut)),
               ),
             ),
         ],
@@ -324,15 +324,15 @@ class _WorkspaceGrid extends StatelessWidget {
     final app = context.watch<AppState>();
 
     final tiles = <(IconData, String, VoidCallback?)>[
-      (Icons.inventory_2_outlined, 'Products', () => app.nav(Screen.products)),
-      (Icons.people_outline, 'Customers', () => app.nav(Screen.customers)),
-      if (app.mSuppliers) (Icons.local_shipping_outlined, 'Suppliers', app.goSuppliers),
-      if (app.mSale) (Icons.receipt_long_outlined, 'Cash Sale', () => app.nav(Screen.invoice)),
-      if (app.mCount) (Icons.checklist_rounded, 'Stock Count', app.goCount),
-      if (app.mCount) (Icons.warning_amber_rounded, 'Low Stock', app.goLow),
-      if (app.mReports) (Icons.show_chart, 'Reports', app.goReports),
-      (Icons.description_outlined, 'Statements', app.openStatementPicker),
-      (Icons.settings_outlined, 'Settings', () => app.nav(Screen.settings)),
+      (Icons.inventory_2_outlined, context.tr('Products'), () => app.nav(Screen.products)),
+      (Icons.people_outline, context.tr('Customers'), () => app.nav(Screen.customers)),
+      if (app.mSuppliers) (Icons.local_shipping_outlined, context.tr('Suppliers'), app.goSuppliers),
+      if (app.mSale) (Icons.receipt_long_outlined, context.tr('Cash Sale'), () => app.nav(Screen.invoice)),
+      if (app.mCount) (Icons.checklist_rounded, context.tr('Stock Count'), app.goCount),
+      if (app.mCount) (Icons.warning_amber_rounded, context.tr('Low Stock'), app.goLow),
+      if (app.mReports) (Icons.show_chart, context.tr('Reports'), app.goReports),
+      (Icons.description_outlined, context.tr('Statements'), app.openStatementPicker),
+      (Icons.settings_outlined, context.tr('Settings'), () => app.nav(Screen.settings)),
     ];
 
     return GridView.builder(

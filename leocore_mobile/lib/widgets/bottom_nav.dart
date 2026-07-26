@@ -49,11 +49,11 @@ class LcBottomNav extends StatelessWidget {
           padding: EdgeInsets.fromLTRB(6, 8, 6, 10 + bottomInset),
           child: Row(
             children: [
-              item(Icons.home_outlined, 'Home', s == Screen.home, () => app.nav(Screen.home)),
-              item(Icons.inventory_2_outlined, 'Products', s == Screen.products, () => app.nav(Screen.products)),
+              item(Icons.home_outlined, context.tr('Home'), s == Screen.home, () => app.nav(Screen.home)),
+              item(Icons.inventory_2_outlined, context.tr('Products'), s == Screen.products, () => app.nav(Screen.products)),
               const SizedBox(width: 72),
-              item(Icons.people_outline, 'Customers', s == Screen.customers, () => app.nav(Screen.customers)),
-              item(Icons.grid_view_outlined, 'More', s == Screen.more, () => app.nav(Screen.more)),
+              item(Icons.people_outline, context.tr('Customers'), s == Screen.customers, () => app.nav(Screen.customers)),
+              item(Icons.grid_view_outlined, context.tr('More'), s == Screen.more, () => app.nav(Screen.more)),
             ],
           ),
         ),

@@ -82,8 +82,13 @@ class ApiClient {
     return const [];
   }
 
-  Future<Map<String, dynamic>> postJson(String path, {Object? body, bool auth = true}) async {
-    final res = await _send('POST', path, body: body, auth: auth);
+  Future<Map<String, dynamic>> postJson(
+    String path, {
+    Object? body,
+    bool auth = true,
+    String? idempotencyKey,
+  }) async {
+    final res = await _send('POST', path, body: body, auth: auth, idempotencyKey: idempotencyKey);
     return _asMap(res.data);
   }
 
@@ -95,6 +100,36 @@ class ApiClient {
   Future<void> postNoContent(String path, {Object? body, bool auth = true}) async {
     await _send('POST', path, body: body, auth: auth);
   }
+
+  Future<void> deleteNoContent(String path, {bool auth = true}) async {
+    await _send('DELETE', path, auth: auth);
+  }
+
+  /// Uploads files as `multipart/form-data` under [field].
+  Future<Map<String, dynamic>> postMultipart(
+    String path, {
+    required String field,
+    required List<String> filePaths,
+  }) async {
+    final form = FormData();
+    for (final p in filePaths) {
+      form.files.add(MapEntry(field, await MultipartFile.fromFile(p)));
+    }
+    final res = await _send('POST', path, body: form);
+    return _asMap(res.data);
+  }
+
+  /// Host origin without the `/api/mobile/v1` suffix — used to resolve
+  /// server-relative asset URLs such as `/Files/Pictures/x.png`.
+  String get origin {
+    final b = _baseUrl ?? '';
+    final i = b.indexOf('/api/mobile/v1');
+    return i < 0 ? b : b.substring(0, i);
+  }
+
+  /// Bearer header for authenticated image loads.
+  Map<String, String> get authHeaders =>
+      _accessToken == null ? const {} : {'Authorization': 'Bearer $_accessToken'};
 
   /// Downloads binary content (e.g. a PDF). Returns the bytes plus the filename
   /// parsed from Content-Disposition (falls back to [fallbackName]).
@@ -124,6 +159,7 @@ class ApiClient {
     bool auth = true,
     bool isRetry = false,
     bool responseBytes = false,
+    String? idempotencyKey,
   }) async {
     if (_baseUrl == null || _baseUrl!.isEmpty) {
       throw const ApiException('NO_SERVER', 'No server address configured.');
@@ -133,6 +169,9 @@ class ApiClient {
       responseType: responseBytes ? ResponseType.bytes : ResponseType.json,
       headers: {
         if (auth && _accessToken != null) 'Authorization': 'Bearer $_accessToken',
+        // Safe-retry key: replaying the same key returns the original record
+        // instead of creating a duplicate document.
+        if (idempotencyKey != null) 'Idempotency-Key': idempotencyKey,
       },
     );
 
@@ -152,7 +191,13 @@ class ApiClient {
       // Try one rotating refresh, then retry the original request.
       final refreshed = await _tryRefresh();
       if (refreshed) {
-        return _send(method, path, query: query, body: body, auth: auth, isRetry: true, responseBytes: responseBytes);
+        return _send(method, path,
+            query: query,
+            body: body,
+            auth: auth,
+            isRetry: true,
+            responseBytes: responseBytes,
+            idempotencyKey: idempotencyKey);
       }
       onSessionExpired?.call();
     }

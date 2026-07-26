@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../data/mock_data.dart';
 import '../state/app_state.dart';
 import '../theme/tokens.dart';
 import '../utils/money.dart';
@@ -15,33 +14,81 @@ class StatementScreen extends StatelessWidget {
     final app = context.watch<AppState>();
     final lc = context.lc;
 
-    Widget bucket(String label, String amount, Color fg, Color bg) => Expanded(
+    // Ageing buckets come from the statement response, never hardcoded.
+    final aging = app.customerAging;
+
+    Widget bucket(String label, double value, Color fg, Color bg) => Expanded(
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
             decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(label, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: fg)),
                 const SizedBox(height: 2),
-                Text(amount, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, fontFeatures: [FontFeature.tabularFigures()])),
+                // Scale down rather than wrap — a wrapped amount reads as a
+                // different number (e.g. "1,200.50 / 0").
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    Money.fmt(value),
+                    maxLines: 1,
+                    softWrap: false,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: value < 0 ? lc.ok : lc.ink,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
         );
 
     Widget cell(String s, {int flex = 1, TextAlign align = TextAlign.left, TextStyle? style}) =>
-        Expanded(flex: flex, child: Text(s, textAlign: align, style: style));
+        Expanded(
+          flex: flex,
+          child: Text(s, textAlign: align, maxLines: 2, overflow: TextOverflow.ellipsis, style: style),
+        );
+
+    /// Right-aligned money cell: never wraps, and shows a neutral placeholder
+    /// (not a dash) when empty so it can't be mistaken for a minus sign on the
+    /// neighbouring balance.
+    Widget moneyCell(double? v, {required int flex, TextStyle? style, bool signed = false}) => Expanded(
+          flex: flex,
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: v == null
+                ? Text('·', style: TextStyle(fontSize: 12, color: lc.mut.withValues(alpha: 0.5)))
+                : FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      Money.fmt(v),
+                      maxLines: 1,
+                      softWrap: false,
+                      style: (style ?? const TextStyle()).copyWith(
+                        color: signed && v < 0 ? lc.bad : style?.color,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  ),
+          ),
+        );
+
     final head = TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, letterSpacing: 0.5, color: lc.mut);
 
     return Column(
       children: [
         ScreenHeader(
-          title: 'Account statement',
+          title: context.tr('Account statement'),
           subtitle: app.statementPartyName,
           onBack: () => app.nav(app.statementReturn),
           actions: [
-            IconChip(Icons.ios_share, fg: lc.ink, onTap: app.shareStmt, busy: app.statementSharing),
+            IconChip(Icons.download_outlined, fg: lc.ink, onTap: app.downloadStmt, busy: app.statementSharing),
             IconChip(Icons.print_outlined, fg: lc.ink, onTap: app.printStmt, busy: app.statementPrinting),
           ],
         ),
@@ -62,7 +109,7 @@ class StatementScreen extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('As-on date', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: lc.mut)),
+                        Text(context.tr('As-on date'), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: lc.mut)),
                         Text(app.statementAsOnLabel, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
                       ],
                     ),
@@ -78,13 +125,13 @@ class StatementScreen extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 60),
             children: [
               Row(children: [
-                bucket('0–30d', '1,200.500', lc.ok, lc.okbg),
+                bucket('0–30d', aging.isNotEmpty ? aging[0] : 0, lc.ok, lc.okbg),
                 const SizedBox(width: 8),
-                bucket('31–60d', '850.250', const Color(0xFF8A6A1F), lc.goldbg),
+                bucket('31–60d', aging.length > 1 ? aging[1] : 0, const Color(0xFF8A6A1F), lc.goldbg),
                 const SizedBox(width: 8),
-                bucket('61–90d', '400.000', lc.warn, lc.warnbg),
+                bucket('61–90d', aging.length > 2 ? aging[2] : 0, lc.warn, lc.warnbg),
                 const SizedBox(width: 8),
-                bucket('90+d', '0.000', lc.bad, lc.badbg),
+                bucket('90+d', aging.length > 3 ? aging[3] : 0, lc.bad, lc.badbg),
               ]),
               const SizedBox(height: 12),
               if (app.statementLoading && app.stmtRows.isEmpty)
@@ -101,11 +148,12 @@ class StatementScreen extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       decoration: BoxDecoration(border: Border(bottom: BorderSide(color: lc.line))),
                       child: Row(children: [
-                        cell('DATE', flex: 23, style: head),
-                        cell('DOCUMENT', flex: 32, style: head),
-                        cell('DEBIT', flex: 20, align: TextAlign.right, style: head),
-                        cell('CREDIT', flex: 20, align: TextAlign.right, style: head),
-                        cell('BALANCE', flex: 21, align: TextAlign.right, style: head),
+                        cell(context.tr('DATE'), flex: 22, style: head),
+                        cell(context.tr('DOCUMENT'), flex: 30, style: head),
+                        cell(context.tr('DEBIT'), flex: 19, align: TextAlign.right, style: head),
+                        cell(context.tr('CREDIT'), flex: 19, align: TextAlign.right, style: head),
+                        const SizedBox(width: 10), // gutter before BALANCE
+                        cell(context.tr('BALANCE'), flex: 24, align: TextAlign.right, style: head),
                       ]),
                     ),
                     for (final r in app.stmtRows)
@@ -113,11 +161,22 @@ class StatementScreen extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(vertical: 11),
                         decoration: BoxDecoration(border: Border(bottom: BorderSide(color: lc.line))),
                         child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-                          cell(r.d, flex: 23, style: TextStyle(fontSize: 11.5, color: lc.mut)),
-                          cell(r.doc, flex: 32, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600)),
-                          cell(r.dr == null ? '—' : Money.fmt(r.dr!), flex: 20, align: TextAlign.right, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: lc.prim2)),
-                          cell(r.cr == null ? '—' : Money.fmt(r.cr!), flex: 20, align: TextAlign.right, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: lc.ok)),
-                          cell(Money.fmt(r.bal), flex: 21, align: TextAlign.right, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700)),
+                          cell(r.d, flex: 22, style: TextStyle(fontSize: 11.5, color: lc.mut)),
+                          cell(r.doc, flex: 30, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600)),
+                          moneyCell(r.dr,
+                              flex: 19,
+                              signed: true,
+                              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: lc.prim2)),
+                          moneyCell(r.cr,
+                              flex: 19,
+                              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: lc.ok)),
+                          // Gutter keeps an empty debit/credit cell from reading
+                          // as a minus sign in front of the balance.
+                          const SizedBox(width: 10),
+                          moneyCell(r.bal,
+                              flex: 24,
+                              signed: true,
+                              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700)),
                         ]),
                       ),
                     Padding(
@@ -125,8 +184,24 @@ class StatementScreen extends StatelessWidget {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text('Closing balance', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-                          Text('${MockData.money(app.statementClosing)} BHD', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: lc.prim2)),
+                          Text(context.tr('Closing balance'), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                          Flexible(
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerRight,
+                              child: Text(
+                                '${Money.fmt(app.statementClosing)} BHD',
+                                maxLines: 1,
+                                softWrap: false,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: app.statementClosing < 0 ? lc.bad : lc.prim2,
+                                  fontFeatures: const [FontFeature.tabularFigures()],
+                                ),
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -135,16 +210,30 @@ class StatementScreen extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               PrimaryButton(
-                app.statementSharing ? 'Preparing PDF…' : 'Share PDF via WhatsApp',
-                icon: Icons.ios_share,
-                onTap: app.shareStmt,
+                app.statementSharing ? context.tr('Preparing PDF…') : context.tr('Download PDF'),
+                icon: Icons.download_outlined,
+                onTap: app.downloadStmt,
                 busy: app.statementSharing,
               ),
               const SizedBox(height: 10),
-              OutlineButton2(
-                'Print statement',
-                onTap: app.printStmt,
-                busy: app.statementPrinting,
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlineButton2(
+                      context.tr('Share'),
+                      borderColor: lc.line,
+                      onTap: app.shareStmt,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlineButton2(
+                      context.tr('Print'),
+                      onTap: app.printStmt,
+                      busy: app.statementPrinting,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

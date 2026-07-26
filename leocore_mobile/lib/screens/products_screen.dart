@@ -49,14 +49,14 @@ class _ProductsScreenState extends State<ProductsScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Products', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700)),
+                  Text(context.tr('Products'), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700)),
                   IconChip(Icons.refresh, fg: lc.ink, onTap: app.doRefresh),
                 ],
               ),
               const SizedBox(height: 12),
               Row(
                 children: [
-                  Expanded(child: SearchField(hint: 'Search name, code or barcode', controller: _search, onChanged: app.setQuery)),
+                  Expanded(child: SearchField(hint: context.tr('Search name, code or barcode'), controller: _search, onChanged: app.setQuery)),
                   const SizedBox(width: 10),
                   GestureDetector(
                     onTap: app.openFilter,
@@ -184,9 +184,9 @@ class _EmptyProducts extends StatelessWidget {
           children: [
             Icon(Icons.search_off, size: 52, color: lc.line),
             const SizedBox(height: 12),
-            const Text('No products found', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+            Text(context.tr('No products found'), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
             const SizedBox(height: 8),
-            Text('Try a different name or barcode, or clear the category filter.',
+            Text(context.tr('Try a different name or barcode, or clear the category filter.'),
                 textAlign: TextAlign.center, style: TextStyle(fontSize: 13, height: 1.5, color: lc.mut)),
             const SizedBox(height: 12),
             GestureDetector(
@@ -196,7 +196,7 @@ class _EmptyProducts extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 18),
                 alignment: Alignment.center,
                 decoration: BoxDecoration(borderRadius: BorderRadius.circular(99), border: Border.all(color: lc.prim, width: 1.5)),
-                child: Text('Clear search', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: lc.tprim)),
+                child: Text(context.tr('Clear search'), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: lc.tprim)),
               ),
             ),
           ],

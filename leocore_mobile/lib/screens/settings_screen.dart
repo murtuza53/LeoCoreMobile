@@ -41,7 +41,7 @@ class SettingsScreen extends StatelessWidget {
 
     return Column(
       children: [
-        ScreenHeader(title: 'Settings', onBack: () => app.nav(Screen.more)),
+        ScreenHeader(title: context.tr('Settings'), onBack: () => app.nav(Screen.more)),
         Expanded(
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 60),
@@ -78,14 +78,14 @@ class SettingsScreen extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 14),
                 child: Column(
                   children: [
-                    _prefRow(context, 'Language', trailing: miniSeg([
+                    _prefRow(context, context.tr('Language'), trailing: miniSeg([
                       ('English', app.lang == 'en', () => app.pickLang('en')),
                       ('العربية', app.lang == 'ar', () => app.pickLang('ar')),
                     ])),
                     _divider(lc),
-                    _prefRow(context, 'Theme', trailing: miniSeg([
-                      ('☀ Light', !app.isDark, app.pickLight),
-                      ('☾ Dark', app.isDark, app.pickDark),
+                    _prefRow(context, context.tr('Theme'), trailing: miniSeg([
+                      ('☀ ${context.tr('Light')}', !app.isDark, app.pickLight),
+                      ('☾ ${context.tr('Dark')}', app.isDark, app.pickDark),
                     ])),
                     _divider(lc),
                     GestureDetector(
@@ -93,10 +93,10 @@ class SettingsScreen extends StatelessWidget {
                       behavior: HitTestBehavior.opaque,
                       child: _toggleRow(
                           context,
-                          'Fingerprint unlock',
+                          context.tr('Fingerprint unlock'),
                           app.biometricAvailable
-                              ? 'Require your fingerprint to reopen the app'
-                              : 'No fingerprint enrolled on this device',
+                              ? context.tr('Require your fingerprint to reopen the app')
+                              : context.tr('No fingerprint enrolled on this device'),
                           app.biometrics,
                           lc.ok),
                     ),
@@ -104,7 +104,7 @@ class SettingsScreen extends StatelessWidget {
                     GestureDetector(
                       onTap: app.toggleOffline,
                       behavior: HitTestBehavior.opaque,
-                      child: _toggleRow(context, 'Simulate offline mode', 'Shows the offline banner & sync queue', app.offline, lc.warn, last: true),
+                      child: _toggleRow(context, context.tr('Simulate offline mode'), context.tr('Shows the offline banner & sync queue'), app.offline, lc.warn, last: true),
                     ),
                   ],
                 ),
@@ -117,20 +117,20 @@ class SettingsScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: app.demoMode
                       ? [
-                          const SectionLabel('Demo role (permissions)'),
+                          SectionLabel(context.tr('Demo role (permissions)')),
                           const SizedBox(height: 10),
                           Row(children: [
-                            _roleBtn(context, 'Manager', app.role == Role.manager, () => app.pickRole(Role.manager)),
+                            _roleBtn(context, context.tr('Manager'), app.role == Role.manager, () => app.pickRole(Role.manager)),
                             const SizedBox(width: 8),
-                            _roleBtn(context, 'Sales Rep', app.role == Role.salesRep, () => app.pickRole(Role.salesRep)),
+                            _roleBtn(context, context.tr('Sales Rep'), app.role == Role.salesRep, () => app.pickRole(Role.salesRep)),
                             const SizedBox(width: 8),
-                            _roleBtn(context, 'Storekeeper', app.role == Role.storekeeper, () => app.pickRole(Role.storekeeper)),
+                            _roleBtn(context, context.tr('Storekeeper'), app.role == Role.storekeeper, () => app.pickRole(Role.storekeeper)),
                           ]),
                           const SizedBox(height: 10),
-                          Text('Home workspace tiles appear only if the role has permission — try switching.', style: TextStyle(fontSize: 11.5, height: 1.5, color: lc.mut)),
+                          Text(context.tr('Home workspace tiles appear only if the role has permission — try switching.'), style: TextStyle(fontSize: 11.5, height: 1.5, color: lc.mut)),
                         ]
                       : [
-                          const SectionLabel('Roles & access'),
+                          SectionLabel(context.tr('Roles & access')),
                           const SizedBox(height: 10),
                           Wrap(
                             spacing: 8,
@@ -138,11 +138,11 @@ class SettingsScreen extends StatelessWidget {
                             children: [
                               for (final r in (app.me?.roles ?? const <String>[]))
                                 Pill(r, bg: lc.goldbg, fg: lc.tprim, size: 11.5),
-                              Pill(app.canWrite ? 'read · write' : 'read only', bg: lc.soft, fg: lc.mut, size: 11.5),
+                              Pill(app.canWrite ? context.tr('read · write') : context.tr('read only'), bg: lc.soft, fg: lc.mut, size: 11.5),
                             ],
                           ),
                           const SizedBox(height: 10),
-                          Text('Access is granted server-side per role; the app only shows what your account permits.', style: TextStyle(fontSize: 11.5, height: 1.5, color: lc.mut)),
+                          Text(context.tr('Access is granted server-side per role; the app only shows what your account permits.'), style: TextStyle(fontSize: 11.5, height: 1.5, color: lc.mut)),
                         ],
                 ),
               ),
@@ -153,13 +153,13 @@ class SettingsScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Padding(padding: EdgeInsets.only(top: 12, bottom: 4), child: SectionLabel('Registered devices')),
+                    Padding(padding: const EdgeInsets.only(top: 12, bottom: 4), child: SectionLabel(context.tr('Registered devices'))),
                     if (app.demoMode) ...[
                       _deviceRow(context, 'iPhone 15 · Yousif', 'This device · last sync 2 min ago', active: true),
                       _divider(lc),
                       _deviceRow(context, 'Zebra TC26 · Store', 'Last sync 3 days ago', active: false, last: true),
                     ] else
-                      _deviceRow(context, app.deviceLabel, 'This device · signed in', active: true, last: true),
+                      _deviceRow(context, app.deviceLabel, context.tr('This device · signed in'), active: true, last: true),
                   ],
                 ),
               ),
@@ -172,12 +172,12 @@ class SettingsScreen extends StatelessWidget {
                   children: [
                     Icon(Icons.star_rate_rounded, size: 22, color: lc.gold),
                     const SizedBox(width: 13),
-                    const Expanded(
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Rate LeoCore ERP', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-                          Text('Enjoying the app? Leave a review', style: TextStyle(fontSize: 12, color: Color(0xFF6F695C))),
+                          Text(context.tr('Rate LeoCore ERP'), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                          Text(context.tr('Enjoying the app? Leave a review'), style: const TextStyle(fontSize: 12, color: Color(0xFF6F695C))),
                         ],
                       ),
                     ),
@@ -198,7 +198,7 @@ class SettingsScreen extends StatelessWidget {
                     children: [
                       Icon(Icons.logout, size: 18, color: lc.bad),
                       const SizedBox(width: 8),
-                      Text('Sign out', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: lc.bad)),
+                      Text(context.tr('Sign out'), style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: lc.bad)),
                     ],
                   ),
                 ),
@@ -278,9 +278,9 @@ class SettingsScreen extends StatelessWidget {
             ),
           ),
           if (active)
-            Pill('Active', bg: lc.okbg, fg: lc.ok)
+            Pill(context.tr('Active'), bg: lc.okbg, fg: lc.ok)
           else
-            Text('Revoke', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: lc.bad)),
+            Text(context.tr('Revoke'), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: lc.bad)),
         ],
       ),
     );

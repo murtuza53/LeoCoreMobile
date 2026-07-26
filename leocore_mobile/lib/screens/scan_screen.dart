@@ -49,22 +49,22 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: lc.card,
-        title: const Text('Enter barcode', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+        title: Text(context.tr('Enter barcode'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
         content: TextField(
           controller: controller,
           autofocus: true,
           keyboardType: TextInputType.text,
           style: TextStyle(color: lc.ink),
           decoration: InputDecoration(
-            hintText: 'Barcode / code',
+            hintText: context.tr('Barcode / code'),
             enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: lc.line)),
             focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: lc.prim2)),
           ),
           onSubmitted: (v) => Navigator.of(ctx).pop(v),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text('Cancel', style: TextStyle(color: lc.mut))),
-          TextButton(onPressed: () => Navigator.of(ctx).pop(controller.text), child: Text('Look up', style: TextStyle(color: lc.tprim, fontWeight: FontWeight.w700))),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(context.tr('Cancel'), style: TextStyle(color: lc.mut))),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(controller.text), child: Text(context.tr('Look up'), style: TextStyle(color: lc.tprim, fontWeight: FontWeight.w700))),
         ],
       ),
     );
@@ -87,7 +87,7 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     IconChip(Icons.close, bg: Colors.white.withValues(alpha: 0.12), fg: Colors.white, border: const Border(), onTap: app.closeScan),
-                    const Text('Scan barcode', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white)),
+                    Text(context.tr('Scan barcode'), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white)),
                     GestureDetector(
                       onTap: () => _scanner.toggleTorch(),
                       child: Container(
@@ -171,7 +171,7 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
                         Icon(Icons.barcode_reader, size: 16, color: Colors.white.withValues(alpha: 0.5)),
                         const SizedBox(width: 10),
                         Flexible(
-                          child: Text('EAN-13 · Code-128 · QR — align the code inside the frame',
+                          child: Text(context.tr('EAN-13 · Code-128 · QR — align the code inside the frame'),
                               style: TextStyle(fontSize: 12.5, color: Colors.white.withValues(alpha: 0.5))),
                         ),
                       ],
@@ -187,7 +187,7 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
                           border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Text('Enter barcode manually', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white)),
+                        child: Text(context.tr('Enter barcode manually'), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white)),
                       ),
                     ),
                   ],
@@ -244,9 +244,9 @@ class _CameraError extends StatelessWidget {
         children: [
           Icon(Icons.no_photography_outlined, size: 44, color: Colors.white.withValues(alpha: 0.4)),
           const SizedBox(height: 12),
-          Text('Camera unavailable', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white.withValues(alpha: 0.8))),
+          Text(context.tr('Camera unavailable'), style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white.withValues(alpha: 0.8))),
           const SizedBox(height: 6),
-          Text('Grant camera permission, or enter the barcode manually.',
+          Text(context.tr('Grant camera permission, or enter the barcode manually.'),
               textAlign: TextAlign.center, style: TextStyle(fontSize: 12.5, color: Colors.white.withValues(alpha: 0.5))),
           const SizedBox(height: 14),
           GestureDetector(
@@ -256,7 +256,7 @@ class _CameraError extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 18),
               alignment: Alignment.center,
               decoration: BoxDecoration(border: Border.all(color: _gold, width: 1.5), borderRadius: BorderRadius.circular(12)),
-              child: const Text('Enter barcode', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: Colors.white)),
+              child: Text(context.tr('Enter barcode'), style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: Colors.white)),
             ),
           ),
         ],
@@ -293,7 +293,7 @@ class _MatchSheet extends StatelessWidget {
                   Center(child: Container(width: 40, height: 4.5, decoration: BoxDecoration(color: lc.line, borderRadius: BorderRadius.circular(99)))),
                   const SizedBox(height: 14),
                   Row(children: [
-                    Pill('✓ Match found', bg: lc.okbg, fg: lc.ok, size: 11),
+                    Pill('✓ ${context.tr('Match found')}', bg: lc.okbg, fg: lc.ok, size: 11),
                     const SizedBox(width: 8),
                     Expanded(child: Text(p.barcode.isEmpty ? p.code : p.barcode, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: lc.mut))),
                   ]),
@@ -317,11 +317,11 @@ class _MatchSheet extends StatelessWidget {
                   ]),
                   const SizedBox(height: 14),
                   Row(children: [
-                    Expanded(flex: 10, child: OutlineButton2('Open', height: 48, borderColor: lc.line, onTap: app.openScanned)),
+                    Expanded(flex: 10, child: OutlineButton2(context.tr('Open'), height: 48, borderColor: lc.line, onTap: app.openScanned)),
                     const SizedBox(width: 9),
-                    Expanded(flex: 14, child: PrimaryButton('Add to memo', height: 48, onTap: app.addScanned)),
+                    Expanded(flex: 14, child: PrimaryButton(context.tr('Add to memo'), height: 48, onTap: app.addScanned)),
                     const SizedBox(width: 9),
-                    Expanded(flex: 10, child: OutlineButton2('Count', height: 48, borderColor: lc.gold, onTap: app.countScanned)),
+                    Expanded(flex: 10, child: OutlineButton2(context.tr('Count'), height: 48, borderColor: lc.gold, onTap: app.countScanned)),
                   ]),
                 ],
               ),

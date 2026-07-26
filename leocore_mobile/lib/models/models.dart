@@ -4,6 +4,15 @@
 // real `/api/mobile/v1` API is wired in, these become the deserialization
 // targets (freezed/json_serializable) — the UI already speaks this vocabulary.
 
+/// A product photo stored on the server. [url] is server-relative
+/// (e.g. `/Files/Pictures/<guid>.png`) and is resolved against the host.
+class ProductImage {
+  final int id;
+  final String url;
+  final bool isPrimary;
+  const ProductImage({required this.id, required this.url, this.isPrimary = false});
+}
+
 class Product {
   final int id;
   final String code;
@@ -19,6 +28,9 @@ class Product {
   /// (warehouse name, quantity) pairs.
   final List<(String, int)> wh;
 
+  /// Product photos from the server (server-relative URLs).
+  final List<ProductImage> images;
+
   const Product({
     required this.id,
     required this.code,
@@ -31,9 +43,10 @@ class Product {
     required this.stock,
     required this.barcode,
     required this.wh,
+    this.images = const [],
   });
 
-  Product copyWith({int? stock, List<(String, int)>? wh}) => Product(
+  Product copyWith({int? stock, List<(String, int)>? wh, List<ProductImage>? images}) => Product(
         id: id,
         code: code,
         name: name,
@@ -45,6 +58,7 @@ class Product {
         stock: stock ?? this.stock,
         barcode: barcode,
         wh: wh ?? this.wh,
+        images: images ?? this.images,
       );
 }
 

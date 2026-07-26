@@ -72,18 +72,18 @@ class _CustomersScreenState extends State<CustomersScreen> {
                 crossAxisAlignment: CrossAxisAlignment.baseline,
                 textBaseline: TextBaseline.alphabetic,
                 children: [
-                  const Text('Customers', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700)),
+                  Text(context.tr('Customers'), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700)),
                   Text.rich(TextSpan(
                     style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: lc.mut),
                     children: [
-                      const TextSpan(text: 'AR total · '),
+                      TextSpan(text: '${context.tr('AR total')} · '),
                       TextSpan(text: '${MockData.money(app.arTotal)} BHD', style: TextStyle(color: lc.prim2, fontWeight: FontWeight.w700)),
                     ],
                   )),
                 ],
               ),
               const SizedBox(height: 12),
-              SearchField(hint: 'Search customers by name or area', controller: _search, onChanged: app.setCustomerQuery),
+              SearchField(hint: context.tr('Search customers by name or area'), controller: _search, onChanged: app.setCustomerQuery),
             ],
           ),
         ),
@@ -91,7 +91,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
           child: app.customers.isEmpty && app.dataLoading
               ? Center(child: CircularProgressIndicator(color: lc.prim, strokeWidth: 2.4))
               : rows.isEmpty
-              ? Center(child: Text(app.customerQuery.isEmpty ? 'No customers' : 'No matching customers', style: TextStyle(fontSize: 14, color: lc.mut)))
+              ? Center(child: Text(app.customerQuery.isEmpty ? context.tr('No customers') : context.tr('No matching customers'), style: TextStyle(fontSize: 14, color: lc.mut)))
               : ListView.separated(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 140),
             itemCount: rows.length,
@@ -100,7 +100,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
               final c = rows[i];
               final bucket = agingBucket(c);
               final (fg, bg) = c.out == 0 ? (lc.ok, lc.okbg) : bucketColors(lc, bucket);
-              final chip = c.out == 0 ? 'Clear' : agingLabels[bucket];
+              final chip = c.out == 0 ? context.tr('Clear') : agingLabels[bucket];
               return LcCard(
                 onTap: () => app.openCustomer(c.id),
                 padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
@@ -193,7 +193,7 @@ class CustomerScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('OUTSTANDING BALANCE', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, letterSpacing: 0.7, color: Colors.white.withValues(alpha: 0.65))),
+                    Text(context.tr('OUTSTANDING BALANCE'), style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, letterSpacing: 0.7, color: Colors.white.withValues(alpha: 0.65))),
                     const SizedBox(height: 12),
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.baseline,
@@ -208,8 +208,8 @@ class CustomerScreen extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Credit limit ${MockData.money(c.limit)}', style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.7))),
-                        Text('Terms · Net 30', style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.7))),
+                        Text('${context.tr('Credit limit')} ${MockData.money(c.limit)}', style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.7))),
+                        Text(context.tr('Terms · Net 30'), style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.7))),
                       ],
                     ),
                   ],
@@ -217,11 +217,11 @@ class CustomerScreen extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               Row(children: [
-                quick(Icons.call_outlined, 'Call', lc.icon, app.callCust),
+                quick(Icons.call_outlined, context.tr('Call'), lc.icon, app.callCust),
                 const SizedBox(width: 9),
-                quick(Icons.chat_bubble_outline, 'WhatsApp', lc.ok, app.waCust),
+                quick(Icons.chat_bubble_outline, context.tr('WhatsApp'), lc.ok, app.waCust),
                 const SizedBox(width: 9),
-                quick(Icons.location_on_outlined, 'Navigate', lc.icon, app.navCust),
+                quick(Icons.location_on_outlined, context.tr('Navigate'), lc.icon, app.navCust),
               ]),
               const SizedBox(height: 12),
               LcCard(
@@ -229,7 +229,7 @@ class CustomerScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const SectionLabel('Ageing'),
+                    SectionLabel(context.tr('Ageing')),
                     const SizedBox(height: 12),
                     for (var i = 0; i < 4; i++) ...[
                       Row(
@@ -254,12 +254,12 @@ class CustomerScreen extends StatelessWidget {
                   children: [
                     Icon(Icons.description_outlined, size: 22, color: lc.icon),
                     const SizedBox(width: 12),
-                    const Expanded(
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Account statement', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-                          Text('Running balance, as-on date, share & print', style: TextStyle(fontSize: 12, color: Color(0xFF6F695C))),
+                          Text(context.tr('Account statement'), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                          Text(context.tr('Running balance, as-on date, share & print'), style: const TextStyle(fontSize: 12, color: Color(0xFF6F695C))),
                         ],
                       ),
                     ),
@@ -271,9 +271,9 @@ class CustomerScreen extends StatelessWidget {
               LcCard(
                 padding: const EdgeInsets.symmetric(horizontal: 14),
                 child: Column(children: [
-                  _kv(context, 'Last sale', '27 Jun 2026 · INV-10441'),
-                  _kv(context, 'Last payment', '01 Jul 2026 · 385.250 BHD'),
-                  _kv(context, 'Salesman', 'Yousif M. · Route 4', last: true),
+                  _kv(context, context.tr('Last sale'), '27 Jun 2026 · INV-10441'),
+                  _kv(context, context.tr('Last payment'), '01 Jul 2026 · 385.250 BHD'),
+                  _kv(context, context.tr('Salesman'), 'Yousif M. · Route 4', last: true),
                 ]),
               ),
             ],

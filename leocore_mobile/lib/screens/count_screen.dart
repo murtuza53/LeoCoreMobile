@@ -18,7 +18,7 @@ class CountScreen extends StatelessWidget {
         Column(
           children: [
             ScreenHeader(
-              title: 'Stock count',
+              title: context.tr('Stock count'),
               subtitle: 'Main WH · Tubli',
               onBack: () => app.nav(Screen.home),
               actions: [
@@ -48,7 +48,7 @@ class CountScreen extends StatelessWidget {
                 children: [
                   IconChip(Icons.qr_code_scanner, size: 52, fg: lc.gold, border: Border.all(color: lc.gold, width: 1.5), onTap: app.openScan),
                   const SizedBox(width: 10),
-                  Expanded(child: PrimaryButton('Submit count', onTap: app.submitCount)),
+                  Expanded(child: PrimaryButton(context.tr('Submit count'), onTap: app.submitCount)),
                 ],
               ),
             ),
@@ -79,12 +79,12 @@ class _StartPane extends StatelessWidget {
               child: Icon(Icons.checklist_rounded, size: 38, color: lc.icon),
             ),
             const SizedBox(height: 16),
-            const Text('Start a count session', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+            Text(context.tr('Start a count session'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
             const SizedBox(height: 16),
-            Text('Scan items with the barcode button — expected quantities load from the selected warehouse and variances are highlighted as you go.',
+            Text(context.tr('Scan items with the barcode button — expected quantities load from the selected warehouse and variances are highlighted as you go.'),
                 textAlign: TextAlign.center, style: TextStyle(fontSize: 13.5, height: 1.55, color: lc.mut)),
             const SizedBox(height: 16),
-            IntrinsicWidth(child: PrimaryButton('Start session', onTap: onStart)),
+            IntrinsicWidth(child: PrimaryButton(context.tr('Start session'), onTap: onStart)),
           ],
         ),
       ),
@@ -119,9 +119,9 @@ class _CountList extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
           child: Row(children: [
-            statCard('Lines', '${products.length} lines'),
+            statCard(context.tr('Lines'), '${products.length} ${context.tr('lines')}'),
             const SizedBox(width: 8),
-            statCard('Variances', '${app.countVar} variance', color: lc.bad),
+            statCard(context.tr('Variances'), '${app.countVar} ${context.tr('variance')}', color: lc.bad),
           ]),
         ),
         Expanded(
@@ -161,7 +161,7 @@ class _CountList extends StatelessWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Expected', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: lc.mut)),
+                              Text(context.tr('Expected'), style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: lc.mut)),
                               Text('$exp', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                             ],
                           ),
@@ -234,12 +234,12 @@ class _CountDoneDialog extends StatelessWidget {
                 child: Icon(Icons.check, size: 28, color: lc.ok),
               ),
               const SizedBox(height: 12),
-              const Text('Count submitted', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+              Text(context.tr('Count submitted'), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
               const SizedBox(height: 8),
-              Text('Session CNT-0042 · 4 lines · ${app.countVar} variance sent for approval.',
+              Text('Session CNT-0042 · 4 ${context.tr('lines')} · ${app.countVar} ${context.tr('variance sent for approval.')}',
                   textAlign: TextAlign.center, style: TextStyle(fontSize: 13, height: 1.5, color: lc.mut)),
               const SizedBox(height: 16),
-              IntrinsicWidth(child: PrimaryButton('Done', height: 46, onTap: app.closeCountDone)),
+              IntrinsicWidth(child: PrimaryButton(context.tr('Done'), height: 46, onTap: app.closeCountDone)),
             ],
           ),
         ),

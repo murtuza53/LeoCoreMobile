@@ -1,3 +1,5 @@
+import 'dart:io' show File;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -32,81 +34,8 @@ class ProductDetailScreen extends StatelessWidget {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
                 children: [
-                  // Photo carousel
-                  SizedBox(
-                    height: 180,
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      children: [
-                        Container(
-                          width: 300,
-                          margin: const EdgeInsets.only(right: 10),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(14),
-                            gradient: LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: [thumb, lc.soft]),
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.image_outlined,
-                                  size: 34,
-                                  color: Colors.white.withValues(alpha: 0.9)),
-                              const SizedBox(height: 8),
-                              Text('Product photo 1 · placeholder',
-                                  style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.white
-                                          .withValues(alpha: 0.95))),
-                            ],
-                          ),
-                        ),
-                        for (final n in [2, 3])
-                          Container(
-                            width: 300,
-                            margin: const EdgeInsets.only(right: 10),
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                                color: lc.soft,
-                                borderRadius: BorderRadius.circular(14)),
-                            child: Text('Photo $n · placeholder',
-                                style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: lc.mut)),
-                          ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                          width: 16,
-                          height: 5,
-                          decoration: BoxDecoration(
-                              color: lc.prim,
-                              borderRadius: BorderRadius.circular(99))),
-                      const SizedBox(width: 5),
-                      Container(
-                          width: 5,
-                          height: 5,
-                          decoration: BoxDecoration(
-                              color: lc.line,
-                              borderRadius: BorderRadius.circular(99))),
-                      const SizedBox(width: 5),
-                      Container(
-                          width: 5,
-                          height: 5,
-                          decoration: BoxDecoration(
-                              color: lc.line,
-                              borderRadius: BorderRadius.circular(99))),
-                    ],
-                  ),
+                  // Photo gallery — real server photos, plus capture / pick.
+                  _PhotoStrip(thumb: thumb),
                   const SizedBox(height: 12),
                   // Price card
                   LcCard(
@@ -121,7 +50,7 @@ class ProductDetailScreen extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
                             MoneyText(p.price,
-                                size: 26, unit: 'BHD · incl. VAT'),
+                                size: 26, unit: context.tr('BHD · incl. VAT')),
                             StockBadge(p, size: 11),
                           ],
                         ),
@@ -145,7 +74,7 @@ class ProductDetailScreen extends StatelessWidget {
                                           letterSpacing: 0.4))),
                               GestureDetector(
                                 onTap: app.openEdit,
-                                child: Text('Edit barcode / price',
+                                child: Text(context.tr('Edit barcode / price'),
                                     style: TextStyle(
                                         fontSize: 12.5,
                                         fontWeight: FontWeight.w700,
@@ -159,7 +88,7 @@ class ProductDetailScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 12),
                   Segmented(
-                    options: const ['Details', 'Product Ledger'],
+                    options: [context.tr('Details'), context.tr('Product Ledger')],
                     selected: app.prodTab == 'info' ? 0 : 1,
                     onSelect: (i) => app.setProdTab(i == 0 ? 'info' : 'ledger'),
                   ),
@@ -169,11 +98,11 @@ class ProductDetailScreen extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 14),
                       child: Column(
                         children: [
-                          _InfoRow('Category', p.cat),
-                          _InfoRow('Brand', p.brand),
-                          _InfoRow('Unit', p.unit),
-                          const _InfoRow('VAT class', 'Standard 10%'),
-                          _InfoRow('Cost price', '${Money.fmt(p.cost)} BHD',
+                          _InfoRow(context.tr('Category'), p.cat),
+                          _InfoRow(context.tr('Brand'), p.brand),
+                          _InfoRow(context.tr('Unit'), p.unit),
+                          _InfoRow(context.tr('VAT class'), context.tr('Standard 10%')),
+                          _InfoRow(context.tr('Cost price'), '${Money.fmt(p.cost)} BHD',
                               last: true),
                         ],
                       ),
@@ -184,7 +113,7 @@ class ProductDetailScreen extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          const SectionLabel('Stock by warehouse'),
+                          SectionLabel(context.tr('Stock by warehouse')),
                           const SizedBox(height: 12),
                           for (var i = 0; i < p.wh.length; i++) ...[
                             Row(
@@ -194,7 +123,7 @@ class ProductDetailScreen extends StatelessWidget {
                                     style: const TextStyle(
                                         fontSize: 13.5,
                                         fontWeight: FontWeight.w600)),
-                                Text('${p.wh[i].$2} pcs',
+                                Text('${p.wh[i].$2} ${context.tr('pcs')}',
                                     style: const TextStyle(
                                         fontSize: 13.5,
                                         fontWeight: FontWeight.w700)),
@@ -230,13 +159,13 @@ class ProductDetailScreen extends StatelessWidget {
               children: [
                 Expanded(
                     flex: 15,
-                    child: PrimaryButton('Add to memo',
+                    child: PrimaryButton(context.tr('Add to memo'),
                         icon: Icons.shopping_cart_outlined,
                         onTap: app.addCurrentToCart)),
                 const SizedBox(width: 10),
                 Expanded(
                     flex: 10,
-                    child: OutlineButton2('Count', onTap: app.goCount)),
+                    child: OutlineButton2(context.tr('Count'), onTap: app.goCount)),
               ],
             ),
           ),
@@ -298,7 +227,7 @@ class _LedgerCard extends StatelessWidget {
     if (rows.isEmpty) {
       return LcCard(
         padding: const EdgeInsets.symmetric(vertical: 40),
-        child: Center(child: Text('No ledger movements', style: TextStyle(fontSize: 13, color: lc.mut))),
+        child: Center(child: Text(context.tr('No ledger movements'), style: TextStyle(fontSize: 13, color: lc.mut))),
       );
     }
 
@@ -311,10 +240,10 @@ class _LedgerCard extends StatelessWidget {
             decoration: BoxDecoration(
                 border: Border(bottom: BorderSide(color: lc.line))),
             child: Row(children: [
-              cell('DATE', flex: 15, style: head),
-              cell('DOCUMENT', flex: 14, style: head),
-              cell('QTY', flex: 7, align: TextAlign.right, style: head),
-              cell('BALANCE', flex: 8, align: TextAlign.right, style: head),
+              cell(context.tr('DATE'), flex: 15, style: head),
+              cell(context.tr('DOCUMENT'), flex: 14, style: head),
+              cell(context.tr('QTY'), flex: 7, align: TextAlign.right, style: head),
+              cell(context.tr('BALANCE'), flex: 8, align: TextAlign.right, style: head),
             ]),
           ),
           for (var i = 0; i < rows.length; i++)
@@ -353,5 +282,188 @@ class _LedgerCard extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// Horizontal photo strip for the product: server photos, the pending local
+/// capture while it uploads, and an "add photo" tile.
+class _PhotoStrip extends StatelessWidget {
+  final Color thumb;
+  const _PhotoStrip({required this.thumb});
+
+  @override
+  Widget build(BuildContext context) {
+    final app = context.watch<AppState>();
+    final lc = context.lc;
+    final images = app.product.images;
+    final pending = app.pendingPhotoPath;
+
+    Widget tile({required Widget child, VoidCallback? onTap, VoidCallback? onLongPress}) =>
+        GestureDetector(
+          onTap: onTap,
+          onLongPress: onLongPress,
+          child: Container(
+            width: 300,
+            margin: const EdgeInsets.only(right: 10),
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(color: lc.soft, borderRadius: BorderRadius.circular(14)),
+            child: child,
+          ),
+        );
+
+    return Column(
+      children: [
+        SizedBox(
+          height: 180,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            children: [
+              // Photo being uploaded right now.
+              if (pending != null)
+                tile(
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Image.file(File(pending), fit: BoxFit.cover),
+                      if (app.photoUploading)
+                        Container(
+                          color: Colors.black.withValues(alpha: 0.42),
+                          alignment: Alignment.center,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const SizedBox(
+                                width: 26,
+                                height: 26,
+                                child: CircularProgressIndicator(strokeWidth: 2.6, color: Colors.white),
+                              ),
+                              const SizedBox(height: 10),
+                              Text(context.tr('Uploading…'),
+                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white)),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              // Photos already on the server.
+              for (final img in images)
+                tile(
+                  onLongPress: () => _confirmRemove(context, app, img.id),
+                  child: Image.network(
+                    app.imageUrl(img.url),
+                    headers: app.imageHeaders,
+                    fit: BoxFit.cover,
+                    loadingBuilder: (c, child, progress) => progress == null
+                        ? child
+                        : Center(child: CircularProgressIndicator(color: lc.prim, strokeWidth: 2.2)),
+                    errorBuilder: (c, e, s) => Center(
+                      child: Icon(Icons.broken_image_outlined, size: 30, color: lc.mut),
+                    ),
+                  ),
+                ),
+              // Add-photo tile.
+              GestureDetector(
+                onTap: app.photoUploading ? null : () => _pickSource(context, app),
+                child: Container(
+                  width: images.isEmpty && pending == null ? 300 : 150,
+                  margin: const EdgeInsets.only(right: 10),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: lc.line, width: 1.5),
+                    gradient: images.isEmpty && pending == null
+                        ? LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [thumb, lc.soft])
+                        : null,
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.add_a_photo_outlined,
+                          size: 30,
+                          color: images.isEmpty && pending == null
+                              ? Colors.white.withValues(alpha: 0.95)
+                              : lc.icon),
+                      const SizedBox(height: 8),
+                      Text(
+                        context.tr('Add photo'),
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: images.isEmpty && pending == null
+                              ? Colors.white.withValues(alpha: 0.95)
+                              : lc.mut,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (images.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Text(context.tr('Long-press a photo to remove it'),
+              style: TextStyle(fontSize: 10.5, color: lc.mut)),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _pickSource(BuildContext context, AppState app) async {
+    final lc = context.lc;
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: lc.card,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 10),
+            Container(width: 40, height: 4.5, decoration: BoxDecoration(color: lc.line, borderRadius: BorderRadius.circular(99))),
+            const SizedBox(height: 14),
+            ListTile(
+              leading: Icon(Icons.photo_camera_outlined, color: lc.icon),
+              title: Text(context.tr('Take photo'), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                app.addProductPhoto(fromCamera: true);
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.photo_library_outlined, color: lc.icon),
+              title: Text(context.tr('Choose from gallery'), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+              onTap: () {
+                Navigator.of(ctx).pop();
+                app.addProductPhoto(fromCamera: false);
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _confirmRemove(BuildContext context, AppState app, int imageId) async {
+    final lc = context.lc;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: lc.card,
+        title: Text(context.tr('Remove photo?'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+        content: Text(context.tr('This deletes the photo from the product.'),
+            style: TextStyle(fontSize: 13.5, color: lc.mut)),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(context.tr('Cancel'), style: TextStyle(color: lc.mut))),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text(context.tr('Remove'), style: TextStyle(color: lc.bad, fontWeight: FontWeight.w700))),
+        ],
+      ),
+    );
+    if (ok == true) await app.removeProductPhoto(imageId);
   }
 }

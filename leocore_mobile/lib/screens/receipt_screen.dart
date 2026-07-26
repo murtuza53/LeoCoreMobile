@@ -6,269 +6,150 @@ import '../theme/tokens.dart';
 import '../utils/money.dart';
 import '../widgets/common.dart';
 
-/// 80mm thermal receipt preview. The paper card uses fixed print colors (not
-/// theme tokens) because a real receipt is always ink-on-paper.
+/// Confirmation shown after a sales document is saved to the ERP.
+///
+/// Cash sales are saved as **drafts** (payment is taken later in the full app)
+/// and quotations are saved as **Open** — so this screen confirms the saved
+/// document and, for quotations, offers the PDF to send.
 class ReceiptScreen extends StatelessWidget {
   const ReceiptScreen({super.key});
 
-  static const _paper = Color(0xFFFFFDF7);
-  static const _ink = Color(0xFF22201B);
-  static const _muted = Color(0xFF5A564C);
-  static const _dash = Color(0xFFB9B4A6);
+  /// Server document status → display label. Uses distinct translation keys so
+  /// the quotation status "Open" isn't confused with the "Open" action verb.
+  static String _statusLabel(BuildContext context, String status) => switch (status) {
+        'Draft' => context.tr('Draft'),
+        'Open' => context.tr('Open quotation'),
+        '' => context.tr('Saved'),
+        _ => status,
+      };
 
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
     final lc = context.lc;
+    final doc = app.savedDoc;
+    final isQuote = doc != null && doc.expiryDate.isNotEmpty;
 
-    return Stack(
+    if (doc == null) {
+      return Column(
+        children: [
+          ScreenHeader(title: context.tr('Saved'), onBack: () => app.nav(Screen.home)),
+          Expanded(
+            child: Center(
+              child: Text(context.tr('Nothing saved yet'), style: TextStyle(fontSize: 14, color: lc.mut)),
+            ),
+          ),
+        ],
+      );
+    }
+
+    Widget row(String k, String v, {bool strong = false}) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 5),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(k, style: TextStyle(fontSize: strong ? 14 : 12.5, fontWeight: strong ? FontWeight.w700 : FontWeight.w500, color: strong ? lc.ink : lc.mut)),
+              Text(v,
+                  style: TextStyle(
+                      fontSize: strong ? 15 : 12.5,
+                      fontWeight: strong ? FontWeight.w700 : FontWeight.w600,
+                      color: strong ? lc.tprim : lc.ink,
+                      fontFeatures: const [FontFeature.tabularFigures()])),
+            ],
+          ),
+        );
+
+    return Column(
       children: [
-        Column(
-          children: [
-            ScreenHeader(
-                title: 'Receipt preview',
-                subtitle: '80mm thermal · INV-10497',
-                onBack: () => app.nav(Screen.invoice)),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(42, 10, 42, 130),
-                children: [
-                  Container(
-                    decoration: BoxDecoration(
-                      color: _paper,
-                      borderRadius: BorderRadius.circular(4),
-                      boxShadow: [
-                        BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.16),
-                            blurRadius: 26,
-                            offset: const Offset(0, 8))
-                      ],
-                    ),
-                    padding: const EdgeInsets.fromLTRB(16, 20, 16, 14),
-                    child: Column(
-                      children: [
-                        // Header
-                        const Column(
-                          children: [
-                            LcLogo(size: 26),
-                            SizedBox(height: 6),
-                            Text('LeoCore Trading W.L.L.',
-                                style: TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w700,
-                                    color: _ink)),
-                            SizedBox(height: 3),
-                            Text('Bldg 224, Rd 339, Blk 333 · Manama, Bahrain',
-                                style:
-                                    TextStyle(fontSize: 10.5, color: _muted)),
-                            Text('CR 84921-1 · TRN 220004479200002',
-                                style:
-                                    TextStyle(fontSize: 10.5, color: _muted)),
-                            Text('Tel +973 1729 4400',
-                                style:
-                                    TextStyle(fontSize: 10.5, color: _muted)),
-                          ],
-                        ),
-                        _dashDivider(),
-                        // Meta
-                        Column(
-                          children: [
-                            _metaRow('Invoice', 'INV-10497'),
-                            _metaRow('Date', '04 Jul 2026 · 10:42'),
-                            _metaRow('Cashier', 'Yousif M. · Van 12'),
-                            _metaRow('Payment', app.payments.isEmpty ? '—' : app.payments.map((p) => p.method).toSet().join(', ')),
-                          ],
-                        ),
-                        _dashDivider(),
-                        // Lines
-                        Column(
-                          children: [
-                            for (final line in app.cart) ...[
-                              Builder(builder: (_) {
-                                final p = app.productById(line.pid);
-                                return Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    Text(p.name,
-                                        style: const TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w600,
-                                            color: _ink)),
-                                    const SizedBox(height: 1),
-                                    Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text(
-                                            '${line.qty} × ${Money.fmt(p.price)}',
-                                            style: const TextStyle(
-                                                fontSize: 10.5, color: _muted)),
-                                        Text(Money.fmt(p.price * line.qty),
-                                            style: const TextStyle(
-                                                fontSize: 10.5,
-                                                fontWeight: FontWeight.w700,
-                                                color: _ink)),
-                                      ],
-                                    ),
-                                  ],
-                                );
-                              }),
-                              const SizedBox(height: 7),
-                            ],
-                          ],
-                        ),
-                        _dashDivider(),
-                        // Totals
-                        Column(
-                          children: [
-                            _totalRow('Subtotal', Money.fmt(app.subtotal)),
-                            _totalRow('VAT 10%', Money.fmt(app.vat)),
-                            const SizedBox(height: 3),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text('TOTAL BHD',
-                                    style: TextStyle(
-                                        fontSize: 13.5,
-                                        fontWeight: FontWeight.w700,
-                                        color: _ink)),
-                                Text(Money.fmt(app.total),
-                                    style: const TextStyle(
-                                        fontSize: 13.5,
-                                        fontWeight: FontWeight.w700,
-                                        color: _ink)),
-                              ],
-                            ),
-                            for (final p in app.payments) _totalRow(p.method, Money.fmt(p.amount)),
-                            _totalRow('Paid', Money.fmt(app.totalPaid)),
-                            _totalRow('Change', Money.fmt(app.change)),
-                          ],
-                        ),
-                        Container(
-                          margin: const EdgeInsets.only(top: 8),
-                          padding: const EdgeInsets.only(top: 8),
-                          decoration: const BoxDecoration(
-                              border: Border(top: BorderSide(color: _dash))),
-                          child: Column(
-                            children: [
-                              CustomPaint(
-                                  size: const Size(150, 34),
-                                  painter: _BarcodePainter()),
-                              const SizedBox(height: 6),
-                              const Text(
-                                  'شكراً لتسوقكم معنا · Thank you for shopping with us',
-                                  textAlign: TextAlign.center,
-                                  style:
-                                      TextStyle(fontSize: 10, color: _muted)),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+        ScreenHeader(
+          title: isQuote ? context.tr('Quotation saved') : context.tr('Draft saved'),
+          subtitle: doc.number,
+          onBack: () => app.nav(Screen.home),
         ),
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: 0,
-          child: Container(
-            padding: EdgeInsets.fromLTRB(16, 12, 16, 16 + MediaQuery.paddingOf(context).bottom),
-            decoration: BoxDecoration(
-                color: lc.card,
-                border: Border(top: BorderSide(color: lc.line))),
-            child: Row(
-              children: [
-                Expanded(
-                    flex: 10,
-                    child: OutlineButton2('Print',
-                        borderColor: lc.line, onTap: () => app.showToast('Receipt printing is coming soon'))),
-                const SizedBox(width: 10),
-                Expanded(
-                    flex: 13,
-                    child: PrimaryButton('New sale', onTap: app.newSale)),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
+            children: [
+              LcCard(
+                shadow: true,
+                padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 58,
+                        height: 58,
+                        decoration: BoxDecoration(color: lc.okbg, shape: BoxShape.circle),
+                        child: Icon(Icons.check_rounded, size: 30, color: lc.ok),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Center(
+                      child: Text(doc.number,
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                    ),
+                    const SizedBox(height: 6),
+                    Center(
+                      child: Pill(
+                        _statusLabel(context, doc.status),
+                        bg: isQuote ? lc.goldbg : lc.soft,
+                        fg: isQuote ? lc.tprim : lc.mut,
+                        size: 11.5,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    row(context.tr('Date'), doc.date),
+                    if (isQuote) row(context.tr('Valid until'), doc.expiryDate),
+                    Divider(height: 20, color: lc.line),
+                    row(context.tr('Subtotal'), Money.fmt(doc.subTotal)),
+                    if (doc.discount > 0) row(context.tr('Discount'), Money.fmt(doc.discount)),
+                    row(context.tr('VAT'), Money.fmt(doc.vatAmount)),
+                    Divider(height: 20, color: lc.line),
+                    row(context.tr('Total'), '${Money.fmt(doc.grandTotal)} BHD', strong: true),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              // Cash-sale drafts are completed in the full app.
+              if (!isQuote)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                  decoration: BoxDecoration(color: lc.soft, borderRadius: BorderRadius.circular(10)),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info_outline, size: 16, color: lc.mut),
+                      const SizedBox(width: 9),
+                      Expanded(
+                        child: Text(context.tr('Open this draft in the full app to take payment.'),
+                            style: TextStyle(fontSize: 11.5, height: 1.4, color: lc.mut)),
+                      ),
+                    ],
+                  ),
+                ),
+              if (isQuote) ...[
+                PrimaryButton(
+                  context.tr('Download PDF'),
+                  icon: Icons.download_outlined,
+                  onTap: () => app.downloadQuotationPdf(doc.id),
+                  busy: app.quotePdfBusy,
+                ),
+                const SizedBox(height: 10),
+                if (app.lastPdfPath != null)
+                  OutlineButton2(context.tr('Share PDF'), onTap: app.shareLastPdf),
               ],
-            ),
+              const SizedBox(height: 12),
+              OutlineButton2(
+                isQuote ? context.tr('New quotation') : context.tr('New cash sale'),
+                borderColor: lc.line,
+                onTap: isQuote ? app.newQuotation : app.newSale,
+              ),
+              const SizedBox(height: 10),
+              PrimaryButton(context.tr('Done'), onTap: () => app.nav(Screen.home)),
+            ],
           ),
         ),
       ],
     );
   }
-
-  Widget _dashDivider() => Container(
-        margin: const EdgeInsets.symmetric(vertical: 12),
-        height: 1,
-        decoration: const BoxDecoration(
-            border: Border(bottom: BorderSide(color: _dash))),
-      );
-
-  Widget _metaRow(String k, String v) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 1.5),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(k, style: const TextStyle(fontSize: 10.5, color: _muted)),
-            Text(v, style: const TextStyle(fontSize: 10.5, color: _ink)),
-          ],
-        ),
-      );
-
-  Widget _totalRow(String k, String v) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(k, style: const TextStyle(fontSize: 11, color: _muted)),
-            Text(v, style: const TextStyle(fontSize: 11, color: _muted)),
-          ],
-        ),
-      );
-}
-
-class _BarcodePainter extends CustomPainter {
-  static const List<double> _widths = [
-    3,
-    1.5,
-    4,
-    1.5,
-    2.5,
-    4.5,
-    1.5,
-    3,
-    1.5,
-    4,
-    2,
-    3.5,
-    1.5,
-    4.5,
-    2,
-    3,
-    1.5,
-    4,
-    2.5,
-    1.5,
-    3.5,
-    2,
-    4,
-    1.5,
-    3
-  ];
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = const Color(0xFF22201B);
-    var x = 2.0;
-    for (var i = 0; i < _widths.length; i++) {
-      if (i.isEven) {
-        canvas.drawRect(Rect.fromLTWH(x, 2, _widths[i], 30), paint);
-      }
-      x += _widths[i] + 2.5;
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

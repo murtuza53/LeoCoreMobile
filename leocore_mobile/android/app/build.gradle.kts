@@ -68,3 +68,18 @@ android {
 flutter {
     source = "../.."
 }
+
+// ── 16 KB page-size compliance ─────────────────────────────────────────────
+// mobile_scanner 5.x pulls older ML Kit (libbarhopper_v3.so) and CameraX
+// (libimage_processing_util_jni.so) whose native libraries are only 4 KB
+// aligned, which fails the Android 15/16 "16 KB-compatible" ELF check and
+// blocks Play uploads. Force the versions that ship 16 KB-aligned .so files.
+configurations.all {
+    resolutionStrategy {
+        force("com.google.mlkit:barcode-scanning:17.3.0")
+        force("androidx.camera:camera-core:1.4.2")
+        force("androidx.camera:camera-camera2:1.4.2")
+        force("androidx.camera:camera-lifecycle:1.4.2")
+        force("androidx.camera:camera-view:1.4.2")
+    }
+}

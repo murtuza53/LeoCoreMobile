@@ -20,9 +20,9 @@ class ReportsScreen extends StatelessWidget {
     return Column(
       children: [
         ScreenHeader(
-          title: 'Reports',
+          title: context.tr('Reports'),
           onBack: () => app.nav(Screen.home),
-          actions: [IconChip(Icons.ios_share, fg: lc.ink, onTap: () => app.showToast('Report export is coming soon'))],
+          actions: [IconChip(Icons.ios_share, fg: lc.ink, onTap: () => app.showToast(context.tr('Report export is coming soon')))],
         ),
         // Range chips
         SizedBox(
@@ -41,7 +41,7 @@ class ReportsScreen extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 15),
                   alignment: Alignment.center,
                   decoration: BoxDecoration(color: on ? lc.prim : lc.card, border: Border.all(color: on ? lc.prim : lc.line), borderRadius: BorderRadius.circular(99)),
-                  child: Text(_ranges[i].$2, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: on ? Colors.white : lc.ink)),
+                  child: Text(context.tr(_ranges[i].$2), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: on ? Colors.white : lc.ink)),
                 ),
               );
             },
@@ -62,11 +62,11 @@ class ReportsScreen extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Sales vs Purchases', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
+                        Text(context.tr('Sales vs Purchases'), style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
                         Row(children: [
-                          _legend(lc.prim, 'Sales'),
+                          _legend(lc.prim, context.tr('Sales')),
                           const SizedBox(width: 12),
-                          _legend(lc.gold, 'Purchases'),
+                          _legend(lc.gold, context.tr('Purchases')),
                         ]),
                       ],
                     ),
@@ -77,11 +77,11 @@ class ReportsScreen extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               Row(children: [
-                _stat(context, 'Net sales', '41,208.500', '▲ 8.2%', lc.ok),
+                _stat(context, context.tr('Net sales'), '41,208.500', '▲ 8.2%', lc.ok),
                 const SizedBox(width: 10),
-                _stat(context, 'Purchases', '27,940.000', '▲ 11.6%', lc.bad),
+                _stat(context, context.tr('Purchases'), '27,940.000', '▲ 11.6%', lc.bad),
                 const SizedBox(width: 10),
-                _stat(context, 'Margin', '32.2%', '▲ 0.4pt', lc.ok),
+                _stat(context, context.tr('Margin'), '32.2%', '▲ 0.4pt', lc.ok),
               ]),
               const SizedBox(height: 12),
               LcCard(
@@ -89,7 +89,7 @@ class ReportsScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const SectionLabel('Top customers'),
+                    SectionLabel(context.tr('Top customers')),
                     const SizedBox(height: 11),
                     _rankBar(context, 1, 'Gulf Mart WLL', 1.0, '9,412.000'),
                     _rankBar(context, 2, 'Al Jazira Supermarket', 0.74, '6,980.250'),
@@ -104,7 +104,7 @@ class ReportsScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const SectionLabel('Top items'),
+                    SectionLabel(context.tr('Top items')),
                     const SizedBox(height: 11),
                     _itemRow(context, 1, 'Mahmood Basmati Rice 5kg', '612 pcs', '3,029.400'),
                     _itemRow(context, 2, 'Almarai Full Fat Milk 2L', '1,840 pcs', '2,300.000'),
@@ -253,16 +253,16 @@ class _LiveReports extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 6, 16, 60),
       children: [
         Row(children: [
-          _stat(context, 'Net sales', sales.total, lc.ink),
+          _stat(context, context.tr('Net sales'), sales.total, lc.ink),
           const SizedBox(width: 10),
-          _stat(context, 'Purchases', purch.total, lc.ink),
+          _stat(context, context.tr('Purchases'), purch.total, lc.ink),
           const SizedBox(width: 10),
-          _stat(context, 'Gross', gross, gross >= 0 ? lc.ok : lc.bad),
+          _stat(context, context.tr('Gross'), gross, gross >= 0 ? lc.ok : lc.bad),
         ]),
         const SizedBox(height: 12),
-        _rankCard(context, 'Top customers', sales.top),
+        _rankCard(context, context.tr('Top customers'), sales.top),
         const SizedBox(height: 12),
-        _rankCard(context, 'Top suppliers', purch.top),
+        _rankCard(context, context.tr('Top suppliers'), purch.top),
       ],
     );
   }
@@ -298,7 +298,7 @@ class _LiveReports extends StatelessWidget {
           children: [
             SectionLabel(title),
             const SizedBox(height: 12),
-            Text('No activity in this period', style: TextStyle(fontSize: 13, color: lc.mut)),
+            Text(context.tr('No activity in this period'), style: TextStyle(fontSize: 13, color: lc.mut)),
           ],
         ),
       );
