@@ -163,6 +163,21 @@ class ApiClient {
     required String fallbackName,
   }) async {
     final res = await _send('GET', path, query: query, responseBytes: true);
+    return _bytesResult(res, fallbackName);
+  }
+
+  /// POSTs [body] and expects a binary response (e.g. `POST /labels/print` → PDF).
+  Future<({List<int> bytes, String filename, String contentType})> postBytes(
+    String path, {
+    Object? body,
+    required String fallbackName,
+  }) async {
+    final res = await _send('POST', path, body: body, responseBytes: true);
+    return _bytesResult(res, fallbackName);
+  }
+
+  ({List<int> bytes, String filename, String contentType}) _bytesResult(
+      Response<dynamic> res, String fallbackName) {
     final data = res.data;
     final List<int> bytes = data is List<int> ? data : (data is String ? data.codeUnits : const []);
     var name = fallbackName;

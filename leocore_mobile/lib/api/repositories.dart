@@ -1,6 +1,7 @@
 import 'package:intl/intl.dart';
 
 import '../models/models.dart';
+import '../models/reports.dart';
 import 'api_client.dart';
 
 // ── JSON helpers ─────────────────────────────────────────────────────────
@@ -293,6 +294,188 @@ class LeoRepository {
 
   Future<void> deleteProductImage(int productId, int imageId) =>
       _client.deleteNoContent('/products/$productId/images/$imageId');
+
+  // ── Manager reports (v1.4.5+, RBAC-gated) ──────────────────────────────
+  Future<AgingReport> receivablesAging({String? asOn}) async =>
+      AgingReport.fromJson(await _client.getJson('/reports/receivables/aging',
+          query: {if (asOn != null) 'asOn': asOn}));
+
+  Future<CollectionsReport> collections({required String from, required String to}) async =>
+      CollectionsReport.fromJson(await _client.getJson('/reports/collections', query: {'from': from, 'to': to}));
+
+  Future<CashPosition> cashPosition({String? asOn}) async =>
+      CashPosition.fromJson(await _client.getJson('/reports/cash-position', query: {if (asOn != null) 'asOn': asOn}));
+
+  Future<SalesTrendReport> salesTrend({required String from, required String to, String groupBy = 'day'}) async =>
+      SalesTrendReport.fromJson(await _client.getJson('/reports/sales/trend', query: {'from': from, 'to': to, 'groupBy': groupBy}));
+
+  Future<MarginReport> margin({required String from, required String to}) async =>
+      MarginReport.fromJson(await _client.getJson('/reports/margin', query: {'from': from, 'to': to}));
+
+  Future<TopItemsReport> topItems({required String from, required String to, int limit = 10, String by = 'value'}) async =>
+      TopItemsReport.fromJson(await _client.getJson('/reports/top-items', query: {'from': from, 'to': to, 'limit': limit, 'by': by}));
+
+  Future<CategorySalesReport> salesByCategory({required String from, required String to}) async =>
+      CategorySalesReport.fromJson(await _client.getJson('/reports/sales/by-category', query: {'from': from, 'to': to}));
+
+  Future<VatReport> vat({required String from, required String to}) async =>
+      VatReport.fromJson(await _client.getJson('/reports/vat', query: {'from': from, 'to': to}));
+
+  Future<SalesmanReport> salesBySalesman({required String from, required String to}) async =>
+      SalesmanReport.fromJson(await _client.getJson('/reports/sales/by-salesman', query: {'from': from, 'to': to}));
+
+  Future<InventoryValuation> inventoryValuation({int? warehouseId}) async =>
+      InventoryValuation.fromJson(await _client.getJson('/reports/inventory/valuation',
+          query: {if (warehouseId != null) 'warehouseId': warehouseId}));
+
+  // ── Barcode labels (v1.4.7, gate: MobileLabels) ────────────────────────
+  Future<List<LabelTemplate>> labelTemplates() async {
+    final j = await _client.getJson('/label-templates');
+    final list = _pick(j, ['templates']);
+    if (list is! List) return const [];
+    return list.whereType<Map>().map(LabelTemplate.fromJson).toList();
+  }
+
+  /// Renders a print-ready label PDF for the given items/quantities.
+  Future<({List<int> bytes, String filename, String contentType})> printLabels({
+    required int templateId,
+    required List<({int itemId, int quantity})> items,
+  }) {
+    return _client.postBytes(
+      '/labels/print',
+      fallbackName: 'labels_$templateId.pdf',
+      body: {
+        'templateId': templateId,
+        'items': [for (final it in items) {'itemId': it.itemId, 'quantity': it.quantity}],
+      },
+    );
+  }
+
+  // ── Receipts / collections (gate: RBAC on role) ────────────────────────
+  Future<SalesDocResult> postReceipt({
+    required int customerId,
+    required int accountId,
+    required double amount,
+    String paymentMethod = 'Cash',
+    String? reference,
+    List<({String docType, int docId, double amount})> allocations = const [],
+    required String idempotencyKey,
+  }) async {
+    final j = await _client.postJson(
+      '/receipts',
+      idempotencyKey: idempotencyKey,
+      body: {
+        'customerId': customerId,
+        'accountId': accountId,
+        'paymentMethod': paymentMethod,
+        'amount': amount,
+        if (reference != null) 'reference': reference,
+        'allocations': [
+          for (final a in allocations) {'docType': a.docType, 'docId': a.docId, 'amount': a.amount}
+        ],
+      },
+    );
+    return SalesDocResult.fromJson(j);
+  }
+
+  // ── Payment tenders (cash/bank accounts) ───────────────────────────────
+  Future<List<({int accountId, String name, String type})>> tenders() async {
+    final list = await _client.getList('/sales/tenders');
+    return list
+        .whereType<Map>()
+        .map((m) => (accountId: _i(m, ['accountId', 'id']), name: _s(m, ['name']), type: _s(m, ['type'])))
+        .toList();
+  }
+
+  // ── Quotation history ──────────────────────────────────────────────────
+  Future<List<({int id, String number, String date, String customer, String status, double total})>> quotations({
+    String? from,
+    String? to,
+    int? customerId,
+    int page = 1,
+    int pageSize = 25,
+  }) async {
+    final list = await _client.getList('/sales/quotations', query: {
+      'page': page,
+      'pageSize': pageSize,
+      if (from != null) 'from': from,
+      if (to != null) 'to': to,
+      if (customerId != null) 'customerId': customerId,
+    });
+    return list
+        .whereType<Map>()
+        .map((m) => (
+              id: _i(m, ['id']),
+              number: _s(m, ['number']),
+              date: _fmtDate(_s(m, ['date'])),
+              customer: _s(m, ['customer', 'customerName']),
+              status: _s(m, ['status']),
+              total: _d(m, ['grandTotal', 'total']),
+            ))
+        .toList();
+  }
+
+  // ── Customer outstanding (open invoices) ───────────────────────────────
+  Future<({double balance, List<({int docId, String number, String date, double amount, double balance, int overdueDays})> invoices})>
+      customerOutstanding(int id) async {
+    final j = await _client.getJson('/customers/$id/outstanding');
+    final rows = _pick(j, ['invoices', 'items', 'lines']);
+    return (
+      balance: _d(j, ['balance', 'total', 'outstanding']),
+      invoices: (rows is List ? rows : const [])
+          .whereType<Map>()
+          .map((m) => (
+                docId: _i(m, ['docId', 'id']),
+                number: _s(m, ['number', 'docNumber']),
+                date: _fmtDate(_s(m, ['date'])),
+                amount: _d(m, ['amount', 'total']),
+                balance: _d(m, ['balance', 'outstanding']),
+                overdueDays: _i(m, ['overdueDays', 'daysOverdue']),
+              ))
+          .toList(),
+    );
+  }
+
+  // ── Live stock count (sheet + submit) ──────────────────────────────────
+  Future<List<({int itemId, String code, String name, int expected})>> stockCountSheet({
+    int? warehouseId,
+    String? search,
+    int page = 1,
+    int pageSize = 100,
+  }) async {
+    final list = await _client.getList('/inventory/stock-count/sheet', query: {
+      'page': page,
+      'pageSize': pageSize,
+      if (warehouseId != null) 'warehouseId': warehouseId,
+      if (search != null && search.isNotEmpty) 'search': search,
+    });
+    return list
+        .whereType<Map>()
+        .map((m) => (
+              itemId: _i(m, ['itemId', 'id']),
+              code: _s(m, ['code']),
+              name: _s(m, ['name']),
+              expected: _i(m, ['expected', 'onHand', 'systemQty']),
+            ))
+        .toList();
+  }
+
+  Future<void> submitStockCount({
+    required int warehouseId,
+    String? notes,
+    required List<({int itemId, int countedQty})> lines,
+    required String idempotencyKey,
+  }) {
+    return _client.postJson(
+      '/inventory/stock-count',
+      idempotencyKey: idempotencyKey,
+      body: {
+        'warehouseId': warehouseId,
+        if (notes != null) 'notes': notes,
+        'lines': [for (final l in lines) {'itemId': l.itemId, 'countedQty': l.countedQty}],
+      },
+    );
+  }
 
   static List<ProductImage> mapProductImages(dynamic raw) {
     if (raw is! List) return const [];

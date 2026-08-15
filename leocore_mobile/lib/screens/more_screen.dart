@@ -18,6 +18,8 @@ class MoreScreen extends StatelessWidget {
       if (app.mCount) (Icons.checklist_rounded, context.tr('Stock count'), context.tr('Expected vs counted, variance'), app.goCount),
       if (app.mCount) (Icons.warning_amber_rounded, context.tr('Stock alerts'), context.tr('Low stock & dead stock'), app.goLow),
       if (app.mReports) (Icons.show_chart, context.tr('Reports'), context.tr('Sales & purchases, top lists'), app.goReports),
+      if (app.mAnalytics || app.mFinance) (Icons.insights_outlined, context.tr('Business health'), context.tr('Aging, cash, margin, trends'), app.openManagerReports),
+      if (app.mLabels) (Icons.qr_code_2_outlined, context.tr('Print Labels'), context.tr('Barcode & shelf labels'), app.openLabels),
       if (app.mSuppliers) (Icons.local_shipping_outlined, context.tr('Suppliers'), context.tr('Directory & account statements'), app.goSuppliers),
       (Icons.settings_outlined, context.tr('Settings'), context.tr('Language, theme, devices, role'), () => app.nav(Screen.settings)),
     ];

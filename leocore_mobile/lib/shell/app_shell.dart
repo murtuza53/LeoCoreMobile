@@ -10,6 +10,8 @@ import '../screens/login_screen.dart';
 import '../screens/low_stock_screen.dart';
 import '../screens/more_screen.dart';
 import '../screens/product_detail_screen.dart';
+import '../screens/labels_screen.dart';
+import '../screens/manager_reports_screen.dart';
 import '../screens/products_screen.dart';
 import '../screens/quotation_screen.dart';
 import '../screens/receipt_screen.dart';
@@ -106,6 +108,8 @@ class _AppShellState extends State<AppShell> {
       Screen.quotation => const QuotationScreen(),
       Screen.receipt => const ReceiptScreen(),
       Screen.reports => const ReportsScreen(),
+      Screen.managerReports => const ManagerReportsScreen(),
+      Screen.labels => const LabelsScreen(),
       Screen.settings => const SettingsScreen(),
       Screen.more => const MoreScreen(),
     };

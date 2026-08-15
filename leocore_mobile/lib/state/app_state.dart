@@ -21,6 +21,7 @@ import '../api/secure_store.dart';
 import '../data/mock_data.dart';
 import '../l10n/ar.dart';
 import '../models/models.dart';
+import '../models/reports.dart';
 import '../utils/money.dart';
 
 enum Screen {
@@ -39,6 +40,8 @@ enum Screen {
   invoice,
   quotation,
   receipt,
+  managerReports,
+  labels,
   reports,
   settings,
   more,
@@ -379,6 +382,14 @@ class AppState extends ChangeNotifier {
 
   bool get mSuppliers => demoMode ? role == Role.manager : (_menuKeys.isEmpty || _menuHas('supplier'));
   bool get mReports => demoMode ? role == Role.manager : (_menuKeys.isEmpty || _menuHas('report'));
+
+  /// Manager reports (v1.4.5+) split by RBAC gate.
+  /// `MobileReports` → analytics; `MobileFinanceReports` → money/profit/cost.
+  bool get mAnalytics => demoMode ? role == Role.manager : _menuHas('report');
+  bool get mFinance => demoMode ? role == Role.manager : (_menuHas('finance') || _menuHas('financ'));
+
+  /// Print Labels (v1.4.7) — gate: `MobileLabels`.
+  bool get mLabels => demoMode ? role != Role.salesRep : _menuHas('label');
   bool get mCount => demoMode
       ? role != Role.salesRep
       : (_menuKeys.isEmpty || _menuHas('count') || _menuHas('stock'));
@@ -594,6 +605,8 @@ class AppState extends ChangeNotifier {
         nav(Screen.home);
         return true;
       case Screen.settings:
+      case Screen.managerReports:
+      case Screen.labels:
         nav(Screen.more);
         return true;
       case Screen.products:
@@ -1554,6 +1567,245 @@ class AppState extends ChangeNotifier {
       showToast(t('Could not download the quotation PDF'));
     } finally {
       quotePdfBusy = false;
+      notifyListeners();
+    }
+  }
+
+  // ── manager reports (v1.4.5+) ──────────────────────────────────────
+  DateTime reportFrom = DateTime(DateTime.now().year, DateTime.now().month, 1);
+  DateTime reportTo = DateTime.now();
+  String trendGroupBy = 'day'; // day | week | month
+  bool reportsBusy = false;
+
+  AgingReport? agingRep;
+  CollectionsReport? collectionsRep;
+  CashPosition? cashRep;
+  SalesTrendReport? trendRep;
+  MarginReport? marginRep;
+  TopItemsReport? topItemsRep;
+  CategorySalesReport? categoryRep;
+  VatReport? vatRep;
+  SalesmanReport? salesmanRep;
+  InventoryValuation? valuationRep;
+
+  String get reportRangeLabel =>
+      '${DateFormat('dd MMM').format(reportFrom)} – ${DateFormat('dd MMM yyyy').format(reportTo)}';
+
+  void openManagerReports() {
+    nav(Screen.managerReports);
+    loadManagerReports();
+  }
+
+  Future<void> setReportRange(DateTime from, DateTime to) async {
+    reportFrom = from;
+    reportTo = to;
+    notifyListeners();
+    await loadManagerReports();
+  }
+
+  Future<void> setTrendGroupBy(String g) async {
+    trendGroupBy = g;
+    notifyListeners();
+    if (!demoMode && mAnalytics) {
+      try {
+        trendRep = await _repo.salesTrend(from: _fmtD(reportFrom), to: _fmtD(reportTo), groupBy: g);
+      } catch (_) {}
+      notifyListeners();
+    }
+  }
+
+  String _fmtD(DateTime d) => DateFormat('yyyy-MM-dd').format(d);
+
+  /// Loads every report the user's role is permitted to see. Each call is
+  /// isolated so a 403 (missing gate) or error on one report never blocks the
+  /// others.
+  Future<void> loadManagerReports() async {
+    if (demoMode) {
+      _loadDemoReports();
+      return;
+    }
+    reportsBusy = true;
+    notifyListeners();
+    final from = _fmtD(reportFrom), to = _fmtD(reportTo), asOn = _fmtD(reportTo);
+    Future<void> guard(Future<void> Function() run) async {
+      try {
+        await run();
+      } catch (_) {/* permission or transient error — leave that card empty */}
+    }
+
+    final jobs = <Future<void>>[];
+    if (mAnalytics) {
+      jobs.addAll([
+        guard(() async => collectionsRep = await _repo.collections(from: from, to: to)),
+        guard(() async => trendRep = await _repo.salesTrend(from: from, to: to, groupBy: trendGroupBy)),
+        guard(() async => topItemsRep = await _repo.topItems(from: from, to: to)),
+        guard(() async => categoryRep = await _repo.salesByCategory(from: from, to: to)),
+        guard(() async => salesmanRep = await _repo.salesBySalesman(from: from, to: to)),
+      ]);
+    }
+    if (mFinance) {
+      jobs.addAll([
+        guard(() async => agingRep = await _repo.receivablesAging(asOn: asOn)),
+        guard(() async => cashRep = await _repo.cashPosition(asOn: asOn)),
+        guard(() async => marginRep = await _repo.margin(from: from, to: to)),
+        guard(() async => vatRep = await _repo.vat(from: from, to: to)),
+        guard(() async => valuationRep = await _repo.inventoryValuation()),
+      ]);
+    }
+    await Future.wait(jobs);
+    reportsBusy = false;
+    notifyListeners();
+  }
+
+  /// Sample manager-report data for the offline demo.
+  void _loadDemoReports() {
+    agingRep = const AgingReport(total: 41208.5, buckets: [18400, 9800, 6200, 4108.5, 2700], topDebtors: [
+      AgingDebtor(customerId: 1, name: 'Gulf Mart WLL', outstanding: 9412.0, oldestDays: 47),
+      AgingDebtor(customerId: 2, name: 'Al Jazira Supermarket', outstanding: 6980.25, oldestDays: 96),
+      AgingDebtor(customerId: 3, name: 'Bahrain Pearl Markets', outstanding: 5455.5, oldestDays: 118),
+    ]);
+    cashRep = const CashPosition(totalCash: 850.0, totalBank: 63240.75, accounts: [
+      (accountId: 5, name: 'NBB Current', type: 'Bank', balance: 42180.5),
+      (accountId: 6, name: 'BBK Current', type: 'Bank', balance: 21060.25),
+      (accountId: 9, name: 'Cash in Hand', type: 'Cash', balance: 850.0),
+    ]);
+    marginRep = const MarginReport(revenue: 41208.5, cost: 27940.0, grossProfit: 13268.5, marginPct: 32.2, byCategory: [
+      (name: 'Rice & Grains', revenue: 12000, margin: 3600),
+      (name: 'Dairy', revenue: 9200, margin: 2300),
+      (name: 'Beverages', revenue: 7400, margin: 2000),
+    ]);
+    vatRep = const VatReport(outputVat: 1800.0, inputVat: 1100.0, netPayable: 700.0);
+    valuationRep = const InventoryValuation(totalValue: 128400.0, totalQty: 41200, byCategory: [
+      (name: 'Rice & Grains', value: 48000, qty: 12000),
+      (name: 'Dairy', value: 32000, qty: 9800),
+    ], byWarehouse: [
+      (name: 'Main WH · Tubli', value: 96400, qty: 31000),
+      (name: 'Sitra Store', value: 32000, qty: 10200),
+    ]);
+    collectionsRep = const CollectionsReport(total: 27940.0, count: 63, byMethod: [
+      (label: 'Cash', amount: 12400),
+      (label: 'BankTransfer', amount: 13100),
+      (label: 'Cheque', amount: 2440),
+    ], byDay: []);
+    trendRep = const SalesTrendReport(groupBy: 'day', total: 41208.5, avgPerDay: 1373.6, points: [
+      (label: 'Mon', sales: 1200, invoices: 6),
+      (label: 'Tue', sales: 1850, invoices: 9),
+      (label: 'Wed', sales: 980, invoices: 5),
+      (label: 'Thu', sales: 2100, invoices: 11),
+      (label: 'Fri', sales: 1500, invoices: 7),
+      (label: 'Sat', sales: 2400, invoices: 13),
+      (label: 'Sun', sales: 1760, invoices: 8),
+    ]);
+    topItemsRep = const TopItemsReport(by: 'value', items: [
+      (itemId: 1, code: 'RICE-5KG', name: 'Mahmood Basmati Rice 5kg', qty: 612, value: 3029.4),
+      (itemId: 2, code: 'MILK-2L', name: 'Almarai Full Fat Milk 2L', qty: 1840, value: 2300.0),
+      (itemId: 3, code: 'TEA-200', name: 'Lipton Yellow Label 200s', qty: 486, value: 1385.1),
+    ]);
+    categoryRep = const CategorySalesReport(categories: [
+      (name: 'Rice & Grains', sales: 12000, qty: 9800),
+      (name: 'Dairy', sales: 9200, qty: 6400),
+      (name: 'Beverages', sales: 7400, qty: 5100),
+    ]);
+    salesmanRep = const SalesmanReport(salesmen: [
+      (salesmanId: 1, name: 'Yousif Mahmood', sales: 15000, invoices: 42, collections: 9000),
+      (salesmanId: 2, name: 'Ahmed Salman', sales: 12400, invoices: 35, collections: 7200),
+      (salesmanId: 0, name: 'Unassigned', sales: 3800, invoices: 9, collections: 1100),
+    ]);
+    notifyListeners();
+  }
+
+  // ── print labels (v1.4.7) ──────────────────────────────────────────
+  List<LabelTemplate> labelTemplates = [];
+  int labelTemplateId = 0;
+  final Map<int, int> labelQty = {}; // itemId → copies
+  bool labelsBusy = false;
+  String labelQuery = '';
+
+  LabelTemplate? get labelTemplate =>
+      labelTemplates.where((t) => t.id == labelTemplateId).firstOrNull;
+
+  int get labelTotalCopies => labelQty.values.fold(0, (a, b) => a + b);
+
+  List<Product> get labelProductRows {
+    final q = labelQuery.trim().toLowerCase();
+    final all = products;
+    if (q.isEmpty) return all;
+    return all
+        .where((p) => p.name.toLowerCase().contains(q) || p.code.toLowerCase().contains(q) || p.barcode.contains(q))
+        .toList();
+  }
+
+  void openLabels() {
+    nav(Screen.labels);
+    loadLabelTemplates();
+  }
+
+  void setLabelQuery(String v) {
+    labelQuery = v;
+    notifyListeners();
+  }
+
+  void setLabelTemplate(int id) {
+    labelTemplateId = id;
+    notifyListeners();
+  }
+
+  void setLabelQty(int itemId, int qty) {
+    if (qty <= 0) {
+      labelQty.remove(itemId);
+    } else {
+      labelQty[itemId] = qty;
+    }
+    notifyListeners();
+  }
+
+  Future<void> loadLabelTemplates() async {
+    if (demoMode) {
+      labelTemplates = const [
+        LabelTemplate(id: 1, name: 'Shelf 50×30', widthMm: 50, heightMm: 30),
+        LabelTemplate(id: 2, name: 'Barcode 40×20', widthMm: 40, heightMm: 20),
+      ];
+      labelTemplateId = labelTemplates.first.id;
+      notifyListeners();
+      return;
+    }
+    try {
+      labelTemplates = await _repo.labelTemplates();
+      if (labelTemplateId == 0 && labelTemplates.isNotEmpty) labelTemplateId = labelTemplates.first.id;
+    } catch (_) {
+      showToast(t('Could not load label templates'));
+    }
+    notifyListeners();
+  }
+
+  Future<void> printLabels() async {
+    if (demoMode) {
+      showToast(t('Label printing is available after live sign-in'));
+      return;
+    }
+    if (labelTemplateId == 0) {
+      showToast(t('Choose a label template first'));
+      return;
+    }
+    if (labelQty.isEmpty) {
+      showToast(t('Add items to print first'));
+      return;
+    }
+    if (labelsBusy) return;
+    labelsBusy = true;
+    notifyListeners();
+    try {
+      final items = labelQty.entries.map((e) => (itemId: e.key, quantity: e.value)).toList();
+      final res = await _repo.printLabels(templateId: labelTemplateId, items: items);
+      final pdf = _validatePdf(res);
+      if (pdf == null) return;
+      await _deliverPdf(pdf.bytes, pdf.filename);
+    } on ApiException catch (e) {
+      showToast(e.message);
+    } catch (_) {
+      showToast(t('Could not generate the labels PDF'));
+    } finally {
+      labelsBusy = false;
       notifyListeners();
     }
   }
