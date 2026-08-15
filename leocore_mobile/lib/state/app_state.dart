@@ -140,6 +140,8 @@ class AppState extends ChangeNotifier {
   bool loginErr = false;
   bool keep = true;
   String serverUrl = 'https://leocoredemo.seksolution.com';
+  // Servers with a past successful login (most-recent-first) — dropdown source.
+  List<String> serverHistory = [];
 
   // ── products ───────────────────────────────────────────────────────
   String query = '';
@@ -413,8 +415,13 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> _restoreSession() async {
+    serverHistory = await _store.serverHistory;
     final s = await _store.serverUrl;
-    if (s != null && s.isNotEmpty) serverUrl = s;
+    if (s != null && s.isNotEmpty) {
+      serverUrl = s; // last server used
+    } else if (serverHistory.isNotEmpty) {
+      serverUrl = serverHistory.first; // last successful login
+    }
     final savedLang = await _store.lang;
     if (savedLang == 'en' || savedLang == 'ar') lang = savedLang!;
     biometrics = await _store.bioEnabled;
@@ -648,6 +655,20 @@ class AppState extends ChangeNotifier {
     _store.setServerUrl(v);
   }
 
+  /// Choose a saved server from the dropdown.
+  void pickServer(String url) {
+    serverUrl = url;
+    _store.setServerUrl(url);
+    notifyListeners();
+  }
+
+  /// Forget a saved server (from the dropdown).
+  Future<void> removeServer(String url) async {
+    await _store.removeServer(url);
+    serverHistory = await _store.serverHistory;
+    notifyListeners();
+  }
+
   void toggleKeep() {
     keep = !keep;
     notifyListeners();
@@ -678,6 +699,9 @@ class AppState extends ChangeNotifier {
       loggingIn = false;
       loginPass = '';
       screen = Screen.home;
+      // Remember this server for the dropdown next time.
+      await _store.addServer(serverUrl.trim());
+      serverHistory = await _store.serverHistory;
       notifyListeners();
       await _loadAll();
     } on ApiException catch (e) {

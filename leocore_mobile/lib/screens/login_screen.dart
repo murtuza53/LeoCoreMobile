@@ -48,6 +48,49 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  /// Bottom sheet to pick (or forget) a previously used server.
+  Future<void> _pickServer(BuildContext context, AppState app) async {
+    FocusScope.of(context).unfocus();
+    final lc = context.lc;
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: lc.card,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
+      builder: (ctx) => SafeArea(
+        child: Consumer<AppState>(
+          builder: (ctx2, s, _) => Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 10),
+              Container(width: 40, height: 4.5, decoration: BoxDecoration(color: lc.line, borderRadius: BorderRadius.circular(99))),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 14, 18, 6),
+                child: Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: Text(context.tr('Saved servers'), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                ),
+              ),
+              for (final url in s.serverHistory)
+                ListTile(
+                  leading: Icon(Icons.dns_outlined, size: 20, color: lc.icon),
+                  title: Text(url, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: lc.ink)),
+                  trailing: IconButton(
+                    icon: Icon(Icons.close, size: 18, color: lc.mut),
+                    onPressed: () => s.removeServer(url),
+                  ),
+                  onTap: () {
+                    s.pickServer(url);
+                    Navigator.of(ctx2).pop();
+                  },
+                ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
@@ -227,6 +270,16 @@ class _LoginScreenState extends State<LoginScreen> {
                                   style: TextStyle(fontSize: 15, color: lc.ink),
                                 ),
                               ),
+                              // Quick-pick a previously used server.
+                              if (app.serverHistory.isNotEmpty)
+                                GestureDetector(
+                                  onTap: () => _pickServer(context, app),
+                                  behavior: HitTestBehavior.opaque,
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(left: 4),
+                                    child: Icon(Icons.arrow_drop_down, size: 26, color: lc.icon),
+                                  ),
+                                ),
                             ],
                           ),
                         ),

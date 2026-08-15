@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -10,6 +11,7 @@ class SecureStore {
   );
 
   static const _kServer = 'server_url';
+  static const _kServers = 'server_history';
   static const _kAccess = 'access_token';
   static const _kRefresh = 'refresh_token';
   static const _kScope = 'token_scope';
@@ -20,6 +22,37 @@ class SecureStore {
 
   Future<String?> get serverUrl => _storage.read(key: _kServer);
   Future<void> setServerUrl(String v) => _storage.write(key: _kServer, value: v);
+
+  /// Servers the user has successfully signed into, most-recent-first. Powers
+  /// the login server dropdown so users don't retype their own server.
+  Future<List<String>> get serverHistory async {
+    final raw = await _storage.read(key: _kServers);
+    if (raw == null || raw.isEmpty) return const [];
+    try {
+      final v = jsonDecode(raw);
+      if (v is List) {
+        return v.map((e) => e.toString()).where((s) => s.isNotEmpty).toList();
+      }
+    } catch (_) {/* corrupt → treat as empty */}
+    return const [];
+  }
+
+  /// Records a server after a successful login (dedup, most-recent-first, cap 8).
+  Future<void> addServer(String url) async {
+    final u = url.trim();
+    if (u.isEmpty) return;
+    final list = [...await serverHistory]
+      ..removeWhere((e) => e.toLowerCase() == u.toLowerCase());
+    list.insert(0, u);
+    if (list.length > 8) list.removeRange(8, list.length);
+    await _storage.write(key: _kServers, value: jsonEncode(list));
+  }
+
+  Future<void> removeServer(String url) async {
+    final list = [...await serverHistory]
+      ..removeWhere((e) => e.toLowerCase() == url.trim().toLowerCase());
+    await _storage.write(key: _kServers, value: jsonEncode(list));
+  }
 
   /// UI language ('en' | 'ar'); null until the user picks one.
   Future<String?> get lang => _storage.read(key: _kLang);

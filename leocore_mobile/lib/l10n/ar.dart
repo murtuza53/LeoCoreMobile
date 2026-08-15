@@ -33,6 +33,7 @@ const Map<String, String> kArabic = {
   'Show password': 'إظهار كلمة المرور',
   'Hide password': 'إخفاء كلمة المرور',
   'Server location': 'عنوان الخادم',
+  'Saved servers': 'الخوادم المحفوظة',
   'Keep me signed in': 'إبقائي مسجّلاً للدخول',
   'Sign in': 'تسجيل الدخول',
   'or': 'أو',
