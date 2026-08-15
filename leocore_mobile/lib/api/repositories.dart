@@ -391,11 +391,22 @@ class LeoRepository {
   }
 
   Future<void> updateProduct(int id, {String? barcode, String? model, double? defaultPrice}) async {
-    await _client.patchJson('/products/$id', body: {
+    final body = {
       if (barcode != null) 'barcode': barcode,
       if (model != null) 'model': model,
       if (defaultPrice != null) 'defaultPrice': defaultPrice,
-    });
+    };
+    // v1.4.x documents PUT; older/deployed servers still expose PATCH. Try the
+    // documented method first, fall back to PATCH if the server rejects PUT.
+    try {
+      await _client.putJson('/products/$id', body: body);
+    } on ApiException catch (e) {
+      if (e.status == 405 || e.code == 'HTTP_405') {
+        await _client.patchJson('/products/$id', body: body);
+      } else {
+        rethrow;
+      }
+    }
   }
 
   // ── Mappers ────────────────────────────────────────────────────────────

@@ -75,7 +75,9 @@ class AppState extends ChangeNotifier {
   // ── networking ─────────────────────────────────────────────────────
   final SecureStore _store = SecureStore();
   final Biometrics _bio = Biometrics();
-  late final ApiClient api = ApiClient(_store)..onSessionExpired = _onSessionExpired;
+  late final ApiClient api = ApiClient(_store)
+    ..onSessionExpired = _onSessionExpired
+    ..onAccessRevoked = _onAccessRevoked;
   late final AuthApi _auth = AuthApi(api, _store);
   late final LeoRepository _repo = LeoRepository(api);
 
@@ -451,14 +453,26 @@ class AppState extends ChangeNotifier {
   }
 
   void _onSessionExpired() {
-    // Refresh failed — drop to the login screen.
+    _dropToLogin('Your session expired. Please sign in again.');
+  }
+
+  /// The server revoked this user's mobile access (403 MOBILE_ACCESS_DISABLED).
+  /// Clear tokens and return to login using the server's own message — no
+  /// refresh attempt (the client already skips it for this code).
+  void _onAccessRevoked(String message) {
+    _store.clearTokens();
+    _dropToLogin(message.isNotEmpty ? message : 'Your mobile access has been disabled.');
+  }
+
+  void _dropToLogin(String message) {
     demoMode = true;
     _products = null;
     _customers = null;
     kpis = null;
+    sessionLocked = false;
     screen = Screen.login;
     loginErr = false;
-    loginErrMsg = 'Your session expired. Please sign in again.';
+    loginErrMsg = message;
     notifyListeners();
   }
 

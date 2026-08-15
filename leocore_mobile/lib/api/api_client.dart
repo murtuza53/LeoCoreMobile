@@ -13,6 +13,10 @@ class ApiException implements Exception {
   bool get isAuth => status == 401 || code == 'UNAUTHENTICATED';
   bool get isForbidden => status == 403 || code == 'FORBIDDEN';
 
+  /// The user's mobile access was revoked (never granted, turned off, or the
+  /// seat was reassigned). Can arrive on login, refresh, or any data call.
+  bool get isAccessRevoked => code == 'MOBILE_ACCESS_DISABLED';
+
   @override
   String toString() => message;
 }
@@ -64,6 +68,21 @@ class ApiClient {
   // Callback invoked when refresh fails and the session is unrecoverable.
   void Function()? onSessionExpired;
 
+  /// Invoked when the server reports the user's mobile access was revoked
+  /// (403 `MOBILE_ACCESS_DISABLED`). Carries the server's message. The app must
+  /// clear tokens and return to login WITHOUT running the refresh flow.
+  void Function(String message)? onAccessRevoked;
+
+  /// The `error.code` from an envelope response, or null.
+  String? _errorCode(Response<dynamic> res) {
+    final data = res.data;
+    if (data is Map && data['error'] is Map) {
+      final c = (data['error'] as Map)['code'];
+      return c?.toString();
+    }
+    return null;
+  }
+
   Future<Map<String, dynamic>> getJson(String path, {Map<String, dynamic>? query}) async {
     final res = await _send('GET', path, query: query);
     return _asMap(res.data);
@@ -94,6 +113,11 @@ class ApiClient {
 
   Future<Map<String, dynamic>> patchJson(String path, {Object? body, bool auth = true}) async {
     final res = await _send('PATCH', path, body: body, auth: auth);
+    return _asMap(res.data);
+  }
+
+  Future<Map<String, dynamic>> putJson(String path, {Object? body, bool auth = true}) async {
+    final res = await _send('PUT', path, body: body, auth: auth);
     return _asMap(res.data);
   }
 
@@ -187,6 +211,14 @@ class ApiClient {
       throw ApiException('NETWORK', _networkMessage(e));
     }
 
+    // Mobile access can be revoked mid-session; the server returns 403 on the
+    // next call. Bounce to login immediately — never attempt a token refresh.
+    if (res.statusCode == 403 && _errorCode(res) == 'MOBILE_ACCESS_DISABLED') {
+      final ex = _envelope(res);
+      onAccessRevoked?.call(ex.message);
+      throw ex;
+    }
+
     if (res.statusCode == 401 && auth && !isRetry) {
       // Try one rotating refresh, then retry the original request.
       final refreshed = await _tryRefresh();
@@ -229,6 +261,11 @@ class ApiClient {
           await _store.saveTokens(access: access, refresh: newRefresh, scope: m['scope'] as String?);
           return true;
         }
+      }
+      // Access revoked during refresh → route to the access-revoked handler
+      // (not a generic session-expiry) so the user sees the real reason.
+      if (res.statusCode == 403 && _errorCode(res) == 'MOBILE_ACCESS_DISABLED') {
+        onAccessRevoked?.call(_envelope(res).message);
       }
       return false;
     } catch (_) {
