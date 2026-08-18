@@ -165,19 +165,46 @@ Captured and ready in `store_assets/ios_screenshots_6.9/` (1320×2868, no alpha)
 4. `04_customers.png`      — customer directory with balances and ageing badges
 5. `05_customer_360.png`   — outstanding balance, ageing bars, call/WhatsApp/navigate
 
-NOT used, because the demo dataset has no recent sales and they render empty:
-Reports, and Manager Reports (Business health). Print Labels also errors on the
-demo server — see Known Issues below.
+NOT used: Reports and Manager Reports (Business health) render empty because the
+demo dataset has no recent sales. Print Labels is hidden for the demo account —
+see section 9b.
 
-## 9b. Known issues on the demo server (fix before review)
+## 9b. Demo-account module access (verified 2026-08-18)
 
-- **Print Labels fails**: the screen shows "No templates available" and a toast
-  "Could not load label templates". A reviewer who opens More → Print Labels will
-  see an error. Either configure label templates on leocoredemo, or the endpoint
-  is failing. Worth fixing — Print Labels is advertised in the description.
-- **Reports / Business health are empty**: the demo company has no sales in the
-  last 7/30 days, so those screens show zeros and "No activity in this period".
-  Seeding recent demo sales would make review (and any demo) look far better.
+The app hides modules the server does not grant. `AppState` derives each gate
+from `/api/mobile/v1/menu`, so what a reviewer sees depends entirely on the
+`mic` account's permissions. Measured against the live demo server:
+
+| Gate | Demo user `mic` |
+|---|---|
+| Suppliers, Reports, Business health, Stock count, Cash sale | VISIBLE |
+| Print Labels (`mLabels`) | **HIDDEN** — `/menu` has no label entry |
+
+**Print Labels is permission-gated, not broken.** `/label-templates` returns
+403 `FORBIDDEN` for `mic`, and the menu omits it, so the row does not render in
+More at all. The app behaves correctly; calling `openLabels()` directly (as a
+screenshot harness can) bypasses the gate and surfaces a toast a real user
+would never see.
+
+ACTION: grant `mic` the **Barcode Labels** permission in the LeoCore back
+office, so the feature the description advertises can actually be demonstrated
+during review. Re-verify with:
+
+```
+TOK=$(curl -sS -X POST https://leocoredemo.seksolution.com/api/mobile/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"mic","password":"mic@159357","deviceName":"diag"}' \
+  | python3 -c "import sys,json;print(json.load(sys.stdin)['accessToken'])")
+
+curl -sS -H "Authorization: Bearer $TOK" \
+  https://leocoredemo.seksolution.com/api/mobile/v1/label-templates
+```
+Expect HTTP 200 and a template list, and a label entry in `/menu`.
+
+**Reports / Business health render empty**: the demo company has no sales in the
+last 7/30 days, so those screens show zeros and "No activity in this period".
+Not a rejection risk, but seeding recent demo sales would make review — and any
+sales demo — look considerably better.
 
 ## 10. Export Compliance
 
