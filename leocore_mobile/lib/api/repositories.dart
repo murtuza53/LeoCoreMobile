@@ -329,11 +329,16 @@ class LeoRepository {
           query: {if (warehouseId != null) 'warehouseId': warehouseId}));
 
   // ── Barcode labels (v1.4.7, gate: MobileLabels) ────────────────────────
-  Future<List<LabelTemplate>> labelTemplates() async {
+  /// Templates plus an optional empty-state message (server-provided when no
+  /// label designs exist).
+  Future<({List<LabelTemplate> templates, String? message})> labelTemplates() async {
     final j = await _client.getJson('/label-templates');
-    final list = _pick(j, ['templates']);
-    if (list is! List) return const [];
-    return list.whereType<Map>().map(LabelTemplate.fromJson).toList();
+    final raw = _pick(j, ['templates']);
+    final templates = (raw is List ? raw : const []).whereType<Map>().map(LabelTemplate.fromJson).toList();
+    final hasLabels = _pick(j, ['hasLabels']);
+    final msg = _s(j, ['message']);
+    final emptyMessage = ((hasLabels == false || templates.isEmpty) && msg.isNotEmpty) ? msg : null;
+    return (templates: templates, message: emptyMessage);
   }
 
   /// Renders a print-ready label PDF for the given items/quantities.

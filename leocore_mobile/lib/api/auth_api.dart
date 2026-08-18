@@ -27,7 +27,10 @@ class ApiUser {
 class AuthResult {
   final ApiUser user;
   final String scope;
-  const AuthResult(this.user, this.scope);
+  // When single-device login displaces another device, the server returns a
+  // human-readable message to show the user. Null when nothing was displaced.
+  final String? sessionMessage;
+  const AuthResult(this.user, this.scope, {this.sessionMessage});
 }
 
 /// Auth endpoints: login / refresh / logout / me.
@@ -66,7 +69,16 @@ class AuthApi {
     final user = userJson is Map<String, dynamic>
         ? ApiUser.fromJson(userJson, scope: scope)
         : ApiUser(id: '', name: username, scope: scope);
-    return AuthResult(user, scope);
+
+    // Single-device sessions: show the message when this login signed another
+    // device out.
+    String? sessionMessage;
+    final session = m['session'];
+    if (session is Map && session['displacedOtherDevice'] == true) {
+      final msg = session['message'];
+      if (msg is String && msg.isNotEmpty) sessionMessage = msg;
+    }
+    return AuthResult(user, scope, sessionMessage: sessionMessage);
   }
 
   Future<ApiUser> me() async {

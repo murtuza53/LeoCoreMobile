@@ -716,6 +716,8 @@ class AppState extends ChangeNotifier {
       await _store.addServer(serverUrl.trim());
       serverHistory = await _store.serverHistory;
       notifyListeners();
+      // Single-device login: tell the user if another device was signed out.
+      if (res.sessionMessage != null) showToast(res.sessionMessage!);
       await _loadAll();
     } on ApiException catch (e) {
       loggingIn = false;
@@ -1720,6 +1722,8 @@ class AppState extends ChangeNotifier {
   final Map<int, int> labelQty = {}; // itemId → copies
   bool labelsBusy = false;
   String labelQuery = '';
+  // Server empty-state message shown when no label designs exist.
+  String? labelEmptyMessage;
 
   LabelTemplate? get labelTemplate =>
       labelTemplates.where((t) => t.id == labelTemplateId).firstOrNull;
@@ -1766,11 +1770,14 @@ class AppState extends ChangeNotifier {
         LabelTemplate(id: 2, name: 'Barcode 40×20', widthMm: 40, heightMm: 20),
       ];
       labelTemplateId = labelTemplates.first.id;
+      labelEmptyMessage = null;
       notifyListeners();
       return;
     }
     try {
-      labelTemplates = await _repo.labelTemplates();
+      final res = await _repo.labelTemplates();
+      labelTemplates = res.templates;
+      labelEmptyMessage = res.message;
       if (labelTemplateId == 0 && labelTemplates.isNotEmpty) labelTemplateId = labelTemplates.first.id;
     } catch (_) {
       showToast(t('Could not load label templates'));

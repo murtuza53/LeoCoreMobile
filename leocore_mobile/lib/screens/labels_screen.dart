@@ -52,7 +52,8 @@ class _LabelsScreenState extends State<LabelsScreen> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: app.labelTemplates.isEmpty
-                        ? Text(context.tr('No templates available'), style: TextStyle(fontSize: 13, color: lc.mut))
+                        ? Text(app.labelEmptyMessage ?? context.tr('No templates available'),
+                            style: TextStyle(fontSize: 12.5, height: 1.4, color: lc.mut))
                         : Wrap(
                             spacing: 8,
                             runSpacing: 8,

@@ -17,6 +17,10 @@ class ApiException implements Exception {
   /// seat was reassigned). Can arrive on login, refresh, or any data call.
   bool get isAccessRevoked => code == 'MOBILE_ACCESS_DISABLED';
 
+  /// The account signed in on another device — this session is terminated.
+  /// A hard sign-out (never refresh).
+  bool get isSessionTerminated => code == 'SESSION_TERMINATED';
+
   @override
   String toString() => message;
 }
@@ -226,9 +230,12 @@ class ApiClient {
       throw ApiException('NETWORK', _networkMessage(e));
     }
 
-    // Mobile access can be revoked mid-session; the server returns 403 on the
-    // next call. Bounce to login immediately — never attempt a token refresh.
-    if (res.statusCode == 403 && _errorCode(res) == 'MOBILE_ACCESS_DISABLED') {
+    // Hard sign-out cases — bounce to login immediately, never refresh:
+    //  • 403 MOBILE_ACCESS_DISABLED — mobile access revoked.
+    //  • 401 SESSION_TERMINATED — the account signed in on another device.
+    final errCode = _errorCode(res);
+    if ((res.statusCode == 403 && errCode == 'MOBILE_ACCESS_DISABLED') ||
+        (res.statusCode == 401 && errCode == 'SESSION_TERMINATED')) {
       final ex = _envelope(res);
       onAccessRevoked?.call(ex.message);
       throw ex;
