@@ -164,10 +164,10 @@ Captured and ready in `store_assets/ios_screenshots_6.9/` (1320×2868, no alpha)
 3. `03_product_detail.png` — barcode, VAT class, cost price, Add-to-memo / Count
 4. `04_customers.png`      — customer directory with balances and ageing badges
 5. `05_customer_360.png`   — outstanding balance, ageing bars, call/WhatsApp/navigate
+6. `06_print_labels.png`   — Print Labels with template selected, 22 labels queued
 
 NOT used: Reports and Manager Reports (Business health) render empty because the
-demo dataset has no recent sales. Print Labels is hidden for the demo account —
-see section 9b.
+demo dataset has no recent sales. See section 9b for demo-account module access.
 
 ## 9b. Demo-account module access (verified 2026-08-18)
 
@@ -178,17 +178,20 @@ from `/api/mobile/v1/menu`, so what a reviewer sees depends entirely on the
 | Gate | Demo user `mic` |
 |---|---|
 | Suppliers, Reports, Business health, Stock count, Cash sale | VISIBLE |
-| Print Labels (`mLabels`) | **HIDDEN** — `/menu` has no label entry |
+| Print Labels (`mLabels`) | VISIBLE — granted 2026-08-18 |
 
-**Print Labels is permission-gated, not broken.** `/label-templates` returns
-403 `FORBIDDEN` for `mic`, and the menu omits it, so the row does not render in
-More at all. The app behaves correctly; calling `openLabels()` directly (as a
-screenshot harness can) bypasses the gate and surfaces a toast a real user
-would never see.
+Print Labels was originally permission-gated off for `mic` — `/label-templates`
+returned 403 and the menu omitted it, so the row did not render in More at all.
+That was correct app behaviour, not a bug: calling `openLabels()` directly (as a
+screenshot harness can) bypasses the gate and surfaces a toast a real user would
+never see. Both the permission and a template have since been added.
 
-ACTION: grant `mic` the **Barcode Labels** permission in the LeoCore back
-office, so the feature the description advertises can actually be demonstrated
-during review. Re-verify with:
+RESOLVED 2026-08-18: `mic` was granted the **Barcode Labels** permission and a
+template was created (`id 1, "Barcode", 50x30mm`). Verified end to end —
+`/label-templates` returns the template, and `POST /labels/print` returns a
+valid `application/pdf` (22 KB, 2 pages). Screenshot 06 shows it working.
+
+Re-verify any time with:
 
 ```
 TOK=$(curl -sS -X POST https://leocoredemo.seksolution.com/api/mobile/v1/auth/login \
