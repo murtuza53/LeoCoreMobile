@@ -114,7 +114,7 @@ class _ScanScreenState extends State<ScanScreen> with SingleTickerProviderStateM
                         controller: _scanner,
                         onDetect: _onDetect,
                         fit: BoxFit.cover,
-                        errorBuilder: (context, error, child) => _CameraError(onManual: _manualEntry),
+                        errorBuilder: (context, error) => _CameraError(onManual: _manualEntry),
                       ),
                       // Dim outside the frame
                       Container(color: Colors.black.withValues(alpha: 0.25)),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 
 import '../state/app_state.dart';
@@ -20,6 +21,9 @@ class _LoginScreenState extends State<LoginScreen> {
   final _serverFocus = FocusNode();
   bool _obscure = true;
 
+  /// App version for the footer; read from the bundle so it never goes stale.
+  String _version = '';
+
   @override
   void initState() {
     super.initState();
@@ -27,6 +31,9 @@ class _LoginScreenState extends State<LoginScreen> {
     _user = TextEditingController(text: app.loginUser);
     _pass = TextEditingController(text: app.loginPass);
     _server = TextEditingController(text: app.serverUrl);
+    PackageInfo.fromPlatform().then((info) {
+      if (mounted) setState(() => _version = info.version);
+    });
   }
 
   @override
@@ -356,7 +363,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 18),
                   Center(
-                      child: Text('LeoCore ERP · v2.4.1 · leocoreerp.seksolution.com',
+                      child: Text(_version.isEmpty
+                          ? 'LeoCore ERP · leocoreerp.seksolution.com'
+                          : 'LeoCore ERP · v$_version · leocoreerp.seksolution.com',
                           style: TextStyle(fontSize: 12, color: lc.mut))),
                 ],
               ),
