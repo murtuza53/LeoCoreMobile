@@ -30,6 +30,14 @@ dependencies:
   # Uses the Android Photo Picker on API 33+, so gallery access needs no
   # READ_MEDIA_* permissions (Play "Photo and Video Permissions" policy).
   image_picker: ^1.1.2
+  # Attach Docs: pick files from device storage / iCloud / Drive (Files app).
+  file_picker: ^8.1.2
+  # Advanced document scanning: native edge detection, perspective (skew)
+  # correction and colour/brightness enhancement (VisionKit on iOS, ML Kit
+  # Document Scanner on Android). Multi-page capture.
+  cunning_document_scanner: ^1.2.3
+  # Build a multi-page PDF from scanned/picked images (pure Dart, no native).
+  pdf: ^3.11.0
 
 dev_dependencies:
   flutter_test:

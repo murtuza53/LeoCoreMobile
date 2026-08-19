@@ -18,8 +18,13 @@ import '../api/auth_api.dart';
 import '../api/biometrics.dart';
 import '../api/repositories.dart';
 import '../api/secure_store.dart';
+import 'package:cunning_document_scanner/cunning_document_scanner.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:pdf/widgets.dart' as pw;
+
 import '../data/mock_data.dart';
 import '../l10n/ar.dart';
+import '../models/documents.dart';
 import '../models/models.dart';
 import '../models/reports.dart';
 import '../utils/money.dart';
@@ -42,6 +47,7 @@ enum Screen {
   receipt,
   managerReports,
   labels,
+  documents,
   reports,
   settings,
   more,
@@ -390,6 +396,9 @@ class AppState extends ChangeNotifier {
 
   /// Print Labels (v1.4.7) — gate: `MobileLabels`.
   bool get mLabels => demoMode ? role != Role.salesRep : _menuHas('label');
+
+  /// Attach Docs (1.6.x) — gate: `MobileDocuments` (menu id `documents`).
+  bool get mDocuments => demoMode ? role != Role.salesRep : _menuHas('document');
   bool get mCount => demoMode
       ? role != Role.salesRep
       : (_menuKeys.isEmpty || _menuHas('count') || _menuHas('stock'));
@@ -607,6 +616,7 @@ class AppState extends ChangeNotifier {
       case Screen.settings:
       case Screen.managerReports:
       case Screen.labels:
+      case Screen.documents:
         nav(Screen.more);
         return true;
       case Screen.products:
@@ -1714,6 +1724,193 @@ class AppState extends ChangeNotifier {
       (salesmanId: 0, name: 'Unassigned', sales: 3800, invoices: 9, collections: 1100),
     ]);
     notifyListeners();
+  }
+
+  // ── Attach Docs (1.6.x) ────────────────────────────────────────────
+  String docNumber = '';
+  DocLookup? docLookup;
+  bool docLookupBusy = false;
+  bool attachBusy = false;
+  AttachResult? attachResult;
+  // Files staged for upload (local path + display name).
+  final List<({String path, String name})> attachFiles = [];
+
+  void openAttachDocs() {
+    docNumber = '';
+    docLookup = null;
+    attachResult = null;
+    attachFiles.clear();
+    nav(Screen.documents);
+  }
+
+  void setDocNumber(String v) {
+    docNumber = v;
+    // Editing the number invalidates a previous lookup.
+    if (docLookup != null) docLookup = null;
+    notifyListeners();
+  }
+
+  /// Verify the document exists before the user uploads (§2.1).
+  Future<void> lookupDocument() async {
+    final number = docNumber.trim();
+    if (number.isEmpty) {
+      showToast(t('Enter a document number'));
+      return;
+    }
+    if (demoMode) {
+      showToast(t('Document attach is available after live sign-in'));
+      return;
+    }
+    if (docLookupBusy) return;
+    docLookupBusy = true;
+    attachResult = null;
+    notifyListeners();
+    try {
+      docLookup = await _repo.documentLookup(number);
+    } on ApiException catch (e) {
+      showToast(e.message);
+    } catch (_) {
+      showToast(t('Could not look up the document'));
+    } finally {
+      docLookupBusy = false;
+      notifyListeners();
+    }
+  }
+
+  void _addFile(String path) {
+    if (attachFiles.any((f) => f.path == path)) return;
+    attachFiles.add((path: path, name: path.split(RegExp(r'[\\/]')).last));
+    notifyListeners();
+  }
+
+  void removeAttachFile(String path) {
+    attachFiles.removeWhere((f) => f.path == path);
+    notifyListeners();
+  }
+
+  /// Take a single photo (JPEG) and stage it as an image.
+  Future<void> attachTakePhoto() async {
+    try {
+      final shot = await _picker.pickImage(source: ImageSource.camera, imageQuality: 85, maxWidth: 2000);
+      if (shot != null) _addFile(shot.path);
+    } catch (_) {
+      showToast(t('Could not open the camera'));
+    }
+  }
+
+  /// Pick one or more images from the gallery (Android Photo Picker / iOS).
+  Future<void> attachFromGallery() async {
+    try {
+      final shots = await _picker.pickMultiImage(imageQuality: 85, maxWidth: 2000);
+      for (final s in shots) {
+        _addFile(s.path);
+      }
+    } catch (_) {
+      showToast(t('Could not open the gallery'));
+    }
+  }
+
+  /// Pick files from device storage / iCloud / Drive (system Files picker).
+  Future<void> attachPickFiles() async {
+    try {
+      final res = await FilePicker.platform.pickFiles(allowMultiple: true, withData: false);
+      if (res == null) return;
+      for (final f in res.files) {
+        if (f.path != null) _addFile(f.path!);
+      }
+    } catch (_) {
+      showToast(t('Could not open files'));
+    }
+  }
+
+  /// Advanced document scan: native edge detection + perspective (skew)
+  /// correction + colour/brightness enhancement, multi-page → one PDF.
+  Future<void> attachScanDocument() async {
+    try {
+      final pages = await CunningDocumentScanner.getPictures(noOfPages: 20, isGalleryImportAllowed: true);
+      if (pages == null || pages.isEmpty) return;
+      final pdfPath = await _imagesToPdf(pages, 'scan');
+      if (pdfPath != null) _addFile(pdfPath);
+    } catch (e) {
+      final msg = e.toString();
+      if (msg.contains('Permission')) {
+        showToast(t('Camera permission is required to scan'));
+      } else {
+        showToast(t('Scanning failed'));
+      }
+    }
+  }
+
+  /// Combine every staged **image** into a single multi-page PDF (replacing the
+  /// images with the one PDF). No-op if fewer than one image is staged.
+  Future<void> attachCombineToPdf() async {
+    final images = attachFiles.where((f) => _isImageName(f.name)).toList();
+    if (images.isEmpty) return;
+    final pdfPath = await _imagesToPdf(images.map((f) => f.path).toList(), 'document');
+    if (pdfPath == null) return;
+    for (final img in images) {
+      attachFiles.removeWhere((f) => f.path == img.path);
+    }
+    _addFile(pdfPath);
+  }
+
+  bool _isImageName(String name) => RegExp(r'\.(jpe?g|png|gif|webp|heic)$', caseSensitive: false).hasMatch(name);
+
+  bool get attachHasImages => attachFiles.any((f) => _isImageName(f.name));
+
+  /// Renders a list of image files into a single multi-page PDF in the temp
+  /// directory; returns its path (or null on failure).
+  Future<String?> _imagesToPdf(List<String> imagePaths, String prefix) async {
+    try {
+      final doc = pw.Document();
+      for (final p in imagePaths) {
+        final bytes = await File(p).readAsBytes();
+        final img = pw.MemoryImage(bytes);
+        doc.addPage(pw.Page(build: (ctx) => pw.Center(child: pw.Image(img, fit: pw.BoxFit.contain))));
+      }
+      final dir = await getTemporaryDirectory();
+      final stamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+      final file = File('${dir.path}/${prefix}_$stamp.pdf');
+      await file.writeAsBytes(await doc.save(), flush: true);
+      return file.path;
+    } catch (_) {
+      showToast(t('Could not build the PDF'));
+      return null;
+    }
+  }
+
+  /// Upload the staged files against the looked-up document (§2.2).
+  Future<void> submitAttachments() async {
+    final look = docLookup;
+    if (look == null || !look.found) {
+      showToast(t('Look up a valid document first'));
+      return;
+    }
+    if (attachFiles.isEmpty) {
+      showToast(t('Add at least one file'));
+      return;
+    }
+    if (attachBusy) return;
+    attachBusy = true;
+    notifyListeners();
+    try {
+      final res = await _repo.attachDocuments(look.docNumber.isNotEmpty ? look.docNumber : docNumber.trim(),
+          attachFiles.map((f) => f.path).toList());
+      attachResult = res;
+      if (res.success && res.attached > 0) {
+        showToast('${res.attached} ${t('file(s) attached')}');
+        attachFiles.clear();
+      } else if (res.errors.isNotEmpty) {
+        showToast(res.errors.first.message);
+      }
+    } on ApiException catch (e) {
+      showToast(e.message);
+    } catch (_) {
+      showToast(t('Could not attach the files'));
+    } finally {
+      attachBusy = false;
+      notifyListeners();
+    }
   }
 
   // ── print labels (v1.4.7) ──────────────────────────────────────────

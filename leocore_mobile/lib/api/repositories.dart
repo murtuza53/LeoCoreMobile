@@ -1,5 +1,6 @@
 import 'package:intl/intl.dart';
 
+import '../models/documents.dart';
 import '../models/models.dart';
 import '../models/reports.dart';
 import 'api_client.dart';
@@ -327,6 +328,31 @@ class LeoRepository {
   Future<InventoryValuation> inventoryValuation({int? warehouseId}) async =>
       InventoryValuation.fromJson(await _client.getJson('/reports/inventory/valuation',
           query: {if (warehouseId != null) 'warehouseId': warehouseId}));
+
+  // ── Attach Docs (1.6.x, gate: MobileDocuments) ─────────────────────────
+  Future<DocLookup> documentLookup(String number) async {
+    final j = await _client.getJson('/documents/lookup', query: {'number': number});
+    return DocLookup.fromJson(j);
+  }
+
+  /// Attaches one or more files to the document with [number] (multipart;
+  /// repeatable `files` part).
+  Future<AttachResult> attachDocuments(String number, List<String> filePaths) async {
+    final j = await _client.postMultipart(
+      '/documents/attach',
+      field: 'files',
+      filePaths: filePaths,
+      fields: {'number': number},
+    );
+    return AttachResult.fromJson(j);
+  }
+
+  Future<List<DocAttachment>> documentAttachments(String docType, int docId) async {
+    final j = await _client.getJson('/documents/$docType/$docId/attachments');
+    final raw = _pick(j, ['attachments']);
+    if (raw is! List) return const [];
+    return raw.whereType<Map>().map(DocAttachment.fromJson).toList();
+  }
 
   // ── Barcode labels (v1.4.7, gate: MobileLabels) ────────────────────────
   /// Templates plus an optional empty-state message (server-provided when no
