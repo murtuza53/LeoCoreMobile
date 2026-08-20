@@ -354,6 +354,10 @@ class _PhotoStrip extends StatelessWidget {
                     app.imageUrl(img.url),
                     headers: app.imageHeaders,
                     fit: BoxFit.cover,
+                    // Downsample at decode time — the tile is ~300pt wide, so a
+                    // large server photo never decodes at full resolution
+                    // (lower memory, faster; Play "bitmap downsampling").
+                    cacheWidth: 900,
                     loadingBuilder: (c, child, progress) => progress == null
                         ? child
                         : Center(child: CircularProgressIndicator(color: lc.prim, strokeWidth: 2.2)),
