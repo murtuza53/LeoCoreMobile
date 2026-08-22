@@ -68,6 +68,20 @@ class AttachResult {
       );
 }
 
+/// A file being matched to a document by its filename in the bulk-attach flow.
+/// Mutable: its lookup/status update as the number is checked and uploaded.
+class BatchDoc {
+  final String path;
+  final String fileName;
+  String number; // derived from the filename, editable when not found
+  DocLookup? lookup;
+  String status; // checking | found | notfound | uploading | uploaded | error
+  String? message;
+  BatchDoc(this.path, this.fileName, this.number, {this.status = 'checking'});
+
+  bool get found => lookup?.found == true;
+}
+
 /// One existing attachment on a document.
 class DocAttachment {
   final int id;

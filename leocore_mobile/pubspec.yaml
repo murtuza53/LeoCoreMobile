@@ -38,6 +38,9 @@ dependencies:
   cunning_document_scanner: ^1.2.3
   # Build a multi-page PDF from scanned/picked images (pure Dart, no native).
   pdf: ^3.11.0
+  # Camera permission handling for the document scanner (direct-dep so we can
+  # pre-request + open app settings when the user denied it).
+  permission_handler: ^11.3.1
 
 dev_dependencies:
   flutter_test:

@@ -117,10 +117,10 @@ packages:
     dependency: "direct main"
     description:
       name: cunning_document_scanner
-      sha256: de0c0705799f7d5cc9b82b67bfb8b3e965a1fbff4afbd70ea10cd1dad4f3a98c
+      sha256: bf590e8c8c8a4903ba7873c4f22b67e976604853f11065f594cb19b408bd25ef
       url: "https://pub.dev"
     source: hosted
-    version: "1.4.0"
+    version: "1.2.3"
   cupertino_icons:
     dependency: "direct main"
     description:
@@ -726,21 +726,21 @@ packages:
     source: hosted
     version: "1.0.4"
   permission_handler:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: permission_handler
-      sha256: fe54465bcc62a4564c6e4db337bbaded6c0c0fa6e10487414436d163114784f6
+      sha256: "59adad729136f01ea9e35a48f5d1395e25cba6cea552249ddbe9cf950f5d7849"
       url: "https://pub.dev"
     source: hosted
-    version: "12.0.3"
+    version: "11.4.0"
   permission_handler_android:
     dependency: transitive
     description:
       name: permission_handler_android
-      sha256: "1e3bc410ca1bf84662104b100eb126e066cb55791b7451307f9708d4007350e6"
+      sha256: d3971dcdd76182a0c198c096b5db2f0884b0d4196723d21a866fc4cdea057ebc
       url: "https://pub.dev"
     source: hosted
-    version: "13.0.1"
+    version: "12.1.0"
   permission_handler_apple:
     dependency: transitive
     description:

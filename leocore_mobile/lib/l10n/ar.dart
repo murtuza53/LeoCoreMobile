@@ -413,4 +413,20 @@ const Map<String, String> kArabic = {
   'Could not open files': 'تعذّر فتح الملفات',
   'Camera permission is required to scan': 'إذن الكاميرا مطلوب للمسح',
   'Scanning failed': 'فشل المسح',
+  'Camera access needed': 'مطلوب الوصول إلى الكاميرا',
+  'Turn on Camera for LeoCore ERP in Settings to scan documents.': 'فعّل الكاميرا لتطبيق LeoCore ERP من الإعدادات لمسح المستندات.',
+  'Open Settings': 'فتح الإعدادات',
+
+  // ── Bulk attach (match by filename) ────────────────────────────────
+  'One document': 'مستند واحد',
+  'Match by name': 'المطابقة بالاسم',
+  'Pick files': 'اختيار ملفات',
+  'File names are matched to document numbers (e.g. CSI-2026-0053.pdf).': 'تُطابق أسماء الملفات مع أرقام المستندات (مثال: CSI-2026-0053.pdf).',
+  'Pick files to match by name.': 'اختر ملفات للمطابقة بالاسم.',
+  'Matched': 'مطابق',
+  'Not matched': 'غير مطابق',
+  'Enter document number': 'أدخل رقم المستند',
+  'Check': 'تحقق',
+  'Upload matched': 'رفع المطابق',
+  'Upload failed': 'فشل الرفع',
 };
