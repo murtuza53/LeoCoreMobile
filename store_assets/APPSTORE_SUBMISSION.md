@@ -1,7 +1,7 @@
 # LeoCore ERP — App Store Submission Pack
 
-Bundle ID: `sek.leocore.erp` · Team: `QH862RRRJ6` · Version `2.6.0` build `7`
-Target: iPhone only · Min iOS 13.0
+Bundle ID: `sek.leocore.erp` · Team: `QH862RRRJ6` · Version `2.6.0` build `8`
+Target: iPhone only · Min iOS 15.0
 
 ---
 
@@ -302,7 +302,197 @@ xcrun altool --upload-app -f build/ios/ipa/*.ipa -t ios \
   --apiKey R86H46956N --apiIssuer afc4f68b-4d8f-4940-ad87-fbd53041cc13
 ```
 
+### A4b. The build number in the IPA is NOT the one in pubspec.yaml
+
+Flutter generates `ExportOptions.plist` with `manageAppVersionAndBuildNumber = true`.
+On export, Xcode queries App Store Connect, finds the highest build already
+uploaded, and stamps the IPA with **that number + 1** — whatever `pubspec.yaml`
+says. Verified 2026-08-19:
+
+| Artifact | CFBundleVersion |
+|---|---|
+| `pubspec.yaml` | 8 |
+| `Runner.xcarchive` | 8 |
+| `build/ios/iphoneos/Runner.app` (device build) | 8 |
+| **exported `LeoCore ERP.ipa`** | **9** (8 was the highest on ASC) |
+
+Consequences:
+
+- You cannot accidentally upload a duplicate build number. Convenient.
+- The number shown in App Store Connect may not match `pubspec.yaml`. Read the
+  IPA, not the pubspec, when you need to know what you actually shipped:
+  ```
+  unzip -p "build/ios/ipa/LeoCore ERP.ipa" "Payload/Runner.app/Info.plist" \
+    | plutil -p - | grep CFBundleVersion
+  ```
+- Still bump `pubspec.yaml` for each release — it drives
+  `CFBundleShortVersionString` (the user-visible version) and the Android
+  `versionCode`, neither of which is auto-managed.
+
 ### A5. After upload
 - The build takes 10–30 minutes to finish processing before it can be selected.
 - Attach it to the version, fill in the metadata from sections 1–8 above,
   add the demo credentials in section 7, then **Add for Review**.
+
+---
+
+# Review status log
+
+**2026-08-18** — build 8 uploaded, version submitted, status `WAITING_FOR_REVIEW`.
+
+**2026-08-19** — **Rejected**, Guideline 2.1 *Information Needed — New App
+Submission* (shown as `2.1.0 Performance: App Completeness`).
+
+Not a defect. Apple's standard first-submission questionnaire: they want seven
+questions answered in App Review Information → Notes, plus a screen recording
+captured on a physical device. Re-verified the same day that the demo login and
+both URLs still respond, so the credentials were never the problem.
+
+The paste-ready reply, the recording shot list and the Notes-field text are in
+**`APPLE_2.1_REPLY.md`**. No new build was required — build 8 stood throughout.
+
+**2026-09-01** — replied with a 1:53 screen recording captured on a physical
+iPhone 16 Pro Max (iOS 26.5.2), showing a cold launch, the full sign-in, the
+camera permission alert at 00:46, a live barcode scan, populated reports, label
+printing to PDF, Arabic RTL and dark theme. Sent text: `apple_reply_4000.txt`
+(the reply box caps at 4000 characters, so the long form in `APPLE_2.1_REPLY.md`
+does not fit). App Review Information → Notes: `apple_review_notes.txt`.
+Resubmitted, `WAITING_FOR_REVIEW`.
+
+**2026-09-04** — **Rejected again**, Guideline 3.2 *Business* — Apple judged the
+app to be built for a specific organisation rather than a public audience, and
+suggested Custom App or Unlisted distribution instead.
+
+Root cause was our own listing. The **Support URL pointed at
+`leocoreerp.souqekamil.com`, an unconfigured parked domain** serving the hosting
+provider's placeholder page. A reviewer checking whether LeoCore ERP is a real,
+openly available product found a domain-reseller ad. The description's
+REQUIREMENTS paragraph ("an account issued by your company's administrator...
+not a standalone product") and the phrasing of our own 2.1 reply ("the audience
+is those companies' own staff, not the general public") reinforced it.
+
+Fixes applied, in this order — the URL first, so the reply's claim was already
+true when Apple checked it:
+
+1. Support URL and Marketing URL → `https://leocoreerp.seksolution.com`, the
+   real product site, which carries a "Book a 30-min walkthrough" CTA.
+2. Description REQUIREMENTS rewritten — `apple_description_requirements.txt`.
+3. Replied with `apple_reply_3.2.txt`, answering Apple's five questions: five
+   separate unaffiliated customer companies, open to any business that buys a
+   licence, accounts issued by each customer's own administrator for security
+   (not as a restriction on who may become a customer), no in-app purchases,
+   and the same app already publicly listed on Google Play.
+
+**2026-09-05** — **APPROVED and live.** `READY_FOR_SALE` /
+`READY_FOR_DISTRIBUTION`, submission `COMPLETE`.
+
+## If a 3.2 challenge ever recurs
+
+The deciding question is whether *any* company can become a customer, not how
+many currently are. Keep the Support URL pointing at a real product page with
+public pricing or a demo request — that single link is what a reviewer uses to
+test the claim. If Apple rejects twice on 3.2, take **Unlisted App
+Distribution** rather than arguing a third time: the app keeps a permanent
+direct link for customers and simply does not appear in search.
+
+---
+
+# Appendix B — iCloud broke iOS code signing (found and FIXED 2026-08-19)
+
+**RESOLVED.** iCloud Desktop & Documents sync has been turned off and the stale
+attributes stripped. Release builds now work from the repo in place. Kept here
+because the failure is cryptic and costs an hour if it recurs.
+
+**Symptom.** Any `flutter build ios` / `flutter build ipa` / Xcode archive fails:
+
+```
+Failed to codesign .../Flutter.framework/Flutter with identity <hash>.
+  .../Flutter.framework/Flutter: replacing existing signature
+  .../Flutter.framework/Flutter: resource fork, Finder information, or similar
+  detritus not allowed
+```
+
+**Cause.** The repo lives in `~/Documents` and iCloud Drive was syncing that
+folder. iCloud stamps `com.apple.FinderInfo` (plus `com.apple.fileprovider.fpfs#P`)
+onto the directories it manages, and `codesign` refuses to sign anything
+carrying it.
+
+**Two red herrings, so nobody chases them again:**
+
+- `com.apple.provenance` is on every file and looks like the obvious suspect.
+  It is not the cause — a copy carrying only provenance signs fine. The
+  offending attribute is `com.apple.FinderInfo`, and it sits on the *directory*,
+  not the binary.
+- `xattr -cr build/` appears to work but does not, *while sync is still on*.
+  iCloud re-applies the attribute faster than the delete pass runs — one
+  measured attempt went from 26 stamped paths to 42 *during* the strip.
+
+**The fix that was applied** (in this order — the second step is not optional,
+turning sync off does not clean up what is already stamped):
+
+1. System Settings → Apple Account → iCloud → iCloud Drive →
+   **Desktop & Documents Folders** → off. Confirm with:
+   ```
+   defaults read com.apple.finder FXICloudDriveDocuments   # want 0
+   defaults read com.apple.finder FXICloudDriveDesktop     # want 0
+   ```
+2. Strip the ~66 attributes iCloud left behind:
+   ```
+   cd ~/Documents/LeoCoreMobile
+   rm -rf leocore_mobile/build
+   find . -xattrname com.apple.FinderInfo \
+     -exec xattr -d com.apple.FinderInfo {} \; 2>/dev/null
+   find . -xattrname 'com.apple.fileprovider.fpfs#P' \
+     -exec xattr -d 'com.apple.fileprovider.fpfs#P' {} \; 2>/dev/null
+   ```
+
+**Verified 2026-08-19 after the fix:** `flutter build ios --release` and
+`flutter build ipa --release --export-method app-store` both succeed from the
+repo in place, and a full build leaves `find . -xattrname com.apple.FinderInfo`
+at **0**.
+
+**If it ever comes back**, check that count first — that one command tells you
+whether this is the problem. The emergency workaround is to build from a copy
+outside any synced folder (`flutter build` has no `--build-dir` flag):
+
+```
+DEST=/tmp/leocore_build
+rsync -a --delete --exclude build/ --exclude .dart_tool/ --exclude ios/Pods/ \
+  --exclude ios/.symlinks/ --exclude .git/ --exclude android/.gradle/ \
+  ~/Documents/LeoCoreMobile/leocore_mobile/ "$DEST/"
+cd "$DEST" && flutter pub get && flutter build ipa --release --export-method app-store
+```
+
+## Appendix C — installing on a device for a review recording
+
+Registered devices (`GET /v1/devices`):
+
+| Device | UDID | Status |
+|---|---|---|
+| HUSSAIN's iPhone (iPhone 12 Pro, iOS 18.7.8) | `00008101-00051DE60152001E` | ENABLED |
+| Jamila iPhone 16 Pro Max, iOS 26.5.2 | `00008140-00161D140013C01C` | ENABLED |
+
+After registering a new device, Xcode keeps using its **cached** profile and the
+build silently omits the device. Clear the cache and rebuild:
+
+```
+mv ~/Library/Developer/Xcode/UserData/Provisioning\ Profiles/*.mobileprovision /tmp/backup/
+cd /tmp/leocore_build && rm -rf build/ios/iphoneos && flutter build ios --release
+
+# confirm the device is in the profile before installing
+security cms -D -i build/ios/iphoneos/Runner.app/embedded.mobileprovision | \
+  python3 -c "import sys,plistlib;p=plistlib.loads(sys.stdin.buffer.read());print(len(p['ProvisionedDevices']))"
+
+xcrun devicectl device install app --device <UDID> build/ios/iphoneos/Runner.app
+xcrun devicectl device process launch --device <UDID> sek.leocore.erp
+```
+
+The device also needs **Developer Mode** on (Settings → Privacy & Security →
+Developer Mode), which only appears in Settings after a Mac has connected once.
+
+## Appendix D — App Store Connect API without altool
+
+`xcrun altool --generate-jwt` does not work in Xcode 26. Sign the ES256 JWT
+directly instead — `openssl` plus a DER→raw signature conversion is enough, and
+needs no third-party Python packages. Working script:
+`store_assets/asc_jwt.py`.
