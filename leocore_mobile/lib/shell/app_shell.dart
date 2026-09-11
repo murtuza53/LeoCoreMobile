@@ -10,6 +10,7 @@ import '../screens/login_screen.dart';
 import '../screens/low_stock_screen.dart';
 import '../screens/more_screen.dart';
 import '../screens/product_detail_screen.dart';
+import '../screens/attach_docs_screen.dart';
 import '../screens/labels_screen.dart';
 import '../screens/manager_reports_screen.dart';
 import '../screens/products_screen.dart';
@@ -110,6 +111,7 @@ class _AppShellState extends State<AppShell> {
       Screen.reports => const ReportsScreen(),
       Screen.managerReports => const ManagerReportsScreen(),
       Screen.labels => const LabelsScreen(),
+      Screen.documents => const AttachDocsScreen(),
       Screen.settings => const SettingsScreen(),
       Screen.more => const MoreScreen(),
     };

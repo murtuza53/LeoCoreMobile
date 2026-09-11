@@ -50,6 +50,28 @@ post_install do |installer|
     target.build_configurations.each do |config|
       # Force every pod to the app's minimum so none default to an older iOS.
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
+
+      # permission_handler (pulled in by the document scanner) compiles code for
+      # every permission type by default. Enable ONLY the ones the app uses
+      # (camera + photos) so App Store review doesn't flag missing purpose
+      # strings for permissions we never request.
+      config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= ['$(inherited)']
+      config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] += [
+        'PERMISSION_CAMERA=1',
+        'PERMISSION_PHOTOS=1',
+        'PERMISSION_MICROPHONE=0',
+        'PERMISSION_LOCATION=0',
+        'PERMISSION_NOTIFICATIONS=0',
+        'PERMISSION_CONTACTS=0',
+        'PERMISSION_EVENTS=0',
+        'PERMISSION_REMINDERS=0',
+        'PERMISSION_MEDIA_LIBRARY=0',
+        'PERMISSION_SENSORS=0',
+        'PERMISSION_BLUETOOTH=0',
+        'PERMISSION_APP_TRACKING_TRANSPARENCY=0',
+        'PERMISSION_CRITICAL_ALERTS=0',
+        'PERMISSION_SPEECH_RECOGNIZER=0',
+      ]
     end
   end
 end

@@ -13,16 +13,28 @@
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" tools:node="remove"/>
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" tools:node="remove"/>
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" tools:node="remove"/>
+
+    <!-- cunning_document_scanner declares READ/WRITE_EXTERNAL_STORAGE with no
+         SDK cap. The scanner writes to app-private storage on modern Android, so
+         cap these to the legacy versions where they were actually needed:
+         WRITE only ≤ Android 9 (scoped storage from 10), READ only ≤ Android 12
+         (photo picker from 13). This keeps Google Play review clean. -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" tools:node="replace"/>
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" tools:node="replace"/>
     <application
         android:label="LeoCore ERP"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:resizeableActivity="true">
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
             android:taskAffinity=""
             android:theme="@style/LaunchTheme"
+            android:resizeableActivity="true"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize">

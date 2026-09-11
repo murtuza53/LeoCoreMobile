@@ -1,7 +1,7 @@
 name: leocore_mobile
 description: "LeoCore ERP Mobile — companion app for LeoCore ERP (Bahrain)."
 publish_to: 'none'
-version: 2.6.0+8
+version: 2.7.0+9
 
 environment:
   sdk: ^3.5.0
@@ -30,6 +30,17 @@ dependencies:
   # Uses the Android Photo Picker on API 33+, so gallery access needs no
   # READ_MEDIA_* permissions (Play "Photo and Video Permissions" policy).
   image_picker: ^1.1.2
+  # Attach Docs: pick files from device storage / iCloud / Drive (Files app).
+  file_picker: ^8.1.2
+  # Advanced document scanning: native edge detection, perspective (skew)
+  # correction and colour/brightness enhancement (VisionKit on iOS, ML Kit
+  # Document Scanner on Android). Multi-page capture.
+  cunning_document_scanner: ^1.2.3
+  # Build a multi-page PDF from scanned/picked images (pure Dart, no native).
+  pdf: ^3.11.0
+  # Camera permission handling for the document scanner (direct-dep so we can
+  # pre-request + open app settings when the user denied it).
+  permission_handler: ^11.3.1
 
 dev_dependencies:
   flutter_test:

@@ -18,8 +18,14 @@ import '../api/auth_api.dart';
 import '../api/biometrics.dart';
 import '../api/repositories.dart';
 import '../api/secure_store.dart';
+import 'package:cunning_document_scanner/cunning_document_scanner.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:permission_handler/permission_handler.dart';
+
 import '../data/mock_data.dart';
 import '../l10n/ar.dart';
+import '../models/documents.dart';
 import '../models/models.dart';
 import '../models/reports.dart';
 import '../utils/money.dart';
@@ -42,6 +48,7 @@ enum Screen {
   receipt,
   managerReports,
   labels,
+  documents,
   reports,
   settings,
   more,
@@ -390,6 +397,9 @@ class AppState extends ChangeNotifier {
 
   /// Print Labels (v1.4.7) — gate: `MobileLabels`.
   bool get mLabels => demoMode ? role != Role.salesRep : _menuHas('label');
+
+  /// Attach Docs (1.6.x) — gate: `MobileDocuments` (menu id `documents`).
+  bool get mDocuments => demoMode ? role != Role.salesRep : _menuHas('document');
   bool get mCount => demoMode
       ? role != Role.salesRep
       : (_menuKeys.isEmpty || _menuHas('count') || _menuHas('stock'));
@@ -607,6 +617,7 @@ class AppState extends ChangeNotifier {
       case Screen.settings:
       case Screen.managerReports:
       case Screen.labels:
+      case Screen.documents:
         nav(Screen.more);
         return true;
       case Screen.products:
@@ -1714,6 +1725,318 @@ class AppState extends ChangeNotifier {
       (salesmanId: 0, name: 'Unassigned', sales: 3800, invoices: 9, collections: 1100),
     ]);
     notifyListeners();
+  }
+
+  // ── Attach Docs (1.6.x) ────────────────────────────────────────────
+  String docNumber = '';
+  DocLookup? docLookup;
+  bool docLookupBusy = false;
+  bool attachBusy = false;
+  AttachResult? attachResult;
+  // Files staged for upload (local path + display name).
+  final List<({String path, String name})> attachFiles = [];
+
+  void openAttachDocs() {
+    docNumber = '';
+    docLookup = null;
+    attachResult = null;
+    attachFiles.clear();
+    docBatchMode = false;
+    batchDocs.clear();
+    nav(Screen.documents);
+  }
+
+  void setDocNumber(String v) {
+    docNumber = v;
+    // Editing the number invalidates a previous lookup.
+    if (docLookup != null) docLookup = null;
+    notifyListeners();
+  }
+
+  /// Verify the document exists before the user uploads (§2.1).
+  Future<void> lookupDocument() async {
+    final number = docNumber.trim();
+    if (number.isEmpty) {
+      showToast(t('Enter a document number'));
+      return;
+    }
+    if (demoMode) {
+      showToast(t('Document attach is available after live sign-in'));
+      return;
+    }
+    if (docLookupBusy) return;
+    docLookupBusy = true;
+    attachResult = null;
+    notifyListeners();
+    try {
+      docLookup = await _repo.documentLookup(number);
+    } on ApiException catch (e) {
+      showToast(e.message);
+    } catch (_) {
+      showToast(t('Could not look up the document'));
+    } finally {
+      docLookupBusy = false;
+      notifyListeners();
+    }
+  }
+
+  void _addFile(String path) {
+    if (attachFiles.any((f) => f.path == path)) return;
+    attachFiles.add((path: path, name: path.split(RegExp(r'[\\/]')).last));
+    notifyListeners();
+  }
+
+  void removeAttachFile(String path) {
+    attachFiles.removeWhere((f) => f.path == path);
+    notifyListeners();
+  }
+
+  /// Take a single photo (JPEG) and stage it as an image.
+  Future<void> attachTakePhoto() async {
+    try {
+      final shot = await _picker.pickImage(source: ImageSource.camera, imageQuality: 85, maxWidth: 2000);
+      if (shot != null) _addFile(shot.path);
+    } catch (_) {
+      showToast(t('Could not open the camera'));
+    }
+  }
+
+  /// Pick one or more images from the gallery (Android Photo Picker / iOS).
+  Future<void> attachFromGallery() async {
+    try {
+      final shots = await _picker.pickMultiImage(imageQuality: 85, maxWidth: 2000);
+      for (final s in shots) {
+        _addFile(s.path);
+      }
+    } catch (_) {
+      showToast(t('Could not open the gallery'));
+    }
+  }
+
+  /// Pick files from device storage / iCloud / Drive (system Files picker).
+  Future<void> attachPickFiles() async {
+    try {
+      final res = await FilePicker.platform.pickFiles(allowMultiple: true, withData: false);
+      if (res == null) return;
+      for (final f in res.files) {
+        if (f.path != null) _addFile(f.path!);
+      }
+    } catch (_) {
+      showToast(t('Could not open files'));
+    }
+  }
+
+  /// Advanced document scan: native edge detection + perspective (skew)
+  /// correction + colour/brightness enhancement, multi-page → one PDF.
+  /// Resolve camera permission for scanning. Returns 'granted', 'denied', or
+  /// 'settings' (permanently denied / restricted → the UI should offer to open
+  /// app settings). This mirrors what the scanner needs, so the screen can act
+  /// on it *before* invoking the native scanner.
+  Future<String> ensureCameraPermission() async {
+    var s = await Permission.camera.status;
+    if (s.isGranted) return 'granted';
+    if (s.isPermanentlyDenied || s.isRestricted) return 'settings';
+    s = await Permission.camera.request();
+    if (s.isGranted) return 'granted';
+    if (s.isPermanentlyDenied || s.isRestricted) return 'settings';
+    return 'denied';
+  }
+
+  Future<void> openAppPermissionSettings() => openAppSettings();
+
+  /// Runs the native document scanner. Camera permission is expected to be
+  /// granted already (the screen checks first via [ensureCameraPermission]).
+  Future<void> attachScanDocument() async {
+    try {
+      final pages = await CunningDocumentScanner.getPictures(noOfPages: 20, isGalleryImportAllowed: true);
+      if (pages == null || pages.isEmpty) return;
+      final pdfPath = await _imagesToPdf(pages, 'scan');
+      if (pdfPath != null) _addFile(pdfPath);
+    } catch (_) {
+      showToast(t('Scanning failed'));
+    }
+  }
+
+  // ── bulk attach: match files to documents by filename ──────────────
+  bool docBatchMode = false;
+  bool batchBusy = false;
+  final List<BatchDoc> batchDocs = [];
+
+  int get batchFoundCount => batchDocs.where((b) => b.status == 'found').length;
+  int get batchPending => batchDocs.where((b) => b.status == 'found' || b.status == 'error').length;
+
+  void setBatchMode(bool on) {
+    docBatchMode = on;
+    if (!on) batchDocs.clear();
+    notifyListeners();
+  }
+
+  void _addBatch(Iterable<({String path, String name})> files) {
+    for (final f in files) {
+      if (batchDocs.any((b) => b.path == f.path)) continue;
+      // The filename (minus extension) is the candidate document number.
+      final number = f.name.replaceAll(RegExp(r'\.[^.]+$'), '').trim();
+      final d = BatchDoc(f.path, f.name, number);
+      batchDocs.add(d);
+      recheckBatch(d);
+    }
+    notifyListeners();
+  }
+
+  Future<void> pickBatchFiles() async {
+    try {
+      final res = await FilePicker.platform.pickFiles(allowMultiple: true, withData: false);
+      if (res == null) return;
+      _addBatch(res.files.where((f) => f.path != null).map((f) => (path: f.path!, name: f.name)));
+    } catch (_) {
+      showToast(t('Could not open files'));
+    }
+  }
+
+  Future<void> pickBatchFromGallery() async {
+    try {
+      final shots = await _picker.pickMultiImage(imageQuality: 85, maxWidth: 2000);
+      _addBatch(shots.map((s) => (path: s.path, name: s.name)));
+    } catch (_) {
+      showToast(t('Could not open the gallery'));
+    }
+  }
+
+  Future<void> recheckBatch(BatchDoc d) async {
+    if (d.number.trim().isEmpty) {
+      d.status = 'notfound';
+      d.lookup = null;
+      notifyListeners();
+      return;
+    }
+    d.status = 'checking';
+    notifyListeners();
+    try {
+      d.lookup = await _repo.documentLookup(d.number.trim());
+      d.status = d.lookup!.found ? 'found' : 'notfound';
+    } catch (_) {
+      d.status = 'notfound';
+      d.lookup = null;
+    }
+    notifyListeners();
+  }
+
+  void setBatchNumber(BatchDoc d, String number) {
+    d.number = number;
+    notifyListeners();
+  }
+
+  void removeBatch(BatchDoc d) {
+    batchDocs.remove(d);
+    notifyListeners();
+  }
+
+  Future<void> uploadBatchItem(BatchDoc d) async {
+    if (!d.found) return;
+    d.status = 'uploading';
+    d.message = null;
+    notifyListeners();
+    try {
+      final number = d.lookup!.docNumber.isNotEmpty ? d.lookup!.docNumber : d.number.trim();
+      final res = await _repo.attachDocuments(number, [d.path]);
+      if (res.success && res.attached > 0) {
+        d.status = 'uploaded';
+      } else {
+        d.status = 'error';
+        d.message = res.errors.isNotEmpty ? res.errors.first.message : t('Could not attach the files');
+      }
+    } on ApiException catch (e) {
+      d.status = 'error';
+      d.message = e.message;
+    } catch (_) {
+      d.status = 'error';
+      d.message = t('Could not attach the files');
+    }
+    notifyListeners();
+  }
+
+  /// Upload every matched (found) file that hasn't been uploaded yet.
+  Future<void> uploadAllFound() async {
+    if (batchBusy) return;
+    batchBusy = true;
+    notifyListeners();
+    for (final d in batchDocs.where((b) => b.status == 'found').toList()) {
+      await uploadBatchItem(d);
+    }
+    batchBusy = false;
+    notifyListeners();
+  }
+
+  /// Combine every staged **image** into a single multi-page PDF (replacing the
+  /// images with the one PDF). No-op if fewer than one image is staged.
+  Future<void> attachCombineToPdf() async {
+    final images = attachFiles.where((f) => _isImageName(f.name)).toList();
+    if (images.isEmpty) return;
+    final pdfPath = await _imagesToPdf(images.map((f) => f.path).toList(), 'document');
+    if (pdfPath == null) return;
+    for (final img in images) {
+      attachFiles.removeWhere((f) => f.path == img.path);
+    }
+    _addFile(pdfPath);
+  }
+
+  bool _isImageName(String name) => RegExp(r'\.(jpe?g|png|gif|webp|heic)$', caseSensitive: false).hasMatch(name);
+
+  bool get attachHasImages => attachFiles.any((f) => _isImageName(f.name));
+
+  /// Renders a list of image files into a single multi-page PDF in the temp
+  /// directory; returns its path (or null on failure).
+  Future<String?> _imagesToPdf(List<String> imagePaths, String prefix) async {
+    try {
+      final doc = pw.Document();
+      for (final p in imagePaths) {
+        final bytes = await File(p).readAsBytes();
+        final img = pw.MemoryImage(bytes);
+        doc.addPage(pw.Page(build: (ctx) => pw.Center(child: pw.Image(img, fit: pw.BoxFit.contain))));
+      }
+      final dir = await getTemporaryDirectory();
+      final stamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+      final file = File('${dir.path}/${prefix}_$stamp.pdf');
+      await file.writeAsBytes(await doc.save(), flush: true);
+      return file.path;
+    } catch (_) {
+      showToast(t('Could not build the PDF'));
+      return null;
+    }
+  }
+
+  /// Upload the staged files against the looked-up document (§2.2).
+  Future<void> submitAttachments() async {
+    final look = docLookup;
+    if (look == null || !look.found) {
+      showToast(t('Look up a valid document first'));
+      return;
+    }
+    if (attachFiles.isEmpty) {
+      showToast(t('Add at least one file'));
+      return;
+    }
+    if (attachBusy) return;
+    attachBusy = true;
+    notifyListeners();
+    try {
+      final res = await _repo.attachDocuments(look.docNumber.isNotEmpty ? look.docNumber : docNumber.trim(),
+          attachFiles.map((f) => f.path).toList());
+      attachResult = res;
+      if (res.success && res.attached > 0) {
+        showToast('${res.attached} ${t('file(s) attached')}');
+        attachFiles.clear();
+      } else if (res.errors.isNotEmpty) {
+        showToast(res.errors.first.message);
+      }
+    } on ApiException catch (e) {
+      showToast(e.message);
+    } catch (_) {
+      showToast(t('Could not attach the files'));
+    } finally {
+      attachBusy = false;
+      notifyListeners();
+    }
   }
 
   // ── print labels (v1.4.7) ──────────────────────────────────────────

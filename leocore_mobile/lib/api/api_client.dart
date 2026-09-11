@@ -138,8 +138,10 @@ class ApiClient {
     String path, {
     required String field,
     required List<String> filePaths,
+    Map<String, String>? fields,
   }) async {
     final form = FormData();
+    fields?.forEach((k, v) => form.fields.add(MapEntry(k, v)));
     for (final p in filePaths) {
       form.files.add(MapEntry(field, await MultipartFile.fromFile(p)));
     }
