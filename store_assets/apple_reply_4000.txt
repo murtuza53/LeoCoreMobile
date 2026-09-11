@@ -1,0 +1,33 @@
+Thank you. All seven points are answered below. The recording is attached; this detail is also in the App Review Information Notes.
+
+1. SCREEN RECORDING
+Attached (1:53), on a physical iPhone 16 Pro Max running iOS 26.5.2, beginning with a cold launch from the home screen. It covers sign-in, the dashboard, products, customers, the barcode scanner (the iOS camera permission alert appears at 00:46, followed by a live scan of a physical barcode resolving to the matching product), reports, business health, label printing with the generated PDF, settings including Arabic right-to-left and dark theme, and sign-out.
+
+The other flows you list are absent: no registration or account deletion (point 4), no purchases or subscriptions, no user-generated content (so reporting and blocking do not apply). The camera is the only sensitive permission requested.
+
+2. DEVICES AND OS TESTED
+iPhone 16 Pro Max, iOS 26.5.2 (physical; the device in the recording) - full pass of every screen. iPhone 12 Pro, iOS 18.7.8 (physical) - full pass on an older device. Also verified on the iPhone 16 Pro Max simulator for layout and localisation. iPhone only, iOS 15.0 or later.
+
+3. PURPOSE AND TARGET AUDIENCE
+A business-to-business companion app for LeoCore ERP, an inventory and sales system companies run on their own server. The audience is those companies' own staff, not the general public. It saves walking back to a back-office PC to check a price, stock level or customer balance, and turns the phone camera into the barcode scanner. It is not standalone: it requires a LeoCore ERP server and an account issued by that company's administrator.
+
+4. SETUP AND ACCESS
+No setup or sample files are needed.
+  1. Launch the app; the first screen asks for a "Server location".
+  2. It is pre-filled with https://leocoredemo.seksolution.com
+  3. Username: mic   Password: mic@159357
+  4. Tap "Sign in".
+We re-verified these credentials today. The demo account has every module enabled and the server will remain available throughout review. Cash Sale, Quotation, Stock Count, Print Labels and Business Health are under the "More" tab.
+
+The app has no registration screen and no account deletion, by design: accounts are created and revoked by the customer's own ERP administrator in the LeoCore back office. Guideline 5.1.1(v) therefore does not apply - this is an employee credential issued by the employer, not a consumer account created in the app.
+
+The demo server allows one active session per user; if you are signed out unexpectedly please sign in again, it is not a defect.
+
+5. EXTERNAL SERVICES
+The customer's own LeoCore ERP server is the only backend and the only destination for business data, over HTTPS; it handles authentication and all data. For this review that is https://leocoredemo.seksolution.com, a demo instance we operate. Google Fonts (fonts.gstatic.com) supplies one typeface on first launch - a font request only, no user or business data sent. Apple frameworks provide barcode recognition, the optional Face ID unlock and the rating prompt. There is no analytics, advertising, crash reporting, tracking, payment processor or AI service.
+
+6. REGIONAL DIFFERENCES
+The app functions identically in every region: no region-locked features, no regional content variations, no geographic restrictions, and no use of location. The only variation is user-selected: English or Arabic, with Arabic switching to right-to-left.
+
+7. REGULATED INDUSTRY AND THIRD-PARTY MATERIAL
+Not a regulated industry: general-purpose business software for private commercial use, with no financial, healthcare, gambling or legal services and no payment processing. It contains no protected third-party material; all content is ours or the customer's own data on their own server. Both the app and the LeoCore ERP server are developed by Souq E Kamil Trading and Solutions W.L.L.

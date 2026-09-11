@@ -1,0 +1,25 @@
+Thank you. We believe the assessment is incorrect, and we would like to clarify. LeoCore ERP is a commercial software product that any company can purchase. It is not built for, restricted to, or limited to any single organisation or closed group.
+
+We think one thing on our listing caused the misunderstanding, and it was our error. Our Support URL pointed to leocoreerp.souqekamil.com, which was an unconfigured parked domain showing our hosting provider's placeholder page rather than product information. Anyone checking whether LeoCore ERP is a real, openly available product would have found nothing there. We have corrected the Support URL and the Marketing URL to https://leocoreerp.seksolution.com, our actual product site, which describes the product, lists pricing enquiry and demo booking, and is open to any business. The same app is also publicly listed on Google Play (id sek.leocore.erp).
+
+ANSWERS TO YOUR QUESTIONS
+
+1. Is the app restricted to users who are part of a single company or organisation?
+No. It is used today by the staff of five separate, unaffiliated companies that have each purchased a LeoCore ERP licence, and that number grows as we sell to new customers. There is no technical or commercial restriction tying the app to one organisation. Each customer runs their own independent LeoCore server, and the app connects to whichever server the user enters on the first screen.
+
+2. Is the app designed for use by a limited or specific group of companies?
+No. It is designed for any business that keeps stock and sells goods - typically retail and wholesale companies. There is no approved list, no invitation, no affiliation requirement and no vetting beyond a normal commercial purchase.
+
+Can any company or organisation become a client and use this app?
+Yes. Any company can buy a LeoCore ERP licence from us through our website (https://leocoreerp.seksolution.com), by booking a demo, or by contacting info@souqekamil.com. Purchasing the licence is the only requirement. We market it publicly and sell it to whoever wants it.
+
+3. What features are intended for use by the general public?
+We should be straightforward here: the app is a client for a paid business platform, so its features require a LeoCore ERP account, in the same way as other business software published on the App Store. What is open to the public is availability - any member of the public who runs a business can buy LeoCore ERP and immediately use this app. We are not restricting who may become a customer.
+
+4. How do users obtain an account?
+A company purchases a LeoCore ERP licence, which includes mobile access. That company's own administrator then creates user accounts for its staff inside the LeoCore back office, exactly as they do for desktop access. We do this rather than in-app sign-up because these accounts carry role-based permissions to a company's own financial and inventory records, so the employer must control who is issued one. This is a security design decision, not a restriction on who may become a customer.
+
+5. Is there any paid content in the app, and who pays for it?
+There is no paid content, no in-app purchase and no subscription inside the app. The app is free to download and free to use. The customer company pays us for its LeoCore ERP licence, which includes access to this mobile app for its staff. Individual users never pay anything, in the app or otherwise.
+
+If any of this needs supporting evidence - customer references, licence agreements or pricing documentation - we will gladly provide it. Thank you for reconsidering.
