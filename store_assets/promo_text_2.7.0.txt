@@ -1,0 +1,1 @@
+New: attach documents to any invoice. Scan paper with the camera or pick files, and they land on the record - alongside barcode scanning, stock and reports.

@@ -10,24 +10,28 @@ HOW TO SIGN IN
 The demo account has every module enabled. The server allows one active session per user, so if you are signed out unexpectedly please sign in again - it is not a defect.
 
 WHERE THE FEATURES ARE
-The Dashboard is the landing screen. Products, Customers, Suppliers and Reports are on the dashboard grid and the bottom bar. The barcode scanner is the round button in the centre of the bottom bar. Cash Sale, Quotation, Stock Count, Stock Alerts, Print Labels, Business Health and Settings are under the "More" tab.
+Products, Customers, Suppliers and Reports are on the dashboard grid and the bottom bar. The barcode scanner is the round button in the centre of the bottom bar. Cash Sale, Quotation, Stock Count, Stock Alerts, Attach Docs, Print Labels, Business Health and Settings are under the "More" tab.
 
-Reports and Business Health default to today, and the demo company has no sales dated today. Please select "Last 30 days" on Reports, or set the Business Health date range to a previous month, to see populated figures.
+TO TRY ATTACH DOCS (new in 2.7.0)
+More > Attach Docs, then look up document number DEMO-INV-00051 or DEMO-INV-00142. Both are Sales Invoices on the demo server. Any other number will correctly report "not found". Then attach a file by scanning paper with the camera, or by picking one from Files, Photos or the gallery.
 
-PURPOSE AND AUDIENCE
-The audience is the staff of companies that run LeoCore ERP - storekeepers, sales staff and owners - not the general public. This work is normally tied to a back-office PC, so staff on the shop floor must walk to a computer to check a price, a stock level, or what a customer owes. The app puts those functions on the phone and uses the camera as the barcode scanner. It covers products and live stock, cash sales invoices and quotations as PDF, stock counts with variance, barcode and shelf label printing, customer balances and ageing, and sales, margin and receivables reports, in English and Arabic with right-to-left layout.
+TO SEE POPULATED REPORTS
+Reports and Business Health default to today, and the demo company has no sales dated today. Please select "Last 30 days" on Reports, or set the Business Health date range to a previous month.
+
+WHO THIS IS FOR
+LeoCore ERP is a commercial product that any company can purchase; it is not built for, or restricted to, a single organisation or a closed group. It is in use today by five separate, unaffiliated customer companies, each running its own LeoCore server, and any business can buy a licence through https://leocoreerp.seksolution.com or info@souqekamil.com. The app is free, with no in-app purchases; the customer company pays for its LeoCore ERP licence, which includes mobile access for its staff.
 
 ACCOUNTS
 The app has no registration screen and no account creation or deletion, by design. Accounts are created and revoked by the customer company's own ERP administrator in the LeoCore back office, exactly as their desktop accounts are. Guideline 5.1.1(v) therefore does not apply: this is an employee credential issued and revoked by the employer, not a consumer account created in the app.
 
 PERMISSIONS
-The camera is the only sensitive permission requested, and only when the scanner is opened, to read product barcodes and attach product photos. Face ID is an optional unlock, switchable in Settings. The app requests no location, contacts, microphone or App Tracking Transparency, and does not track users.
+The camera is the only sensitive permission requested - to read product barcodes and to scan documents. Face ID is an optional unlock, switchable in Settings. No location, contacts, microphone or App Tracking Transparency, and no tracking.
 
 EXTERNAL SERVICES
-The customer's own LeoCore ERP server is the only backend and the only destination for business data, over HTTPS via a REST API; it performs authentication and returns all data. Google Fonts (fonts.gstatic.com) supplies one typeface on first launch - a font file request only, no user or business data sent. Apple frameworks provide barcode recognition, the optional Face ID unlock and the rating prompt. There is no analytics, advertising, crash reporting, tracking, payment processor, AI service or external data provider. The auth token and server address are stored in the iOS Keychain on device.
+The customer's own LeoCore ERP server is the only backend and the only destination for business data, over HTTPS via a REST API. Google Fonts supplies one typeface on first launch - a font file request only. Apple frameworks provide barcode recognition, document scanning, the optional Face ID unlock and the rating prompt. There is no analytics, advertising, crash reporting, tracking, payment processor or AI service.
 
 REGIONAL DIFFERENCES
-The app functions identically in every region where it is available: no region-locked features, no regional content variations, no geographic restrictions, and no use of location. The only variation is user-selected, English or Arabic, with Arabic switching the layout to right-to-left. Currency and tax labels come from the LeoCore server, not the device region.
+The app functions identically in every region: no region-locked features, no regional content variations, no geographic restrictions, and no use of location. The only variation is user-selected, English or Arabic, with Arabic switching the layout to right-to-left.
 
 REGULATED INDUSTRY
-Not a regulated industry: general-purpose business software for private commercial use, with no banking, payment, healthcare, insurance, gambling or legal services and no payment processing. It contains no protected third-party material. Both the app and the LeoCore ERP server are developed by Souq E Kamil Trading and Solutions W.L.L.
+Not a regulated industry: general-purpose business software for private commercial use, with no banking, payment, healthcare, insurance, gambling or legal services and no payment processing. Both the app and the LeoCore ERP server are developed by Souq E Kamil Trading and Solutions W.L.L.
