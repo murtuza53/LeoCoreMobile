@@ -1,6 +1,6 @@
 # LeoCore ERP — App Store Submission Pack
 
-Bundle ID: `sek.leocore.erp` · Team: `QH862RRRJ6` · Version `2.6.0` build `8`
+Bundle ID: `sek.leocore.erp` · Team: `QH862RRRJ6` · Latest shipped: `2.7.0` build `9`
 Target: iPhone only · Min iOS 15.0
 
 ---
@@ -22,12 +22,14 @@ Target: iPhone only · Min iOS 15.0
 
 | Field | Value |
 |---|---|
-| Privacy Policy URL | `https://leocoreerp.souqekamil.com/privacy-policy.html` |
-| Support URL | `https://leocoreerp.souqekamil.com` |
-| Marketing URL | (optional — leave blank) |
+| Privacy Policy URL | `https://leocoreerp.seksolution.com/leocore-erp-mobile-privacy.html` |
+| Support URL | `https://leocoreerp.seksolution.com` |
+| Marketing URL | `https://leocoreerp.seksolution.com` |
 
-> Use **https://** — the site answers on HTTPS (verified). Do not enter the `http://`
-> form that the current privacy-policy.html references.
+> **Never point any of these at `souqekamil.com`.** That domain is parked and
+> serves the hosting provider's placeholder page; a reviewer who followed the
+> Support URL there is what triggered the 3.2 rejection on 2026-09-04. All three
+> now point at the real product site. Always use **https://**.
 
 ## 3. Keywords (≤100 chars, no spaces after commas)
 
@@ -36,6 +38,9 @@ erp,inventory,barcode,stock,invoice,pos,sales,quotation,supplier,warehouse,scann
 ```
 
 ## 4. Promotional Text (≤170)
+
+> Shown below is the 2.6.0 text. Promotional text is **blank on every new
+> version** and must be re-entered — the current one is `promo_text_2.7.0.txt`.
 
 ```
 Run your business from your pocket — scan barcodes, raise invoices and quotations,
@@ -83,6 +88,8 @@ by your company's administrator. It is not a standalone product.
 
 ## 6. What's New in This Version
 
+> Shown below is the 2.6.0 text. Current release notes: `whats_new_2.7.0.txt`.
+
 ```
 • Manager Reports — receivables aging, cash position, margin and trend analysis
 • Print Labels — generate barcode and shelf labels from your phone
@@ -102,7 +109,9 @@ The app is behind a login wall. **Apple will reject it without working credentia
 | Username | `mic` |
 | Password | `mic@159357` |
 
-**Notes for Reviewer** (paste into the Notes field):
+**Notes for Reviewer** — the live text is **`apple_review_notes.txt`**, which is
+what was actually submitted for 2.7.0. The block below is the shorter 2.6.0
+draft, kept for reference:
 
 ```
 LeoCore ERP Mobile is a B2B companion app for LeoCore ERP, an on-premise/hosted
@@ -387,6 +396,45 @@ true when Apple checked it:
 
 **2026-09-05** — **APPROVED and live.** `READY_FOR_SALE` /
 `READY_FOR_DISTRIBUTION`, submission `COMPLETE`.
+
+---
+
+**2026-09-11** — 2.7.0 prepared. Three changes, only one of them code:
+
+1. **Privacy Policy URL** moved off the parked `souqekamil.com` domain to
+   `https://leocoreerp.seksolution.com/leocore-erp-mobile-privacy.html`. This is
+   *not* editable on a live version. App Store Connect shows the field under App
+   Information and appears to accept a change, but the save is refused while
+   every `appInfo` is `READY_FOR_DISTRIBUTION` — the API confirms it where the
+   UI only hints. Changing it requires a new version, so budget a release for it.
+2. Camera and photo-library purpose strings widened in `Info.plist`. The old
+   strings said barcodes only; 2.7.0 ships Attach Docs, which scans documents.
+3. Seventh screenshot added (`07_attach_docs.png`), and the review notes
+   extended with `DEMO-INV-00051` / `DEMO-INV-00142` so a reviewer can actually
+   exercise Attach Docs. Any other number correctly reports "not found" — with
+   no real number in the notes a reviewer would have concluded the feature was
+   broken. This is the same trap that produced a false "Print Labels is broken"
+   finding during the 2.6.0 work: a feature that needs seeded data looks like a
+   defect unless the notes hand over the data.
+
+Note that **promotional text does not carry across versions** — it is blank on
+each new version and has to be re-entered (`promo_text_2.7.0.txt`).
+
+**2026-09-12** — build 9 uploaded and submitted, `WAITING_FOR_REVIEW`, with
+**phased release** enabled (*Release update over 7-day period*).
+
+**2026-09-13** — **APPROVED.** `READY_FOR_SALE`, build 9 `VALID`, phased release
+`ACTIVE`, day 1 of 7, started 19:20 UTC. No questions this cycle: the 2.1 and
+3.2 answers written for 2.6.0 carried over unchallenged.
+
+## What phased release actually throttles
+
+Days 1-7 release to 1 / 2 / 5 / 10 / 20 / 50 / 100 percent of users — but **only
+those on automatic updates**. Anyone who opens the App Store page and taps
+Update gets the new build immediately, so customers can be told to update by
+hand on day 1 regardless of the ramp. *Release this version to all users* on the
+version page ends the ramp early. The store page itself can lag up to 24 hours
+behind approval; that is cache, not a problem.
 
 ## If a 3.2 challenge ever recurs
 
