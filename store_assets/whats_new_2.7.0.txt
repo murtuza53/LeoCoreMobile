@@ -1,0 +1,9 @@
+• Attach Docs — find an invoice, delivery note or other record by its number,
+  then attach files to it from your phone
+• Scan paper documents with the camera — automatic edge detection, skew
+  correction and multi-page capture, combined into a single PDF
+• Attach files from Files, iCloud Drive, your photo library or the camera
+• Match by name — pick several files at once and attach each to the record its
+  filename refers to
+• Arabic translations for the new screens
+• Stability and performance improvements
