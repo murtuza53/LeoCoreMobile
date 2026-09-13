@@ -165,6 +165,8 @@ Captured and ready in `store_assets/ios_screenshots_6.9/` (1320×2868, no alpha)
 4. `04_customers.png`      — customer directory with balances and ageing badges
 5. `05_customer_360.png`   — outstanding balance, ageing bars, call/WhatsApp/navigate
 6. `06_print_labels.png`   — Print Labels with template selected, 22 labels queued
+7. `07_attach_docs.png`    — Attach Docs (2.7.0): DEMO-INV-00142 matched as a
+   Sales Invoice, Invoice 00142.pdf queued, all four input methods visible
 
 NOT used: Reports and Manager Reports (Business health) render empty because the
 demo dataset has no recent sales. See section 9b for demo-account module access.
@@ -489,6 +491,54 @@ xcrun devicectl device process launch --device <UDID> sek.leocore.erp
 
 The device also needs **Developer Mode** on (Settings → Privacy & Security →
 Developer Mode), which only appears in Settings after a Mac has connected once.
+
+## Appendix E — capturing App Store screenshots from a device
+
+The iPhone 16 Pro Max shoots at **1320 x 2868 with no alpha**, which is exactly
+the 6.9" App Store requirement, so a device capture drops straight in with no
+resizing and no alpha-stripping. That is how `07_attach_docs.png` was made.
+
+**Use Xcode, not libimobiledevice.** `brew install libimobiledevice` gives you
+`idevicescreenshot`, and it will see the device and read `ideviceinfo` fine, but
+on iOS 26 it fails with:
+
+```
+Could not start screenshotr service: Invalid service
+```
+
+That is not a missing developer disk image — `ideviceimagemounter list` shows
+the DDI mounted with `Status: Complete`. On iOS 17+ Apple moved the developer
+services behind RemoteXPC and libimobiledevice 1.4.0 still looks for them on the
+old lockdown port. `pymobiledevice3` does handle iOS 17+, but needs a root
+tunnel, so it is no help where `sudo` cannot prompt.
+
+Xcode's **Window > Devices and Simulators > Take Screenshot** works on any iOS
+version and saves to the Desktop at full resolution. It can be driven from a
+script, which is useful for taking a series while someone navigates the phone:
+
+```
+osascript -e 'tell application "Xcode" to activate' \
+  -e 'tell application "System Events" to tell process "Xcode"
+        set g to splitter group 1 of splitter group 1 of window "Devices"
+        repeat with e in (UI elements of g)
+          try
+            repeat with b in (UI elements of e)
+              if (role of b) is "AXButton" and ((title of b) as string) is "Take Screenshot" then
+                click b
+              end if
+            end repeat
+          end try
+        end repeat
+      end tell'
+```
+
+This needs the terminal app to hold Accessibility permission (System Settings >
+Privacy & Security > Accessibility). Without it every UI-scripting call fails
+with "not allowed assistive access".
+
+Apple rejects screenshots that show only a login screen, a splash screen or an
+empty form, so put real data on screen before capturing. For `07` that meant a
+looked-up document plus a queued file whose name matches it.
 
 ## Appendix D — App Store Connect API without altool
 
