@@ -1,0 +1,7 @@
+• Products list now shows live stock on every item — green when in stock, red
+  when out of stock or oversold — plus the full product name and list price
+• Fixed product photos not loading on the details page
+• Attach Docs: capture several pages with the camera, delete or replace any
+  page, then combine them into one PDF to upload
+• Faster, lower-memory image loading
+• Stability improvements
