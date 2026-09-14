@@ -1,0 +1,5 @@
+REQUIREMENTS
+LeoCore ERP Mobile is the companion app for LeoCore ERP, a commercial business
+management platform that any company can purchase. Your company needs an active
+LeoCore ERP licence, and your administrator issues your user account. To see the
+platform or book a demo, visit leocoreerp.seksolution.com

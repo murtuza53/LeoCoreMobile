@@ -8,9 +8,9 @@
 	<!-- ── Privacy usage descriptions (App Store review requires one string per
 	     API the app touches; the text is shown in the system permission prompt) ── -->
 	<key>NSCameraUsageDescription</key>
-	<string>LeoCore ERP uses the camera to scan product barcodes and to take product photos.</string>
+	<string>LeoCore ERP uses the camera to scan product barcodes, to take product photos, and to scan paper documents such as delivery notes so you can attach them to an invoice or other record.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>LeoCore ERP lets you choose a product photo from your library to attach to an item.</string>
+	<string>LeoCore ERP lets you choose images from your library — a product photo to attach to an item, or a scanned page to attach to an invoice or other record.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>LeoCore ERP uses Face ID to unlock the app and keep your business data private.</string>
 

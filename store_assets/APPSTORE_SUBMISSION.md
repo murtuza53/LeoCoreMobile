@@ -1,7 +1,7 @@
 # LeoCore ERP — App Store Submission Pack
 
-Bundle ID: `sek.leocore.erp` · Team: `QH862RRRJ6` · Version `2.6.0` build `7`
-Target: iPhone only · Min iOS 13.0
+Bundle ID: `sek.leocore.erp` · Team: `QH862RRRJ6` · Latest shipped: `2.7.0` build `9`
+Target: iPhone only · Min iOS 15.0
 
 ---
 
@@ -22,12 +22,14 @@ Target: iPhone only · Min iOS 13.0
 
 | Field | Value |
 |---|---|
-| Privacy Policy URL | `https://leocoreerp.souqekamil.com/privacy-policy.html` |
-| Support URL | `https://leocoreerp.souqekamil.com` |
-| Marketing URL | (optional — leave blank) |
+| Privacy Policy URL | `https://leocoreerp.seksolution.com/leocore-erp-mobile-privacy.html` |
+| Support URL | `https://leocoreerp.seksolution.com` |
+| Marketing URL | `https://leocoreerp.seksolution.com` |
 
-> Use **https://** — the site answers on HTTPS (verified). Do not enter the `http://`
-> form that the current privacy-policy.html references.
+> **Never point any of these at `souqekamil.com`.** That domain is parked and
+> serves the hosting provider's placeholder page; a reviewer who followed the
+> Support URL there is what triggered the 3.2 rejection on 2026-09-04. All three
+> now point at the real product site. Always use **https://**.
 
 ## 3. Keywords (≤100 chars, no spaces after commas)
 
@@ -36,6 +38,9 @@ erp,inventory,barcode,stock,invoice,pos,sales,quotation,supplier,warehouse,scann
 ```
 
 ## 4. Promotional Text (≤170)
+
+> Shown below is the 2.6.0 text. Promotional text is **blank on every new
+> version** and must be re-entered — the current one is `promo_text_2.7.0.txt`.
 
 ```
 Run your business from your pocket — scan barcodes, raise invoices and quotations,
@@ -83,6 +88,8 @@ by your company's administrator. It is not a standalone product.
 
 ## 6. What's New in This Version
 
+> Shown below is the 2.6.0 text. Current release notes: `whats_new_2.7.0.txt`.
+
 ```
 • Manager Reports — receivables aging, cash position, margin and trend analysis
 • Print Labels — generate barcode and shelf labels from your phone
@@ -102,7 +109,9 @@ The app is behind a login wall. **Apple will reject it without working credentia
 | Username | `mic` |
 | Password | `mic@159357` |
 
-**Notes for Reviewer** (paste into the Notes field):
+**Notes for Reviewer** — the live text is **`apple_review_notes.txt`**, which is
+what was actually submitted for 2.7.0. The block below is the shorter 2.6.0
+draft, kept for reference:
 
 ```
 LeoCore ERP Mobile is a B2B companion app for LeoCore ERP, an on-premise/hosted
@@ -165,6 +174,8 @@ Captured and ready in `store_assets/ios_screenshots_6.9/` (1320×2868, no alpha)
 4. `04_customers.png`      — customer directory with balances and ageing badges
 5. `05_customer_360.png`   — outstanding balance, ageing bars, call/WhatsApp/navigate
 6. `06_print_labels.png`   — Print Labels with template selected, 22 labels queued
+7. `07_attach_docs.png`    — Attach Docs (2.7.0): DEMO-INV-00142 matched as a
+   Sales Invoice, Invoice 00142.pdf queued, all four input methods visible
 
 NOT used: Reports and Manager Reports (Business health) render empty because the
 demo dataset has no recent sales. See section 9b for demo-account module access.
@@ -302,7 +313,284 @@ xcrun altool --upload-app -f build/ios/ipa/*.ipa -t ios \
   --apiKey R86H46956N --apiIssuer afc4f68b-4d8f-4940-ad87-fbd53041cc13
 ```
 
+### A4b. The build number in the IPA is NOT the one in pubspec.yaml
+
+Flutter generates `ExportOptions.plist` with `manageAppVersionAndBuildNumber = true`.
+On export, Xcode queries App Store Connect, finds the highest build already
+uploaded, and stamps the IPA with **that number + 1** — whatever `pubspec.yaml`
+says. Verified 2026-08-19:
+
+| Artifact | CFBundleVersion |
+|---|---|
+| `pubspec.yaml` | 8 |
+| `Runner.xcarchive` | 8 |
+| `build/ios/iphoneos/Runner.app` (device build) | 8 |
+| **exported `LeoCore ERP.ipa`** | **9** (8 was the highest on ASC) |
+
+Consequences:
+
+- You cannot accidentally upload a duplicate build number. Convenient.
+- The number shown in App Store Connect may not match `pubspec.yaml`. Read the
+  IPA, not the pubspec, when you need to know what you actually shipped:
+  ```
+  unzip -p "build/ios/ipa/LeoCore ERP.ipa" "Payload/Runner.app/Info.plist" \
+    | plutil -p - | grep CFBundleVersion
+  ```
+- Still bump `pubspec.yaml` for each release — it drives
+  `CFBundleShortVersionString` (the user-visible version) and the Android
+  `versionCode`, neither of which is auto-managed.
+
 ### A5. After upload
 - The build takes 10–30 minutes to finish processing before it can be selected.
 - Attach it to the version, fill in the metadata from sections 1–8 above,
   add the demo credentials in section 7, then **Add for Review**.
+
+---
+
+# Review status log
+
+**2026-08-18** — build 8 uploaded, version submitted, status `WAITING_FOR_REVIEW`.
+
+**2026-08-19** — **Rejected**, Guideline 2.1 *Information Needed — New App
+Submission* (shown as `2.1.0 Performance: App Completeness`).
+
+Not a defect. Apple's standard first-submission questionnaire: they want seven
+questions answered in App Review Information → Notes, plus a screen recording
+captured on a physical device. Re-verified the same day that the demo login and
+both URLs still respond, so the credentials were never the problem.
+
+The paste-ready reply, the recording shot list and the Notes-field text are in
+**`APPLE_2.1_REPLY.md`**. No new build was required — build 8 stood throughout.
+
+**2026-09-01** — replied with a 1:53 screen recording captured on a physical
+iPhone 16 Pro Max (iOS 26.5.2), showing a cold launch, the full sign-in, the
+camera permission alert at 00:46, a live barcode scan, populated reports, label
+printing to PDF, Arabic RTL and dark theme. Sent text: `apple_reply_4000.txt`
+(the reply box caps at 4000 characters, so the long form in `APPLE_2.1_REPLY.md`
+does not fit). App Review Information → Notes: `apple_review_notes.txt`.
+Resubmitted, `WAITING_FOR_REVIEW`.
+
+**2026-09-04** — **Rejected again**, Guideline 3.2 *Business* — Apple judged the
+app to be built for a specific organisation rather than a public audience, and
+suggested Custom App or Unlisted distribution instead.
+
+Root cause was our own listing. The **Support URL pointed at
+`leocoreerp.souqekamil.com`, an unconfigured parked domain** serving the hosting
+provider's placeholder page. A reviewer checking whether LeoCore ERP is a real,
+openly available product found a domain-reseller ad. The description's
+REQUIREMENTS paragraph ("an account issued by your company's administrator...
+not a standalone product") and the phrasing of our own 2.1 reply ("the audience
+is those companies' own staff, not the general public") reinforced it.
+
+Fixes applied, in this order — the URL first, so the reply's claim was already
+true when Apple checked it:
+
+1. Support URL and Marketing URL → `https://leocoreerp.seksolution.com`, the
+   real product site, which carries a "Book a 30-min walkthrough" CTA.
+2. Description REQUIREMENTS rewritten — `apple_description_requirements.txt`.
+3. Replied with `apple_reply_3.2.txt`, answering Apple's five questions: five
+   separate unaffiliated customer companies, open to any business that buys a
+   licence, accounts issued by each customer's own administrator for security
+   (not as a restriction on who may become a customer), no in-app purchases,
+   and the same app already publicly listed on Google Play.
+
+**2026-09-05** — **APPROVED and live.** `READY_FOR_SALE` /
+`READY_FOR_DISTRIBUTION`, submission `COMPLETE`.
+
+---
+
+**2026-09-11** — 2.7.0 prepared. Three changes, only one of them code:
+
+1. **Privacy Policy URL** moved off the parked `souqekamil.com` domain to
+   `https://leocoreerp.seksolution.com/leocore-erp-mobile-privacy.html`. This is
+   *not* editable on a live version. App Store Connect shows the field under App
+   Information and appears to accept a change, but the save is refused while
+   every `appInfo` is `READY_FOR_DISTRIBUTION` — the API confirms it where the
+   UI only hints. Changing it requires a new version, so budget a release for it.
+2. Camera and photo-library purpose strings widened in `Info.plist`. The old
+   strings said barcodes only; 2.7.0 ships Attach Docs, which scans documents.
+3. Seventh screenshot added (`07_attach_docs.png`), and the review notes
+   extended with `DEMO-INV-00051` / `DEMO-INV-00142` so a reviewer can actually
+   exercise Attach Docs. Any other number correctly reports "not found" — with
+   no real number in the notes a reviewer would have concluded the feature was
+   broken. This is the same trap that produced a false "Print Labels is broken"
+   finding during the 2.6.0 work: a feature that needs seeded data looks like a
+   defect unless the notes hand over the data.
+
+Note that **promotional text does not carry across versions** — it is blank on
+each new version and has to be re-entered (`promo_text_2.7.0.txt`).
+
+**2026-09-12** — build 9 uploaded and submitted, `WAITING_FOR_REVIEW`, with
+**phased release** enabled (*Release update over 7-day period*).
+
+**2026-09-13** — **APPROVED.** `READY_FOR_SALE`, build 9 `VALID`, phased release
+`ACTIVE`, day 1 of 7, started 19:20 UTC. No questions this cycle: the 2.1 and
+3.2 answers written for 2.6.0 carried over unchallenged.
+
+## What phased release actually throttles
+
+Days 1-7 release to 1 / 2 / 5 / 10 / 20 / 50 / 100 percent of users — but **only
+those on automatic updates**. Anyone who opens the App Store page and taps
+Update gets the new build immediately, so customers can be told to update by
+hand on day 1 regardless of the ramp. *Release this version to all users* on the
+version page ends the ramp early. The store page itself can lag up to 24 hours
+behind approval; that is cache, not a problem.
+
+## If a 3.2 challenge ever recurs
+
+The deciding question is whether *any* company can become a customer, not how
+many currently are. Keep the Support URL pointing at a real product page with
+public pricing or a demo request — that single link is what a reviewer uses to
+test the claim. If Apple rejects twice on 3.2, take **Unlisted App
+Distribution** rather than arguing a third time: the app keeps a permanent
+direct link for customers and simply does not appear in search.
+
+---
+
+# Appendix B — iCloud broke iOS code signing (found and FIXED 2026-08-19)
+
+**RESOLVED.** iCloud Desktop & Documents sync has been turned off and the stale
+attributes stripped. Release builds now work from the repo in place. Kept here
+because the failure is cryptic and costs an hour if it recurs.
+
+**Symptom.** Any `flutter build ios` / `flutter build ipa` / Xcode archive fails:
+
+```
+Failed to codesign .../Flutter.framework/Flutter with identity <hash>.
+  .../Flutter.framework/Flutter: replacing existing signature
+  .../Flutter.framework/Flutter: resource fork, Finder information, or similar
+  detritus not allowed
+```
+
+**Cause.** The repo lives in `~/Documents` and iCloud Drive was syncing that
+folder. iCloud stamps `com.apple.FinderInfo` (plus `com.apple.fileprovider.fpfs#P`)
+onto the directories it manages, and `codesign` refuses to sign anything
+carrying it.
+
+**Two red herrings, so nobody chases them again:**
+
+- `com.apple.provenance` is on every file and looks like the obvious suspect.
+  It is not the cause — a copy carrying only provenance signs fine. The
+  offending attribute is `com.apple.FinderInfo`, and it sits on the *directory*,
+  not the binary.
+- `xattr -cr build/` appears to work but does not, *while sync is still on*.
+  iCloud re-applies the attribute faster than the delete pass runs — one
+  measured attempt went from 26 stamped paths to 42 *during* the strip.
+
+**The fix that was applied** (in this order — the second step is not optional,
+turning sync off does not clean up what is already stamped):
+
+1. System Settings → Apple Account → iCloud → iCloud Drive →
+   **Desktop & Documents Folders** → off. Confirm with:
+   ```
+   defaults read com.apple.finder FXICloudDriveDocuments   # want 0
+   defaults read com.apple.finder FXICloudDriveDesktop     # want 0
+   ```
+2. Strip the ~66 attributes iCloud left behind:
+   ```
+   cd ~/Documents/LeoCoreMobile
+   rm -rf leocore_mobile/build
+   find . -xattrname com.apple.FinderInfo \
+     -exec xattr -d com.apple.FinderInfo {} \; 2>/dev/null
+   find . -xattrname 'com.apple.fileprovider.fpfs#P' \
+     -exec xattr -d 'com.apple.fileprovider.fpfs#P' {} \; 2>/dev/null
+   ```
+
+**Verified 2026-08-19 after the fix:** `flutter build ios --release` and
+`flutter build ipa --release --export-method app-store` both succeed from the
+repo in place, and a full build leaves `find . -xattrname com.apple.FinderInfo`
+at **0**.
+
+**If it ever comes back**, check that count first — that one command tells you
+whether this is the problem. The emergency workaround is to build from a copy
+outside any synced folder (`flutter build` has no `--build-dir` flag):
+
+```
+DEST=/tmp/leocore_build
+rsync -a --delete --exclude build/ --exclude .dart_tool/ --exclude ios/Pods/ \
+  --exclude ios/.symlinks/ --exclude .git/ --exclude android/.gradle/ \
+  ~/Documents/LeoCoreMobile/leocore_mobile/ "$DEST/"
+cd "$DEST" && flutter pub get && flutter build ipa --release --export-method app-store
+```
+
+## Appendix C — installing on a device for a review recording
+
+Registered devices (`GET /v1/devices`):
+
+| Device | UDID | Status |
+|---|---|---|
+| HUSSAIN's iPhone (iPhone 12 Pro, iOS 18.7.8) | `00008101-00051DE60152001E` | ENABLED |
+| Jamila iPhone 16 Pro Max, iOS 26.5.2 | `00008140-00161D140013C01C` | ENABLED |
+
+After registering a new device, Xcode keeps using its **cached** profile and the
+build silently omits the device. Clear the cache and rebuild:
+
+```
+mv ~/Library/Developer/Xcode/UserData/Provisioning\ Profiles/*.mobileprovision /tmp/backup/
+cd /tmp/leocore_build && rm -rf build/ios/iphoneos && flutter build ios --release
+
+# confirm the device is in the profile before installing
+security cms -D -i build/ios/iphoneos/Runner.app/embedded.mobileprovision | \
+  python3 -c "import sys,plistlib;p=plistlib.loads(sys.stdin.buffer.read());print(len(p['ProvisionedDevices']))"
+
+xcrun devicectl device install app --device <UDID> build/ios/iphoneos/Runner.app
+xcrun devicectl device process launch --device <UDID> sek.leocore.erp
+```
+
+The device also needs **Developer Mode** on (Settings → Privacy & Security →
+Developer Mode), which only appears in Settings after a Mac has connected once.
+
+## Appendix E — capturing App Store screenshots from a device
+
+The iPhone 16 Pro Max shoots at **1320 x 2868 with no alpha**, which is exactly
+the 6.9" App Store requirement, so a device capture drops straight in with no
+resizing and no alpha-stripping. That is how `07_attach_docs.png` was made.
+
+**Use Xcode, not libimobiledevice.** `brew install libimobiledevice` gives you
+`idevicescreenshot`, and it will see the device and read `ideviceinfo` fine, but
+on iOS 26 it fails with:
+
+```
+Could not start screenshotr service: Invalid service
+```
+
+That is not a missing developer disk image — `ideviceimagemounter list` shows
+the DDI mounted with `Status: Complete`. On iOS 17+ Apple moved the developer
+services behind RemoteXPC and libimobiledevice 1.4.0 still looks for them on the
+old lockdown port. `pymobiledevice3` does handle iOS 17+, but needs a root
+tunnel, so it is no help where `sudo` cannot prompt.
+
+Xcode's **Window > Devices and Simulators > Take Screenshot** works on any iOS
+version and saves to the Desktop at full resolution. It can be driven from a
+script, which is useful for taking a series while someone navigates the phone:
+
+```
+osascript -e 'tell application "Xcode" to activate' \
+  -e 'tell application "System Events" to tell process "Xcode"
+        set g to splitter group 1 of splitter group 1 of window "Devices"
+        repeat with e in (UI elements of g)
+          try
+            repeat with b in (UI elements of e)
+              if (role of b) is "AXButton" and ((title of b) as string) is "Take Screenshot" then
+                click b
+              end if
+            end repeat
+          end try
+        end repeat
+      end tell'
+```
+
+This needs the terminal app to hold Accessibility permission (System Settings >
+Privacy & Security > Accessibility). Without it every UI-scripting call fails
+with "not allowed assistive access".
+
+Apple rejects screenshots that show only a login screen, a splash screen or an
+empty form, so put real data on screen before capturing. For `07` that meant a
+looked-up document plus a queued file whose name matches it.
+
+## Appendix D — App Store Connect API without altool
+
+`xcrun altool --generate-jwt` does not work in Xcode 26. Sign the ES256 JWT
+directly instead — `openssl` plus a DER→raw signature conversion is enough, and
+needs no third-party Python packages. Working script:
+`store_assets/asc_jwt.py`.
