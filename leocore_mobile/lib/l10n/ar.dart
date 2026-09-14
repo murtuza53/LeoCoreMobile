@@ -164,6 +164,19 @@ const Map<String, String> kArabic = {
   'Out of stock': 'نفد المخزون',
   'In stock': 'متوفر',
   'Low': 'منخفض',
+  'in stock': 'متوفر',
+  'Stock': 'المخزون',
+  'List price': 'سعر القائمة',
+  'Tap to retry': 'اضغط لإعادة المحاولة',
+
+  // ── Capture pages → PDF ────────────────────────────────────────────
+  'Capture pages': 'التقاط صفحات',
+  'Take multiple photos, delete or replace any page, then combine to one PDF.':
+      'التقط عدة صور، واحذف أو استبدل أي صفحة، ثم ادمجها في ملف PDF واحد.',
+  'Add page': 'إضافة صفحة',
+  'Replace': 'استبدال',
+  'Add at least one page': 'أضف صفحة واحدة على الأقل',
+  'Pages combined into a PDF': 'تم دمج الصفحات في ملف PDF',
 
   // ── Stock count ────────────────────────────────────────────────────
   'Submit count': 'إرسال الجرد',

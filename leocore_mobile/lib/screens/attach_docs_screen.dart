@@ -1,3 +1,5 @@
+import 'dart:io' show File;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -127,6 +129,8 @@ class _AttachDocsScreenState extends State<AttachDocsScreen> {
             child: Text(context.tr('Scan applies auto edge, skew and colour correction, and makes a multi-page PDF.'),
                 style: TextStyle(fontSize: 11, color: lc.mut)),
           ),
+          const SizedBox(height: 16),
+          _PagesBuilder(),
           if (app.attachFiles.isNotEmpty) ...[
             const SizedBox(height: 14),
             Row(
@@ -399,6 +403,157 @@ class _AttachDocsScreenState extends State<AttachDocsScreen> {
     if (n.endsWith('.pdf')) return Icons.picture_as_pdf_outlined;
     if (RegExp(r'\.(jpe?g|png|gif|webp|heic)$').hasMatch(n)) return Icons.image_outlined;
     return Icons.insert_drive_file_outlined;
+  }
+}
+
+/// Build a multi-page PDF from camera shots: take several photos, delete or
+/// replace any page, then combine them into one PDF staged for upload.
+class _PagesBuilder extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final app = context.watch<AppState>();
+    final lc = context.lc;
+    final shots = app.pageShots;
+
+    return LcCard(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              SectionLabel('${context.tr('Capture pages')}${shots.isEmpty ? '' : ' (${shots.length})'}'),
+              if (shots.isNotEmpty)
+                GestureDetector(
+                  onTap: app.clearPageShots,
+                  child: Text(context.tr('Clear'), style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: lc.mut)),
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(context.tr('Take multiple photos, delete or replace any page, then combine to one PDF.'),
+              style: TextStyle(fontSize: 11, color: lc.mut)),
+          const SizedBox(height: 10),
+          if (shots.isEmpty)
+            OutlineButton2(context.tr('Take photo'), height: 46, onTap: app.addPageShot)
+          else ...[
+            SizedBox(
+              height: 118,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: shots.length + 1,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (_, i) {
+                  if (i == shots.length) {
+                    // Trailing "add page" tile.
+                    return GestureDetector(
+                      onTap: app.addPageShot,
+                      behavior: HitTestBehavior.opaque,
+                      child: Container(
+                        width: 88,
+                        decoration: BoxDecoration(
+                          color: lc.bg,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: lc.line, width: 1.5),
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.add_a_photo_outlined, size: 24, color: lc.icon),
+                            const SizedBox(height: 6),
+                            Text(context.tr('Add page'), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: lc.mut)),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+                  return _PageThumb(index: i, path: shots[i]);
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
+            PrimaryButton(
+              '${context.tr('Combine to PDF')} (${shots.length})',
+              icon: Icons.picture_as_pdf_outlined,
+              height: 46,
+              onTap: app.buildPagesPdf,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _PageThumb extends StatelessWidget {
+  final int index;
+  final String path;
+  const _PageThumb({required this.index, required this.path});
+  @override
+  Widget build(BuildContext context) {
+    final app = context.read<AppState>();
+    return SizedBox(
+      width: 88,
+      child: Stack(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: Image.file(File(path), width: 88, height: 118, fit: BoxFit.cover),
+          ),
+          // Page number.
+          Positioned(
+            left: 5,
+            top: 5,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.55), borderRadius: BorderRadius.circular(99)),
+              child: Text('${index + 1}', style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Colors.white)),
+            ),
+          ),
+          // Delete.
+          Positioned(
+            right: 4,
+            top: 4,
+            child: GestureDetector(
+              onTap: () => app.removePageShot(index),
+              behavior: HitTestBehavior.opaque,
+              child: Container(
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.6), shape: BoxShape.circle),
+                child: const Icon(Icons.close, size: 14, color: Colors.white),
+              ),
+            ),
+          ),
+          // Replace (retake) bar.
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: GestureDetector(
+              onTap: () => app.replacePageShot(index),
+              behavior: HitTestBehavior.opaque,
+              child: Container(
+                height: 24,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.55),
+                  borderRadius: const BorderRadius.vertical(bottom: Radius.circular(10)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.cameraswitch_outlined, size: 13, color: Colors.white),
+                    const SizedBox(width: 4),
+                    Text(context.tr('Replace'), style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.white)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

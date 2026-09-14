@@ -182,6 +182,43 @@ class ApiClient {
     return _bytesResult(res, fallbackName);
   }
 
+  /// Fetches raw image bytes from an **absolute** URL (product photos live off
+  /// the API base, e.g. `https://host/Files/Pictures/x.jpg`) using the same
+  /// Bearer token and rotating-refresh retry as every other call. Returns null
+  /// on any failure so the UI can show a graceful placeholder. This is more
+  /// reliable than `Image.network(headers: …)`, which on some devices drops the
+  /// auth header on redirects and renders a broken image.
+  Future<List<int>?> getImageBytes(String url, {bool isRetry = false}) async {
+    if (url.isEmpty) return null;
+    Response<dynamic> res;
+    try {
+      res = await _dio.get(
+        url,
+        options: Options(
+          responseType: ResponseType.bytes,
+          followRedirects: true,
+          headers: {if (_accessToken != null) 'Authorization': 'Bearer $_accessToken'},
+          validateStatus: (_) => true,
+        ),
+      );
+    } on DioException {
+      return null;
+    }
+    if (res.statusCode == 401 && !isRetry) {
+      if (await _tryRefresh()) return getImageBytes(url, isRetry: true);
+      return null;
+    }
+    final code = res.statusCode ?? 0;
+    if (code >= 200 && code < 300) {
+      final data = res.data;
+      // Guard against an HTML login page returned with 200 (cookie-auth hosts).
+      final ct = (res.headers.value('content-type') ?? '').toLowerCase();
+      if (ct.contains('text/html')) return null;
+      if (data is List<int> && data.isNotEmpty) return data;
+    }
+    return null;
+  }
+
   ({List<int> bytes, String filename, String contentType}) _bytesResult(
       Response<dynamic> res, String fallbackName) {
     final data = res.data;

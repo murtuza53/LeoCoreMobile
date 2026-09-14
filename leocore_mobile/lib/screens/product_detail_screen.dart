@@ -350,21 +350,10 @@ class _PhotoStrip extends StatelessWidget {
               for (final img in images)
                 tile(
                   onLongPress: () => _confirmRemove(context, app, img.id),
-                  child: Image.network(
-                    app.imageUrl(img.url),
-                    headers: app.imageHeaders,
-                    fit: BoxFit.cover,
-                    // Downsample at decode time — the tile is ~300pt wide, so a
-                    // large server photo never decodes at full resolution
-                    // (lower memory, faster; Play "bitmap downsampling").
-                    cacheWidth: 900,
-                    loadingBuilder: (c, child, progress) => progress == null
-                        ? child
-                        : Center(child: CircularProgressIndicator(color: lc.prim, strokeWidth: 2.2)),
-                    errorBuilder: (c, e, s) => Center(
-                      child: Icon(Icons.broken_image_outlined, size: 30, color: lc.mut),
-                    ),
-                  ),
+                  // Loads through the authenticated API pipeline (Bearer token +
+                  // refresh) so protected server photos render instead of
+                  // showing a broken image.
+                  child: AuthedNetworkImage(url: app.imageUrl(img.url), fit: BoxFit.cover),
                 ),
               // Add-photo tile.
               GestureDetector(

@@ -127,10 +127,12 @@ class ProductRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final lc = context.lc;
+    final sub = product.brand.isEmpty ? product.code : '${product.code} · ${product.brand}';
     return LcCard(
       onTap: onTap,
       padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           InitialsThumb(product),
           const SizedBox(width: 12),
@@ -138,24 +140,51 @@ class ProductRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(product.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 2),
-                Text('${product.code} · ${product.brand}', style: TextStyle(fontSize: 12, color: lc.mut)),
+                // Full product name — up to two lines so long names aren't cut off.
+                Text(product.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, height: 1.25)),
+                const SizedBox(height: 3),
+                Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: lc.mut)),
+                const SizedBox(height: 6),
+                _ListStock(product.stock),
               ],
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 10),
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              MoneyText(product.price, size: 14.5),
-              const SizedBox(height: 4),
-              StockBadge(product),
+              Text(context.tr('List price'), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: lc.mut)),
+              const SizedBox(height: 2),
+              MoneyText(product.price, size: 15, unit: 'BHD'),
             ],
           ),
         ],
       ),
     );
+  }
+}
+
+/// Compact stock indicator for the product list: red when 0 or less, green when
+/// positive, and a muted dash when the list endpoint doesn't report stock.
+class _ListStock extends StatelessWidget {
+  final int stock;
+  const _ListStock(this.stock);
+  @override
+  Widget build(BuildContext context) {
+    final lc = context.lc;
+    // Unknown (list endpoint omits on-hand) → neutral dash, not a false zero.
+    if (stock < 0) {
+      return Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(Icons.inventory_2_outlined, size: 13, color: lc.mut),
+        const SizedBox(width: 5),
+        Text('${context.tr('Stock')} —', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: lc.mut)),
+      ]);
+    }
+    final out = stock <= 0;
+    final fg = out ? lc.bad : lc.ok;
+    final bg = out ? lc.badbg : lc.okbg;
+    final label = out ? context.tr('Out of stock') : '$stock ${context.tr('in stock')}';
+    return Pill(label, bg: bg, fg: fg, size: 11);
   }
 }
 

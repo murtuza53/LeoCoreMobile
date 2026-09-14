@@ -1,4 +1,7 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../data/mock_data.dart';
 import '../models/models.dart';
@@ -454,6 +457,97 @@ class ScreenHeader extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// Loads a server image through the authenticated API pipeline (Bearer token +
+/// rotating-refresh retry) and renders the bytes. Falls back to a placeholder
+/// on failure. Uses a small in-memory cache so scrolling / rebuilds don't
+/// re-download the same photo.
+class AuthedNetworkImage extends StatefulWidget {
+  final String url;
+  final BoxFit fit;
+  const AuthedNetworkImage({super.key, required this.url, this.fit = BoxFit.cover});
+
+  /// Process-lifetime cache of already-fetched image bytes, keyed by URL.
+  static final Map<String, Uint8List> _cache = {};
+
+  @override
+  State<AuthedNetworkImage> createState() => _AuthedNetworkImageState();
+}
+
+class _AuthedNetworkImageState extends State<AuthedNetworkImage> {
+  Uint8List? _bytes;
+  bool _loading = true;
+  bool _failed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(AuthedNetworkImage old) {
+    super.didUpdateWidget(old);
+    if (old.url != widget.url) _load();
+  }
+
+  Future<void> _load() async {
+    final cached = AuthedNetworkImage._cache[widget.url];
+    if (cached != null) {
+      setState(() {
+        _bytes = cached;
+        _loading = false;
+        _failed = false;
+      });
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _failed = false;
+    });
+    final raw = await context.read<AppState>().api.getImageBytes(widget.url);
+    if (!mounted) return;
+    if (raw == null || raw.isEmpty) {
+      setState(() {
+        _loading = false;
+        _failed = true;
+      });
+      return;
+    }
+    final bytes = Uint8List.fromList(raw);
+    AuthedNetworkImage._cache[widget.url] = bytes;
+    setState(() {
+      _bytes = bytes;
+      _loading = false;
+      _failed = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final lc = context.lc;
+    if (_loading) {
+      return Center(child: CircularProgressIndicator(color: lc.prim, strokeWidth: 2.2));
+    }
+    if (_failed || _bytes == null) {
+      return GestureDetector(
+        onTap: _load,
+        behavior: HitTestBehavior.opaque,
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.broken_image_outlined, size: 30, color: lc.mut),
+              const SizedBox(height: 6),
+              Text(context.tr('Tap to retry'), style: TextStyle(fontSize: 11, color: lc.mut)),
+            ],
+          ),
+        ),
+      );
+    }
+    return Image.memory(_bytes!, fit: widget.fit, gaplessPlayback: true);
   }
 }
 

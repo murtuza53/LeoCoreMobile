@@ -626,11 +626,22 @@ class LeoRepository {
   // ── Mappers ────────────────────────────────────────────────────────────
   /// [fromList] items (ProductListItem) carry no stock — flagged as unknown
   /// (stock = -1) so the UI hides the stock badge until detail is loaded.
+  // On-hand quantity may be exposed under any of these names (or omitted, in
+  // which case stock stays unknown → -1 and the UI shows "—").
+  static const _stockKeys = [
+    'onHand', 'onHandQty', 'qtyOnHand', 'quantityOnHand', 'availableQuantity',
+    'availableQty', 'available', 'stock', 'stockQty', 'stockOnHand',
+    'currentStock', 'balance', 'balanceQty', 'quantity'
+  ];
+  // Selling / list price may be exposed under any of these names.
+  static const _priceKeys = [
+    'price', 'defaultPrice', 'listPrice', 'salePrice', 'sellingPrice',
+    'unitPrice', 'retailPrice'
+  ];
+
   static Product mapProduct(Map j, {bool fromList = false}) {
-    // The API exposes no on-hand quantity on products (list or detail); stock is
-    // unknown here (-1 → UI hides the badge) and derived later from the ledger.
-    final hasOnHand = _pick(j, ['onHand']) != null;
-    final onHand = hasOnHand ? _i(j, ['onHand']) : -1;
+    final hasOnHand = _pick(j, _stockKeys) != null;
+    final onHand = hasOnHand ? _i(j, _stockKeys) : -1;
     final wh = <(String, int)>[];
     if (hasOnHand) wh.add(('On hand', onHand));
     return Product(
@@ -640,8 +651,8 @@ class LeoRepository {
       brand: _s(j, ['brand']),
       cat: _s(j, ['category'], ''),
       unit: _s(j, ['uom'], 'Unit'),
-      price: _d(j, ['price', 'defaultPrice']),
-      cost: _d(j, ['cost']),
+      price: _d(j, _priceKeys),
+      cost: _d(j, ['cost', 'costPrice', 'avgCost', 'averageCost']),
       stock: onHand,
       barcode: _s(j, ['barcode']),
       wh: wh,

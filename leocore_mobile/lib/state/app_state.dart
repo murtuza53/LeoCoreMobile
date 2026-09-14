@@ -1168,8 +1168,10 @@ class AppState extends ChangeNotifier {
 
   /// Absolute URL for a server-relative image path.
   String imageUrl(String relative) {
+    if (relative.isEmpty) return relative;
     if (relative.startsWith('http')) return relative;
-    return '${api.origin}$relative';
+    final path = relative.startsWith('/') ? relative : '/$relative';
+    return '${api.origin}$path';
   }
 
   Map<String, String> get imageHeaders => api.authHeaders;
@@ -1741,6 +1743,7 @@ class AppState extends ChangeNotifier {
     docLookup = null;
     attachResult = null;
     attachFiles.clear();
+    pageShots.clear();
     docBatchMode = false;
     batchDocs.clear();
     nav(Screen.documents);
@@ -1855,6 +1858,64 @@ class AppState extends ChangeNotifier {
     } catch (_) {
       showToast(t('Scanning failed'));
     }
+  }
+
+  // ── capture pages → one PDF (take multiple photos, edit, then combine) ──
+  /// Image paths captured with the camera for the PDF currently being built.
+  /// The user can add, replace or delete any page before combining.
+  final List<String> pageShots = [];
+
+  /// Take a photo and append it as a new page.
+  Future<void> addPageShot() async {
+    try {
+      final shot = await _picker.pickImage(source: ImageSource.camera, imageQuality: 85, maxWidth: 2000);
+      if (shot != null) {
+        pageShots.add(shot.path);
+        notifyListeners();
+      }
+    } catch (_) {
+      showToast(t('Could not open the camera'));
+    }
+  }
+
+  /// Retake the photo at [index], replacing that page in place.
+  Future<void> replacePageShot(int index) async {
+    if (index < 0 || index >= pageShots.length) return;
+    try {
+      final shot = await _picker.pickImage(source: ImageSource.camera, imageQuality: 85, maxWidth: 2000);
+      if (shot != null) {
+        pageShots[index] = shot.path;
+        notifyListeners();
+      }
+    } catch (_) {
+      showToast(t('Could not open the camera'));
+    }
+  }
+
+  void removePageShot(int index) {
+    if (index < 0 || index >= pageShots.length) return;
+    pageShots.removeAt(index);
+    notifyListeners();
+  }
+
+  void clearPageShots() {
+    if (pageShots.isEmpty) return;
+    pageShots.clear();
+    notifyListeners();
+  }
+
+  /// Combine the captured pages into one multi-page PDF and stage it for upload.
+  Future<void> buildPagesPdf() async {
+    if (pageShots.isEmpty) {
+      showToast(t('Add at least one page'));
+      return;
+    }
+    final pdf = await _imagesToPdf(List.of(pageShots), 'document');
+    if (pdf == null) return;
+    _addFile(pdf);
+    pageShots.clear();
+    showToast(t('Pages combined into a PDF'));
+    notifyListeners();
   }
 
   // ── bulk attach: match files to documents by filename ──────────────
