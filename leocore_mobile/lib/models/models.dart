@@ -4,6 +4,11 @@
 // real `/api/mobile/v1` API is wired in, these become the deserialization
 // targets (freezed/json_serializable) — the UI already speaks this vocabulary.
 
+/// Sentinel for "stock unknown" — the endpoint didn't report on-hand. Kept far
+/// from any realistic quantity so a genuinely **negative** on-hand (oversold,
+/// which the API now returns) is never mistaken for "unknown".
+const int kUnknownStock = -1000000000;
+
 /// A product photo stored on the server. [url] is server-relative
 /// (e.g. `/Files/Pictures/<guid>.png`) and is resolved against the host.
 class ProductImage {

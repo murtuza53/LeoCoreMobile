@@ -66,7 +66,7 @@ extension RoleLabel on Role {
 
 enum StockLevel { inStock, low, out }
 
-StockLevel stockLevelOf(int stock) => stock == 0
+StockLevel stockLevelOf(int stock) => stock <= 0
     ? StockLevel.out
     : stock <= 25
         ? StockLevel.low
@@ -289,7 +289,7 @@ class AppState extends ChangeNotifier {
     }).toList();
   }
 
-  List<Product> get lowRows => products.where((p) => p.stock >= 0 && p.stock <= 25).toList();
+  List<Product> get lowRows => products.where((p) => p.stock > kUnknownStock && p.stock <= 25).toList();
 
   // ── customers search ───────────────────────────────────────────────
   String customerQuery = '';
@@ -851,7 +851,7 @@ class AppState extends ChangeNotifier {
       if (_ledger!.isNotEmpty &&
           _productDetail != null &&
           _productDetail!.id == id &&
-          _productDetail!.stock < 0) {
+          _productDetail!.stock <= kUnknownStock) {
         final bal = _ledger!.first.bal;
         _productDetail = _productDetail!.copyWith(stock: bal, wh: [('On hand', bal)]);
       }

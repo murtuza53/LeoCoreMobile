@@ -624,10 +624,9 @@ class LeoRepository {
   }
 
   // ── Mappers ────────────────────────────────────────────────────────────
-  /// [fromList] items (ProductListItem) carry no stock — flagged as unknown
-  /// (stock = -1) so the UI hides the stock badge until detail is loaded.
-  // On-hand quantity may be exposed under any of these names (or omitted, in
-  // which case stock stays unknown → -1 and the UI shows "—").
+  // On-hand quantity (base unit, summed across warehouses; may be 0 or
+  // negative/oversold). As of LeoCore 1.6.25 it's on the list too, under
+  // `onHand`. If ever omitted, stock stays unknown (kUnknownStock → "—").
   static const _stockKeys = [
     'onHand', 'onHandQty', 'qtyOnHand', 'quantityOnHand', 'availableQuantity',
     'availableQty', 'available', 'stock', 'stockQty', 'stockOnHand',
@@ -641,7 +640,7 @@ class LeoRepository {
 
   static Product mapProduct(Map j, {bool fromList = false}) {
     final hasOnHand = _pick(j, _stockKeys) != null;
-    final onHand = hasOnHand ? _i(j, _stockKeys) : -1;
+    final onHand = hasOnHand ? _i(j, _stockKeys) : kUnknownStock;
     final wh = <(String, int)>[];
     if (hasOnHand) wh.add(('On hand', onHand));
     return Product(

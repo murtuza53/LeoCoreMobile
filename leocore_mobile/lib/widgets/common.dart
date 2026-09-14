@@ -188,8 +188,9 @@ class StockBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final lc = context.lc;
-    // Negative = unknown (a list item whose stock the list endpoint omits).
-    if (product.stock < 0) return const SizedBox.shrink();
+    // Only hide when stock is genuinely unknown; a negative on-hand (oversold)
+    // is real and shows as out of stock.
+    if (product.stock <= kUnknownStock) return const SizedBox.shrink();
     final level = stockLevelOf(product.stock);
     final (label, bg, fg) = switch (level) {
       StockLevel.out => (context.tr('Out of stock'), lc.badbg, lc.bad),

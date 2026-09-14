@@ -173,7 +173,8 @@ class _ListStock extends StatelessWidget {
   Widget build(BuildContext context) {
     final lc = context.lc;
     // Unknown (list endpoint omits on-hand) → neutral dash, not a false zero.
-    if (stock < 0) {
+    // A real negative (oversold) is NOT unknown — it falls through to red.
+    if (stock <= kUnknownStock) {
       return Row(mainAxisSize: MainAxisSize.min, children: [
         Icon(Icons.inventory_2_outlined, size: 13, color: lc.mut),
         const SizedBox(width: 5),

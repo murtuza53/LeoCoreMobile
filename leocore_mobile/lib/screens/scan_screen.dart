@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
 
+import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme/tokens.dart';
 import '../widgets/common.dart';
@@ -312,7 +313,7 @@ class _MatchSheet extends StatelessWidget {
                     ),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [MoneyText(p.price, size: 16), if (p.stock >= 0) ...[const SizedBox(height: 4), StockBadge(p)]],
+                      children: [MoneyText(p.price, size: 16), if (p.stock > kUnknownStock) ...[const SizedBox(height: 4), StockBadge(p)]],
                     ),
                   ]),
                   const SizedBox(height: 14),
