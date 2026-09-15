@@ -468,7 +468,10 @@ class ScreenHeader extends StatelessWidget {
 class AuthedNetworkImage extends StatefulWidget {
   final String url;
   final BoxFit fit;
-  const AuthedNetworkImage({super.key, required this.url, this.fit = BoxFit.cover});
+  /// Compact mode (small thumbnails): tiny spinner, icon-only failure, no
+  /// "Tap to retry" label that would overflow a small box.
+  final bool compact;
+  const AuthedNetworkImage({super.key, required this.url, this.fit = BoxFit.cover, this.compact = false});
 
   /// Process-lifetime cache of already-fetched image bytes, keyed by URL.
   static final Map<String, Uint8List> _cache = {};
@@ -530,21 +533,29 @@ class _AuthedNetworkImageState extends State<AuthedNetworkImage> {
   Widget build(BuildContext context) {
     final lc = context.lc;
     if (_loading) {
-      return Center(child: CircularProgressIndicator(color: lc.prim, strokeWidth: 2.2));
+      return Center(
+        child: SizedBox(
+          width: widget.compact ? 16 : 24,
+          height: widget.compact ? 16 : 24,
+          child: CircularProgressIndicator(color: lc.prim, strokeWidth: 2.2),
+        ),
+      );
     }
     if (_failed || _bytes == null) {
       return GestureDetector(
         onTap: _load,
         behavior: HitTestBehavior.opaque,
         child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.broken_image_outlined, size: 30, color: lc.mut),
-              const SizedBox(height: 6),
-              Text(context.tr('Tap to retry'), style: TextStyle(fontSize: 11, color: lc.mut)),
-            ],
-          ),
+          child: widget.compact
+              ? Icon(Icons.image_not_supported_outlined, size: 20, color: lc.mut)
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.broken_image_outlined, size: 30, color: lc.mut),
+                    const SizedBox(height: 6),
+                    Text(context.tr('Tap to retry'), style: TextStyle(fontSize: 11, color: lc.mut)),
+                  ],
+                ),
         ),
       );
     }

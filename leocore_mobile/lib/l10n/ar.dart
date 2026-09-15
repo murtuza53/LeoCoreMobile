@@ -168,6 +168,8 @@ const Map<String, String> kArabic = {
   'Stock': 'المخزون',
   'List price': 'سعر القائمة',
   'Tap to retry': 'اضغط لإعادة المحاولة',
+  'Outstanding': 'المبلغ المستحق',
+  'Tap a photo to view · long-press to remove': 'اضغط على الصورة لعرضها · اضغط مطولاً لإزالتها',
 
   // ── Capture pages → PDF ────────────────────────────────────────────
   'Capture pages': 'التقاط صفحات',

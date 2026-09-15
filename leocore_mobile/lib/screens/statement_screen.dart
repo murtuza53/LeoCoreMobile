@@ -124,6 +124,48 @@ class StatementScreen extends StatelessWidget {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 60),
             children: [
+              // Full party name + outstanding balance (coloured).
+              LcCard(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(app.statementPartyName,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, height: 1.25)),
+                          const SizedBox(height: 4),
+                          Text(context.tr('Outstanding'),
+                              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: lc.mut)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Flexible(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          '${Money.fmt(app.statementClosing)} BHD',
+                          maxLines: 1,
+                          softWrap: false,
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                            color: app.statementClosing < 0 ? lc.ok : lc.prim2,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
               Row(children: [
                 bucket('0–30d', aging.isNotEmpty ? aging[0] : 0, lc.ok, lc.okbg),
                 const SizedBox(width: 8),

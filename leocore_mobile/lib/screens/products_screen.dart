@@ -134,7 +134,7 @@ class ProductRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          InitialsThumb(product),
+          _ProductThumb(product),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -159,6 +159,29 @@ class ProductRow extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Product list thumbnail: shows the first server photo when available,
+/// otherwise the coloured initials tile.
+class _ProductThumb extends StatelessWidget {
+  final Product product;
+  const _ProductThumb(this.product);
+  @override
+  Widget build(BuildContext context) {
+    if (product.images.isEmpty) return InitialsThumb(product);
+    final lc = context.lc;
+    return Container(
+      width: 48,
+      height: 48,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(color: lc.soft, borderRadius: BorderRadius.circular(11)),
+      child: AuthedNetworkImage(
+        url: context.read<AppState>().imageUrl(product.images.first.url),
+        fit: BoxFit.cover,
+        compact: true,
       ),
     );
   }

@@ -68,9 +68,9 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(s.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                                    Text(s.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, height: 1.25)),
                                     if (s.area.isNotEmpty || s.phone.isNotEmpty)
-                                      Text([s.area, s.phone].where((e) => e.isNotEmpty).join(' · '), style: TextStyle(fontSize: 12, color: lc.mut)),
+                                      Text([s.area, s.phone].where((e) => e.isNotEmpty).join(' · '), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: lc.mut)),
                                   ],
                                 ),
                               ),

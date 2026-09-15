@@ -347,13 +347,14 @@ class _PhotoStrip extends StatelessWidget {
                   ),
                 ),
               // Photos already on the server.
-              for (final img in images)
+              for (var i = 0; i < images.length; i++)
                 tile(
-                  onLongPress: () => _confirmRemove(context, app, img.id),
+                  onTap: () => _openGallery(context, app, i),
+                  onLongPress: () => _confirmRemove(context, app, images[i].id),
                   // Loads through the authenticated API pipeline (Bearer token +
                   // refresh) so protected server photos render instead of
                   // showing a broken image.
-                  child: AuthedNetworkImage(url: app.imageUrl(img.url), fit: BoxFit.cover),
+                  child: AuthedNetworkImage(url: app.imageUrl(images[i].url), fit: BoxFit.cover),
                 ),
               // Add-photo tile.
               GestureDetector(
@@ -399,7 +400,7 @@ class _PhotoStrip extends StatelessWidget {
         ),
         if (images.isNotEmpty) ...[
           const SizedBox(height: 6),
-          Text(context.tr('Long-press a photo to remove it'),
+          Text(context.tr('Tap a photo to view · long-press to remove'),
               style: TextStyle(fontSize: 10.5, color: lc.mut)),
         ],
       ],
@@ -442,6 +443,16 @@ class _PhotoStrip extends StatelessWidget {
     );
   }
 
+  void _openGallery(BuildContext context, AppState app, int initialIndex) {
+    final urls = app.product.images.map((im) => app.imageUrl(im.url)).toList();
+    if (urls.isEmpty) return;
+    Navigator.of(context).push(PageRouteBuilder(
+      opaque: false,
+      barrierColor: Colors.black,
+      pageBuilder: (_, __, ___) => _FullScreenGallery(urls: urls, initialIndex: initialIndex),
+    ));
+  }
+
   Future<void> _confirmRemove(BuildContext context, AppState app, int imageId) async {
     final lc = context.lc;
     final ok = await showDialog<bool>(
@@ -458,5 +469,77 @@ class _PhotoStrip extends StatelessWidget {
       ),
     );
     if (ok == true) await app.removeProductPhoto(imageId);
+  }
+}
+
+/// Full-screen, swipeable, pinch-to-zoom viewer for the product photos.
+class _FullScreenGallery extends StatefulWidget {
+  final List<String> urls;
+  final int initialIndex;
+  const _FullScreenGallery({required this.urls, required this.initialIndex});
+  @override
+  State<_FullScreenGallery> createState() => _FullScreenGalleryState();
+}
+
+class _FullScreenGalleryState extends State<_FullScreenGallery> {
+  late final PageController _pc = PageController(initialPage: widget.initialIndex);
+  late int _index = widget.initialIndex;
+
+  @override
+  void dispose() {
+    _pc.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          PageView.builder(
+            controller: _pc,
+            itemCount: widget.urls.length,
+            onPageChanged: (i) => setState(() => _index = i),
+            itemBuilder: (_, i) => InteractiveViewer(
+              minScale: 1,
+              maxScale: 5,
+              child: Center(
+                child: AuthedNetworkImage(url: widget.urls[i], fit: BoxFit.contain),
+              ),
+            ),
+          ),
+          // Close button.
+          Positioned(
+            top: MediaQuery.paddingOf(context).top + 8,
+            right: 12,
+            child: GestureDetector(
+              onTap: () => Navigator.of(context).pop(),
+              behavior: HitTestBehavior.opaque,
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.5), shape: BoxShape.circle),
+                child: const Icon(Icons.close, color: Colors.white, size: 24),
+              ),
+            ),
+          ),
+          // Page indicator.
+          if (widget.urls.length > 1)
+            Positioned(
+              bottom: MediaQuery.paddingOf(context).bottom + 20,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                  decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.5), borderRadius: BorderRadius.circular(99)),
+                  child: Text('${_index + 1} / ${widget.urls.length}',
+                      style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }

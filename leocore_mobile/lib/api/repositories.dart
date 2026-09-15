@@ -643,6 +643,13 @@ class LeoRepository {
     final onHand = hasOnHand ? _i(j, _stockKeys) : kUnknownStock;
     final wh = <(String, int)>[];
     if (hasOnHand) wh.add(('On hand', onHand));
+    // Detail returns images[]; the list returns a single imageUrl. Fold a bare
+    // imageUrl into one image so the list row can show a thumbnail too.
+    var images = mapProductImages(_pick(j, ['images']));
+    if (images.isEmpty) {
+      final single = _s(j, ['imageUrl', 'image', 'thumbnailUrl']);
+      if (single.isNotEmpty) images = [ProductImage(id: 0, url: single, isPrimary: true)];
+    }
     return Product(
       id: _i(j, ['id', 'itemId']),
       code: _s(j, ['code']),
@@ -655,7 +662,7 @@ class LeoRepository {
       stock: onHand,
       barcode: _s(j, ['barcode']),
       wh: wh,
-      images: mapProductImages(_pick(j, ['images'])),
+      images: images,
     );
   }
 

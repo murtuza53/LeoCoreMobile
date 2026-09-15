@@ -112,9 +112,9 @@ class _CustomersScreenState extends State<CustomersScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                          Text(c.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, height: 1.25)),
                           const SizedBox(height: 2),
-                          Text('${c.area} · ${c.phone}', style: TextStyle(fontSize: 12, color: lc.mut)),
+                          Text([c.area, c.phone].where((e) => e.isNotEmpty).join(' · '), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: lc.mut)),
                         ],
                       ),
                     ),

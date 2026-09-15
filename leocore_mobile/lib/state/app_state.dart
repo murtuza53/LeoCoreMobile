@@ -1057,12 +1057,21 @@ class AppState extends ChangeNotifier {
     final file = File('${dir.path}/$filename');
     await file.writeAsBytes(bytes, flush: true);
     lastPdfPath = file.path;
-    final res = await OpenFilex.open(file.path, type: 'application/pdf');
-    if (res.type != ResultType.done) {
-      // No PDF viewer installed — hand it to the share sheet instead.
+    // The file is already saved. Try to open it in a PDF viewer; if none is
+    // installed or the open handler errors, fall back to the share sheet; if
+    // that also fails, at least confirm the file was saved — never surface this
+    // as a "download failed".
+    try {
+      final res = await OpenFilex.open(file.path, type: 'application/pdf');
+      if (res.type == ResultType.done) {
+        showToast('${t('Downloaded')} · $filename');
+        return;
+      }
+    } catch (_) {/* fall through to share */}
+    try {
       await Share.shareXFiles([XFile(file.path, mimeType: 'application/pdf', name: filename)]);
-    } else {
-      showToast('${t('Downloaded')} · $filename');
+    } catch (_) {
+      showToast('${t('Saved')} · $filename');
     }
   }
 
