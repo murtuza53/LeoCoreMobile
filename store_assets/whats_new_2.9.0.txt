@@ -1,0 +1,9 @@
+• Product photos now load reliably, and you can tap a photo to view it full
+  screen — swipe between photos and pinch to zoom
+• Product list now shows a photo thumbnail where available
+• Customer and supplier lists show the full name instead of cutting it off
+• Account statement now shows the full name and the outstanding balance in a
+  clear, colour-coded highlight
+• If your phone has no PDF app, downloading a statement now offers to install a
+  free PDF viewer or share the file — no more errors
+• Stability improvements
