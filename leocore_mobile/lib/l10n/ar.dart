@@ -170,6 +170,12 @@ const Map<String, String> kArabic = {
   'Tap to retry': 'اضغط لإعادة المحاولة',
   'Outstanding': 'المبلغ المستحق',
   'Tap a photo to view · long-press to remove': 'اضغط على الصورة لعرضها · اضغط مطولاً لإزالتها',
+  'No PDF viewer': 'لا يوجد عارض PDF',
+  'Get a PDF viewer': 'تثبيت عارض PDF',
+  'This phone has no app to open PDF files. Install a free PDF viewer to open statements and documents, or share this file to another app.':
+      'لا يوجد تطبيق على هذا الهاتف لفتح ملفات PDF. ثبّت عارض PDF مجاني لفتح كشوف الحسابات والمستندات، أو شارك هذا الملف مع تطبيق آخر.',
+  'Could not open the PDF here. Install a PDF viewer, or share this file to another app.':
+      'تعذّر فتح ملف PDF هنا. ثبّت عارض PDF، أو شارك هذا الملف مع تطبيق آخر.',
 
   // ── Capture pages → PDF ────────────────────────────────────────────
   'Capture pages': 'التقاط صفحات',

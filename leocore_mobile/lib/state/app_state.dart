@@ -3,6 +3,7 @@ import 'dart:io' show File, Platform;
 import 'dart:math' show Random;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:in_app_review/in_app_review.dart';
 import 'package:in_app_update/in_app_update.dart';
@@ -81,6 +82,10 @@ class AppState extends ChangeNotifier {
   AppState() {
     _restoreSession();
   }
+
+  /// Global navigator key so state-level flows (e.g. the "no PDF viewer" prompt)
+  /// can present a dialog without a widget context. Wired into [MaterialApp].
+  final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
   // ── networking ─────────────────────────────────────────────────────
   final SecureStore _store = SecureStore();
@@ -1057,21 +1062,85 @@ class AppState extends ChangeNotifier {
     final file = File('${dir.path}/$filename');
     await file.writeAsBytes(bytes, flush: true);
     lastPdfPath = file.path;
-    // The file is already saved. Try to open it in a PDF viewer; if none is
-    // installed or the open handler errors, fall back to the share sheet; if
-    // that also fails, at least confirm the file was saved — never surface this
-    // as a "download failed".
+    // The file is already saved. Try to open it in a PDF viewer.
+    ResultType? type;
     try {
       final res = await OpenFilex.open(file.path, type: 'application/pdf');
-      if (res.type == ResultType.done) {
-        showToast('${t('Downloaded')} · $filename');
-        return;
-      }
-    } catch (_) {/* fall through to share */}
-    try {
-      await Share.shareXFiles([XFile(file.path, mimeType: 'application/pdf', name: filename)]);
+      type = res.type;
     } catch (_) {
+      type = null;
+    }
+    if (type == ResultType.done) {
+      showToast('${t('Downloaded')} · $filename');
+      return;
+    }
+    // No app can open a PDF (or the open handler failed) — prompt the user to
+    // install a viewer or share the file, instead of failing silently.
+    final noViewer = type == null || type == ResultType.noAppToOpen;
+    await _promptNoPdfViewer(file.path, filename, noViewer: noViewer);
+  }
+
+  /// Shown when the phone has no PDF viewer associated: offers to install one
+  /// or share the file, so the download can't dead-end in an error.
+  Future<void> _promptNoPdfViewer(String path, String filename, {required bool noViewer}) async {
+    Future<void> share() async {
+      try {
+        await Share.shareXFiles([XFile(path, mimeType: 'application/pdf', name: filename)]);
+      } catch (_) {
+        showToast('${t('Saved')} · $filename');
+      }
+    }
+
+    final ctx = navigatorKey.currentContext;
+    if (ctx == null) {
+      await share();
+      return;
+    }
+    final choice = await showDialog<String>(
+      context: ctx,
+      builder: (dctx) => AlertDialog(
+        title: Text(t('No PDF viewer'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+        content: Text(
+          noViewer
+              ? t('This phone has no app to open PDF files. Install a free PDF viewer to open statements and documents, or share this file to another app.')
+              : t('Could not open the PDF here. Install a PDF viewer, or share this file to another app.'),
+          style: const TextStyle(fontSize: 13.5, height: 1.5),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dctx, 'share'), child: Text(t('Share'))),
+          TextButton(
+            onPressed: () => Navigator.pop(dctx, 'install'),
+            child: Text(t('Get a PDF viewer'), style: const TextStyle(fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+    if (choice == 'install') {
+      await _openPdfViewerStore();
+      // Keep the saved file reachable — offer the share sheet after they return.
+    } else if (choice == 'share') {
+      await share();
+    } else {
       showToast('${t('Saved')} · $filename');
+    }
+  }
+
+  /// Opens the platform app store at a PDF-viewer search so the user can
+  /// install one, then associate it with PDF files.
+  Future<void> _openPdfViewerStore() async {
+    final primary = Platform.isIOS
+        ? Uri.parse('https://apps.apple.com/search?term=pdf%20viewer')
+        : Uri.parse('market://search?q=pdf%20viewer&c=apps');
+    final web = Uri.parse(Platform.isIOS
+        ? 'https://apps.apple.com/search?term=pdf%20viewer'
+        : 'https://play.google.com/store/search?q=pdf%20viewer&c=apps');
+    try {
+      if (await launchUrl(primary, mode: LaunchMode.externalApplication)) return;
+    } catch (_) {/* fall through */}
+    try {
+      await launchUrl(web, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      showToast(t('Could not open the store'));
     }
   }
 

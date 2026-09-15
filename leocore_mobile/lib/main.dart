@@ -54,6 +54,7 @@ class _MaterialRoot extends StatelessWidget {
     return MaterialApp(
       title: 'LeoCore ERP Mobile',
       debugShowCheckedModeBanner: false,
+      navigatorKey: context.read<AppState>().navigatorKey,
       theme: buildTheme(lc, brightness),
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
