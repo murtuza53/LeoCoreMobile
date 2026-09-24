@@ -1,6 +1,7 @@
 # LeoCore ERP — App Store Submission Pack
 
 Bundle ID: `sek.leocore.erp` · Team: `QH862RRRJ6` · Latest shipped: `2.7.0` build `9`
+In flight: `2.9.0` build `11` (iOS skips 2.8.0 — Android shipped 2.8.0/vc10 and 2.9.0/vc11)
 Target: iPhone only · Min iOS 15.0
 
 ---
@@ -22,10 +23,19 @@ Target: iPhone only · Min iOS 15.0
 
 | Field | Value |
 |---|---|
-| Privacy Policy URL | `https://leocoreerp.seksolution.com/leocore-erp-mobile-privacy.html` |
+| Privacy Policy URL | `https://seksolution.com/leocore-erp-mobile-privacy.html` |
 | Support URL | `https://leocoreerp.seksolution.com` |
 | Marketing URL | `https://leocoreerp.seksolution.com` |
 
+> **The Privacy Policy URL is on the apex domain, not the `leocoreerp.` subdomain.**
+> `leocoreerp.seksolution.com/leocore-erp-mobile-privacy.html` does **not** serve the
+> policy — it 301s to `seksolution.com/leocoreerp.html`, the product marketing page.
+> Pointing the privacy field there is the same class of error as the 3.2 rejection.
+> Verified 2026-09-24: the apex URL returns 200 and the title
+> "Privacy Policy — LeoCore ERP Mobile". The Support and Marketing URLs on the
+> subdomain are correct — they redirect to the product page, which is what those
+> two fields want.
+>
 > **Never point any of these at `souqekamil.com`.** That domain is parked and
 > serves the hosting provider's placeholder page; a reviewer who followed the
 > Support URL there is what triggered the 3.2 rejection on 2026-09-04. All three
@@ -39,8 +49,8 @@ erp,inventory,barcode,stock,invoice,pos,sales,quotation,supplier,warehouse,scann
 
 ## 4. Promotional Text (≤170)
 
-> Shown below is the 2.6.0 text. Promotional text is **blank on every new
-> version** and must be re-entered — the current one is `promo_text_2.7.0.txt`.
+> Promotional text is **blank on every new version** and must be re-entered.
+> Current: **`promo_text_2.9.0.txt`** (169/170 chars). Shown below is the 2.6.0 text.
 
 ```
 Run your business from your pocket — scan barcodes, raise invoices and quotations,
@@ -88,7 +98,15 @@ by your company's administrator. It is not a standalone product.
 
 ## 6. What's New in This Version
 
-> Shown below is the 2.6.0 text. Current release notes: `whats_new_2.7.0.txt`.
+> Current iOS release notes: **`whats_new_ios_2.9.0.txt`**.
+>
+> iOS went 2.7.0 → 2.9.0 and never shipped 2.8.0, so the iOS note is the 2.8.0 and
+> 2.9.0 bullets merged — `whats_new_2.8.0.txt` / `whats_new_2.9.0.txt` are the
+> Android-only originals and neither is complete on its own. The 2.9.0 "no PDF app"
+> bullet is deliberately dropped: iOS always opens PDFs via Quick Look, so that
+> prompt never fires there and the line would describe behaviour iOS users cannot see.
+>
+> Shown below is the 2.6.0 text.
 
 ```
 • Manager Reports — receivables aging, cash position, margin and trend analysis
@@ -317,8 +335,9 @@ xcrun altool --upload-app -f build/ios/ipa/*.ipa -t ios \
 
 Flutter generates `ExportOptions.plist` with `manageAppVersionAndBuildNumber = true`.
 On export, Xcode queries App Store Connect, finds the highest build already
-uploaded, and stamps the IPA with **that number + 1** — whatever `pubspec.yaml`
-says. Verified 2026-08-19:
+uploaded, and stamps the IPA with **max(`pubspec.yaml` build, highest-on-ASC + 1)**.
+So it will never duplicate a build number, but it *does* honour `pubspec.yaml` when
+that is already higher. Verified 2026-08-19:
 
 | Artifact | CFBundleVersion |
 |---|---|
@@ -330,6 +349,9 @@ says. Verified 2026-08-19:
 Consequences:
 
 - You cannot accidentally upload a duplicate build number. Convenient.
+- Confirmed again 2026-09-24 for 2.9.0: `pubspec.yaml` said 11 and the highest on
+  ASC was 9, so +1 would have given 10 — the exported IPA was stamped **11**, i.e.
+  the pubspec value won. iOS build 11 therefore lines up with Android vc11.
 - The number shown in App Store Connect may not match `pubspec.yaml`. Read the
   IPA, not the pubspec, when you need to know what you actually shipped:
   ```

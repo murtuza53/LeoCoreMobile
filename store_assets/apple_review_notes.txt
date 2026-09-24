@@ -1,37 +1,40 @@
-LeoCore ERP Mobile is a business-to-business companion app for LeoCore ERP, an inventory and sales system companies run on their own server. It is not standalone: it needs a LeoCore server and an account issued by that company's administrator.
+LeoCore ERP Mobile is a B2B companion app for LeoCore ERP, an inventory and sales system companies run on their own server. It is not standalone: it needs a LeoCore server and an account issued by that company.
 
 HOW TO SIGN IN
-1. Launch the app. The first screen asks for a "Server location".
-2. It is pre-filled with https://leocoredemo.seksolution.com
-3. Username: mic
-4. Password: mic@159357
-5. Tap "Sign in".
+The first screen asks for a "Server location", pre-filled with https://leocoredemo.seksolution.com
+Username: mic
+Password: mic@159357
+Then tap "Sign in".
 
 The demo account has every module enabled. The server allows one active session per user, so if you are signed out unexpectedly please sign in again - it is not a defect.
 
 WHERE THE FEATURES ARE
-Products, Customers, Suppliers and Reports are on the dashboard grid and the bottom bar. The barcode scanner is the round button in the centre of the bottom bar. Cash Sale, Quotation, Stock Count, Stock Alerts, Attach Docs, Print Labels, Business Health and Settings are under the "More" tab.
+Products, Customers, Suppliers and Reports are on the dashboard grid and bottom bar. The barcode scanner is the round centre button. Cash Sale, Quotation, Stock Count, Stock Alerts, Attach Docs, Print Labels, Business Health and Settings are under "More". Tapping a product photo opens a full-screen, pinch-to-zoom view; items with no image show a placeholder.
 
-TO TRY ATTACH DOCS (new in 2.7.0)
-More > Attach Docs, then look up document number DEMO-INV-00051 or DEMO-INV-00142. Both are Sales Invoices on the demo server. Any other number will correctly report "not found". Then attach a file by scanning paper with the camera, or by picking one from Files, Photos or the gallery.
+TO TRY ATTACH DOCS
+More > Attach Docs, two modes.
+
+"One document" - enter DEMO-INV-00051 or DEMO-INV-00142 (Sales Invoices on the demo server; other numbers correctly report "not found"). Then attach from Files, Photos or the gallery, scan paper with the camera, or use "Add page" to shoot several pages and "Combine to PDF" to merge them into one upload.
+
+"Match by name" (new in 2.9.0) - pick several files at once; each FILENAME is read as the document number and looked up. Please test with files named after a demo document, e.g. DEMO-INV-00051.pdf. Other names list as "not found" - correct behaviour, not an error. Any row's number can be edited and re-checked.
 
 TO SEE POPULATED REPORTS
-Reports and Business Health default to today, and the demo company has no sales dated today. Please select "Last 30 days" on Reports, or set the Business Health date range to a previous month.
+Reports and Business Health default to today, and the demo company has no sales today. Please select "Last 30 days" on Reports, or set Business Health to a previous month.
 
 WHO THIS IS FOR
-LeoCore ERP is a commercial product that any company can purchase; it is not built for, or restricted to, a single organisation or a closed group. It is in use today by five separate, unaffiliated customer companies, each running its own LeoCore server, and any business can buy a licence through https://leocoreerp.seksolution.com or info@souqekamil.com. The app is free, with no in-app purchases; the customer company pays for its LeoCore ERP licence, which includes mobile access for its staff.
+LeoCore ERP is a commercial product any company can purchase; it is not built for, or restricted to, a single organisation or closed group. Five separate, unaffiliated customer companies use it today, each on its own LeoCore server; any business can buy a licence via https://leocoreerp.seksolution.com or info@souqekamil.com. The app is free with no in-app purchases; the customer pays for its LeoCore licence, which includes mobile access for staff.
 
 ACCOUNTS
-The app has no registration screen and no account creation or deletion, by design. Accounts are created and revoked by the customer company's own ERP administrator in the LeoCore back office, exactly as their desktop accounts are. Guideline 5.1.1(v) therefore does not apply: this is an employee credential issued and revoked by the employer, not a consumer account created in the app.
+The app has no registration screen and no account creation or deletion, by design. Accounts are created and revoked by the customer's own ERP administrator in the LeoCore back office, exactly as desktop accounts are. Guideline 5.1.1(v) therefore does not apply: this is an employee credential issued and revoked by the employer, not a consumer account.
 
 PERMISSIONS
-The camera is the only sensitive permission requested - to read product barcodes and to scan documents. Face ID is an optional unlock, switchable in Settings. No location, contacts, microphone or App Tracking Transparency, and no tracking.
+The camera is requested to read barcodes, take a product photo, and photograph paper documents for attaching. The photo library is requested only when you choose an existing image to attach, via the standard iOS picker. Face ID is an optional unlock, switchable in Settings. No location, contacts, microphone or App Tracking Transparency, and no tracking.
 
 EXTERNAL SERVICES
-The customer's own LeoCore ERP server is the only backend and the only destination for business data, over HTTPS via a REST API. Google Fonts supplies one typeface on first launch - a font file request only. Apple frameworks provide barcode recognition, document scanning, the optional Face ID unlock and the rating prompt. There is no analytics, advertising, crash reporting, tracking, payment processor or AI service.
+The customer's own LeoCore ERP server is the only backend and the only destination for business data, over HTTPS via a REST API. Google Fonts supplies one typeface on first launch (a font file request only). Apple frameworks provide barcode recognition, document scanning, Face ID unlock and the rating prompt. No analytics, advertising, crash reporting, tracking, payment processor or AI service.
 
 REGIONAL DIFFERENCES
-The app functions identically in every region: no region-locked features, no regional content variations, no geographic restrictions, and no use of location. The only variation is user-selected, English or Arabic, with Arabic switching the layout to right-to-left.
+The app functions identically in every region: no region-locked features, no regional content, no geographic restrictions, no use of location. The only variation is user-selected English or Arabic, Arabic switching the layout to right-to-left.
 
 REGULATED INDUSTRY
-Not a regulated industry: general-purpose business software for private commercial use, with no banking, payment, healthcare, insurance, gambling or legal services and no payment processing. Both the app and the LeoCore ERP server are developed by Souq E Kamil Trading and Solutions W.L.L.
+Not a regulated industry: general-purpose business software for private commercial use - no banking, payment, healthcare, insurance, gambling or legal services, and no payment processing. Both the app and the LeoCore server are developed by Souq E Kamil Trading and Solutions W.L.L.
