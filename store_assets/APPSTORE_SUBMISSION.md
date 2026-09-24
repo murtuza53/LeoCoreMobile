@@ -449,6 +449,31 @@ each new version and has to be re-entered (`promo_text_2.7.0.txt`).
 `ACTIVE`, day 1 of 7, started 19:20 UTC. No questions this cycle: the 2.1 and
 3.2 answers written for 2.6.0 carried over unchallenged.
 
+**2026-09-20** — 2.7.0 phased release `COMPLETE`, day 7. At 100% of users.
+
+**2026-09-24** — 2.9.0 build 11 uploaded and submitted, `WAITING_FOR_REVIEW`
+(submission `44264fa4`, 11:14 UTC). **iOS skipped 2.8.0** — Android shipped
+2.8.0/vc10 and 2.9.0/vc11 while iOS was still on 2.7.0/9 — so the release notes
+are the 2.8.0 and 2.9.0 bullets merged, minus the "no PDF app" line, which
+describes an Android-only prompt (iOS opens PDFs via Quick Look).
+
+Nothing in the 7 commits touched `ios/` or `android/`, and no dependency
+changed: it is all shared Dart, so iOS inherited every feature on merge. Checks
+before upload — `flutter analyze` clean; `Info.plist` camera/photo strings
+already covered the new capture-pages flow from the 2.7.0 widening; the single
+`Platform.isIOS` branch (PDF-viewer store link) correctly targets
+`apps.apple.com`; `in_app_update` (Play-only) stays try/caught, so it no-ops.
+
+Verified on the Simulator against the demo server before submitting: the new
+authenticated image loader, the products list (stock badge, full name, list
+price, thumbnail) and the fullscreen pinch-to-zoom viewer all work on iOS.
+
+Also this cycle: the recorded Privacy Policy URL was corrected (§2 — the
+`leocoreerp.` subdomain path 301s to the marketing page), promotional text and
+reviewer notes re-entered, phased release re-enabled, and the products
+screenshot reshot after adding catalogue images to four demo products so the
+thumbnail feature is actually visible.
+
 ## What phased release actually throttles
 
 Days 1-7 release to 1 / 2 / 5 / 10 / 20 / 50 / 100 percent of users — but **only
