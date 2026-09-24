@@ -610,6 +610,36 @@ Apple rejects screenshots that show only a login screen, a splash screen or an
 empty form, so put real data on screen before capturing. For `07` that meant a
 looked-up document plus a queued file whose name matches it.
 
+**The Simulator also works, and needs no physical device.** The **iPhone 17 Pro
+Max** simulator renders at exactly 1320 x 2868, so it drops in like a device
+capture. That is how `02_products.png` was reshot for 2.9.0:
+
+```
+xcrun simctl boot "iPhone 17 Pro Max"
+xcrun simctl install <udid> build/ios/iphonesimulator/Runner.app
+# clean, consistent status bar - Apple's own marketing time
+xcrun simctl status_bar <udid> override --time "09:41" \
+  --batteryState charged --batteryLevel 100 \
+  --cellularMode active --cellularBars 4 --wifiMode active --wifiBars 3
+xcrun simctl io <udid> screenshot shot.png
+```
+
+**Two gotchas:**
+
+1. **Simulator captures carry an alpha channel and App Store Connect rejects
+   them.** Device captures do not, which is why this never came up before. There
+   is no ImageMagick or PIL on this machine and a `sips` PNG->BMP->PNG round trip
+   *keeps* the alpha, so strip it with CoreGraphics - see
+   `deopaque.swift` in the session scratchpad, or inline:
+   `CGContext(..., bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)`, draw the
+   image, re-encode. Verify with `sips -g hasAlpha`.
+2. **Two screenshots in one set cannot share a `fileName`.** Reserving an upload
+   whose name matches an existing shot fails with a misleading *"An unexpected
+   error occurred on the server side"*. Upload under a new name
+   (`02_products_290.png`), then delete the old one and re-order the set with
+   `PATCH /v1/appScreenshotSets/{id}/relationships/appScreenshots`, which takes
+   the full ordered id list.
+
 ## Appendix D — App Store Connect API without altool
 
 `xcrun altool --generate-jwt` does not work in Xcode 26. Sign the ES256 JWT
