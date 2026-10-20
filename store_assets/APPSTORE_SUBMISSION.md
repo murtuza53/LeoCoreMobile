@@ -1,7 +1,7 @@
 # LeoCore ERP — App Store Submission Pack
 
-Bundle ID: `sek.leocore.erp` · Team: `QH862RRRJ6` · Latest shipped: `2.7.0` build `9`
-In flight: `2.9.0` build `11` (iOS skips 2.8.0 — Android shipped 2.8.0/vc10 and 2.9.0/vc11)
+Bundle ID: `sek.leocore.erp` · Team: `QH862RRRJ6` · Latest shipped: `2.9.0` build `11`
+In flight: nothing (iOS skipped 2.8.0 — Android shipped 2.8.0/vc10, then both met at 2.9.0/vc11)
 Target: iPhone only · Min iOS 15.0
 
 ---
@@ -473,6 +473,19 @@ Also this cycle: the recorded Privacy Policy URL was corrected (§2 — the
 reviewer notes re-entered, phased release re-enabled, and the products
 screenshot reshot after adding catalogue images to four demo products so the
 thumbnail feature is actually visible.
+
+**2026-09-24** — **APPROVED the same day.** Submitted 11:14 UTC, released
+19:33 UTC — about eight hours, the fastest turnaround of any cycle so far.
+`READY_FOR_SALE`, build 11 `VALID`, submission `44264fa4` `COMPLETE`, phased
+release day 1 of 7. No questions again: the trimmed reviewer notes (4816 ->
+3992 chars to fit the 4000 cap) held up, including the "Match by name" warning
+that arbitrary filenames correctly report "not found".
+
+**2026-09-30** — 2.9.0 phased release `COMPLETE`, day 7. At 100% of users.
+
+**2026-10-20** — upstream checked: `origin/main` still at `8069288`
+(2026-09-15), no new commits, branches or tags. Both platforms are on
+2.9.0 / 11 and in sync for the first time since Android shipped 2.8.0.
 
 ## What phased release actually throttles
 
