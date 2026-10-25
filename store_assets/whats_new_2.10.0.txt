@@ -1,0 +1,8 @@
+• Cash sale & quotation: search products by ID, name, brand or category
+• Change the unit price of any item on a cash sale or quotation
+• Leaving a cash sale or quotation with unsaved items now asks to save or
+  discard
+• Statements and PDFs save to Downloads and open in your PDF app; Share sends
+  the saved file
+• Fixed sharing, PDF opening and barcode scanning on some phones
+• Stability improvements
