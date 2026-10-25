@@ -4,6 +4,7 @@ import 'dart:math' show Random;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show MethodChannel, PlatformException;
 import 'package:image_picker/image_picker.dart';
 import 'package:in_app_review/in_app_review.dart';
 import 'package:in_app_update/in_app_update.dart';
@@ -373,13 +374,31 @@ class AppState extends ChangeNotifier {
   int countValue(int id) => counts[id] ?? 0;
   int get countVar => countProducts.where((p) => countValue(p.id) != countExpected(p.id)).length;
 
-  double get subtotal => cart.fold(0, (a, l) => a + productById(l.pid).price * l.qty);
+  /// Unit price of a line: the user's manual price, else the list price.
+  double linePrice(CartLine l) => l.price ?? productById(l.pid).price;
+
+  /// Sets (or with null, resets to the list price) the unit price of [pid] on
+  /// the quotation ([quote]) or the cash sale.
+  void setLinePrice(int pid, double? price, {required bool quote}) {
+    for (final l in quote ? quoteLines : cart) {
+      if (l.pid == pid) l.price = price;
+    }
+    // The document body changed, so a retry must not replay the old request.
+    if (quote) {
+      _quoteIdemKey = null;
+    } else {
+      _draftIdemKey = null;
+    }
+    notifyListeners();
+  }
+
+  double get subtotal => cart.fold(0, (a, l) => a + linePrice(l) * l.qty);
   double get vat => subtotal * 0.10;
   double get total => subtotal + vat;
 
   /// Quotation line totals (same 10% VAT basis as the cash sale preview).
   /// These are indicative only — the server prices the document on save.
-  double get quoteSubtotal => quoteLines.fold(0, (a, l) => a + productById(l.pid).price * l.qty);
+  double get quoteSubtotal => quoteLines.fold(0, (a, l) => a + linePrice(l) * l.qty);
   double get quoteVat => quoteSubtotal * 0.10;
   double get quoteTotal => quoteSubtotal + quoteVat;
 
@@ -617,7 +636,8 @@ class AppState extends ChangeNotifier {
         nav(savedDoc?.status == 'Open' ? Screen.quotation : Screen.invoice);
         return true;
       case Screen.quotation:
-        nav(Screen.home);
+      case Screen.invoice:
+        leaveDoc();
         return true;
       case Screen.settings:
       case Screen.managerReports:
@@ -632,7 +652,6 @@ class AppState extends ChangeNotifier {
       case Screen.statementPicker:
       case Screen.count:
       case Screen.low:
-      case Screen.invoice:
       case Screen.reports:
         nav(Screen.home);
         return true;
@@ -938,6 +957,72 @@ class AppState extends ChangeNotifier {
   }
 
   void addCurrentToCart() => addToCart(product.id);
+
+  // ── item picker (cash sale / quotation) ────────────────────────────
+  String pickQuery = '';
+  List<Product> _pickRemote = const [];
+  bool pickLoading = false;
+  Timer? _pickDebounce;
+
+  static bool _productMatches(Product p, String q) =>
+      p.id.toString() == q ||
+      p.code.toLowerCase().contains(q) ||
+      p.name.toLowerCase().contains(q) ||
+      p.brand.toLowerCase().contains(q) ||
+      p.cat.toLowerCase().contains(q) ||
+      p.barcode.toLowerCase().contains(q);
+
+  /// Loaded products matching the query by id, code, name, brand, category or
+  /// barcode, plus server matches that aren't in the loaded page.
+  List<Product> get pickProductRows {
+    final q = pickQuery.trim().toLowerCase();
+    if (q.isEmpty) return products;
+    final local = products.where((p) => _productMatches(p, q)).toList();
+    final seen = local.map((p) => p.id).toSet();
+    return [...local, ..._pickRemote.where((p) => seen.add(p.id))];
+  }
+
+  /// Quantity of [pid] already on the document being built.
+  int pickedQty(int pid) {
+    final lines = activeDoc == 'quotation' ? quoteLines : cart;
+    return lines.where((l) => l.pid == pid).fold(0, (a, l) => a + l.qty);
+  }
+
+  void openPicker() {
+    pickQuery = '';
+    _pickRemote = const [];
+    pickLoading = false;
+  }
+
+  void setPickQuery(String v) {
+    pickQuery = v;
+    notifyListeners();
+    _pickDebounce?.cancel();
+    final q = v.trim();
+    if (demoMode || q.isEmpty) {
+      _pickRemote = const [];
+      return;
+    }
+    _pickDebounce = Timer(const Duration(milliseconds: 350), () async {
+      pickLoading = true;
+      notifyListeners();
+      try {
+        final rows = await _repo.products(search: q, pageSize: 50);
+        if (pickQuery.trim() == q) _pickRemote = rows;
+      } catch (_) {/* local matches still show */}
+      if (pickQuery.trim() == q) pickLoading = false;
+      notifyListeners();
+    });
+  }
+
+  /// Adds [p] to the current document. Server results outside the loaded page
+  /// are cached so the line can resolve its product (name / price).
+  void addPicked(Product p) {
+    if (!demoMode && !products.any((e) => e.id == p.id)) {
+      _products = [...products, p];
+    }
+    addToCart(p.id);
+  }
   void incLine(int pid) => addToCart(pid, 'Quantity updated');
 
   void decLine(int pid) {
@@ -1054,15 +1139,51 @@ class AppState extends ChangeNotifier {
   /// Path of the most recently downloaded PDF (so the UI can re-share it).
   String? lastPdfPath;
 
-  /// Writes the PDF to the documents directory (so it persists as a real
-  /// downloaded file) and opens it in the device's PDF viewer. Falls back to
-  /// the share sheet when no viewer is installed.
-  Future<void> _deliverPdf(Uint8List bytes, String filename) async {
+  static const _downloads = MethodChannel('leocore/downloads');
+
+  /// Writes a private copy of the PDF (so Share can always reach the last
+  /// download) and, on Android, saves it to the public Downloads folder.
+  /// Returns the private file plus the Downloads URI (null on iOS or failure).
+  Future<({File file, String? uri})> _savePdf(Uint8List bytes, String filename) async {
     final dir = await getApplicationDocumentsDirectory();
     final file = File('${dir.path}/$filename');
     await file.writeAsBytes(bytes, flush: true);
     lastPdfPath = file.path;
-    // The file is already saved. Try to open it in a PDF viewer.
+    String? uri;
+    if (Platform.isAndroid) {
+      try {
+        uri = await _downloads.invokeMethod<String>(
+            'save', {'bytes': bytes, 'name': filename, 'mime': 'application/pdf'});
+      } on PlatformException catch (e) {
+        debugPrint('Save to Downloads failed: ${e.message}');
+      }
+    }
+    return (file: file, uri: uri);
+  }
+
+  /// Saves the PDF to the phone's public Downloads folder and opens it in the
+  /// default PDF app. On iOS (no Downloads folder) it is kept in the app's
+  /// documents directory and opened from there. Falls back to a prompt (install
+  /// a viewer / share) when nothing can open it.
+  Future<void> _deliverPdf(Uint8List bytes, String filename) async {
+    final (:file, :uri) = await _savePdf(bytes, filename);
+    if (Platform.isAndroid) {
+      if (uri != null) {
+        String? opened;
+        try {
+          opened = await _downloads.invokeMethod<String>('open', {'uri': uri, 'mime': 'application/pdf'});
+        } on PlatformException catch (e) {
+          debugPrint('Open PDF failed: ${e.message}');
+        }
+        if (opened == 'done') {
+          showToast('${t('Saved to Downloads')} · $filename');
+          return;
+        }
+        await _promptNoPdfViewer(file.path, filename, noViewer: opened == 'noApp', inDownloads: true);
+        return;
+      }
+      // Couldn't write to Downloads — fall through and open the private copy.
+    }
     ResultType? type;
     try {
       final res = await OpenFilex.open(file.path, type: 'application/pdf');
@@ -1082,7 +1203,8 @@ class AppState extends ChangeNotifier {
 
   /// Shown when the phone has no PDF viewer associated: offers to install one
   /// or share the file, so the download can't dead-end in an error.
-  Future<void> _promptNoPdfViewer(String path, String filename, {required bool noViewer}) async {
+  Future<void> _promptNoPdfViewer(String path, String filename,
+      {required bool noViewer, bool inDownloads = false}) async {
     Future<void> share() async {
       try {
         await Share.shareXFiles([XFile(path, mimeType: 'application/pdf', name: filename)]);
@@ -1101,9 +1223,10 @@ class AppState extends ChangeNotifier {
       builder: (dctx) => AlertDialog(
         title: Text(t('No PDF viewer'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
         content: Text(
-          noViewer
-              ? t('This phone has no app to open PDF files. Install a free PDF viewer to open statements and documents, or share this file to another app.')
-              : t('Could not open the PDF here. Install a PDF viewer, or share this file to another app.'),
+          (inDownloads ? '${t('The file was saved to your Downloads folder.')}\n\n' : '') +
+              (noViewer
+                  ? t('This phone has no app to open PDF files. Install a free PDF viewer to open statements and documents, or share this file to another app.')
+                  : t('Could not open the PDF here. Install a PDF viewer, or share this file to another app.')),
           style: const TextStyle(fontSize: 13.5, height: 1.5),
         ),
         actions: [
@@ -1121,7 +1244,7 @@ class AppState extends ChangeNotifier {
     } else if (choice == 'share') {
       await share();
     } else {
-      showToast('${t('Saved')} · $filename');
+      showToast('${t(inDownloads ? 'Saved to Downloads' : 'Saved')} · $filename');
     }
   }
 
@@ -1189,20 +1312,29 @@ class AppState extends ChangeNotifier {
     if (statementBusy) return;
     statementSharing = true;
     notifyListeners();
+    ({Uint8List bytes, String filename})? pdf;
     try {
-      final pdf = await _fetchStatementPdf();
-      if (pdf == null) return;
-      final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/${pdf.filename}');
-      await file.writeAsBytes(pdf.bytes, flush: true);
-      await Share.shareXFiles(
-        [XFile(file.path, mimeType: 'application/pdf', name: pdf.filename)],
-        subject: 'Account statement — $statementPartyName',
-      );
+      pdf = await _fetchStatementPdf();
     } on ApiException catch (e) {
       showToast(e.message);
-    } catch (_) {
+    } catch (e) {
+      debugPrint('Statement PDF fetch failed: $e');
       showToast(t('Could not generate the statement PDF'));
+    }
+    try {
+      if (pdf == null) return;
+      // Save to Downloads first, then share that saved file.
+      final (:file, :uri) = await _savePdf(pdf.bytes, pdf.filename);
+      final subject = 'Account statement — $statementPartyName';
+      if (uri != null) {
+        await _downloads.invokeMethod<String>(
+            'share', {'uri': uri, 'mime': 'application/pdf', 'subject': subject});
+      } else {
+        await Share.shareXFiles([XFile(file.path, mimeType: 'application/pdf')], subject: subject);
+      }
+    } catch (e) {
+      debugPrint('Statement share failed: $e');
+      showToast(t('Could not share the statement'));
     } finally {
       statementSharing = false;
       notifyListeners();
@@ -1522,7 +1654,7 @@ class AppState extends ChangeNotifier {
     try {
       final doc = await _repo.createCashInvoiceDraft(
         warehouseId: wh,
-        lines: [for (final l in cart) (itemId: l.pid, qty: l.qty)],
+        lines: [for (final l in cart) (itemId: l.pid, qty: l.qty, price: l.price)],
         idempotencyKey: _draftIdemKey!,
       );
       savedDoc = doc;
@@ -1537,6 +1669,63 @@ class AppState extends ChangeNotifier {
     } finally {
       savingDraft = false;
       notifyListeners();
+    }
+  }
+
+  bool _leavePrompting = false;
+
+  /// Back from the cash sale / quotation. With unsaved lines, asks whether to
+  /// save, discard or keep editing, so work isn't lost by an accidental back.
+  Future<void> leaveDoc() async {
+    final quote = screen == Screen.quotation;
+    final lines = quote ? quoteLines : cart;
+    final ctx = navigatorKey.currentContext;
+    if (lines.isEmpty || ctx == null) {
+      nav(Screen.home);
+      return;
+    }
+    if (_leavePrompting) return; // a second back press while the dialog is up
+    _leavePrompting = true;
+    final String? choice;
+    try {
+      choice = await showDialog<String>(
+        context: ctx,
+        builder: (dctx) => AlertDialog(
+          title: Text(t('Save changes?'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          content: Text(
+            quote
+                ? t('This quotation has unsaved items. Save it before leaving, or discard the changes?')
+                : t('This cash sale has unsaved items. Save it as a draft before leaving, or discard the changes?'),
+            style: const TextStyle(fontSize: 13.5, height: 1.5),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dctx, 'discard'), child: Text(t('Discard'))),
+            TextButton(onPressed: () => Navigator.pop(dctx), child: Text(t('Keep editing'))),
+            TextButton(
+              onPressed: () => Navigator.pop(dctx, 'save'),
+              child: Text(t('Save'), style: const TextStyle(fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      _leavePrompting = false;
+    }
+    if (choice == 'save') {
+      // Saving moves on by itself (receipt / quotation PDF); on failure the
+      // lines stay and the user remains on the screen.
+      await (quote ? saveQuotation() : saveDraft());
+    } else if (choice == 'discard') {
+      if (quote) {
+        quoteLines = [];
+        quoteCustomerId = 0;
+        quoteCustomerQuery = '';
+        _quoteIdemKey = null;
+      } else {
+        cart = [];
+        _draftIdemKey = null;
+      }
+      nav(Screen.home);
     }
   }
 
@@ -1624,7 +1813,7 @@ class AppState extends ChangeNotifier {
     try {
       final doc = await _repo.createQuotation(
         customerId: quoteCustomerId,
-        lines: [for (final l in quoteLines) (itemId: l.pid, qty: l.qty)],
+        lines: [for (final l in quoteLines) (itemId: l.pid, qty: l.qty, price: l.price)],
         idempotencyKey: _quoteIdemKey!,
       );
       savedDoc = doc;

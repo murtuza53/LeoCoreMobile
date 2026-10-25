@@ -242,11 +242,12 @@ class LeoRepository {
   // ── Sales documents (cash-invoice draft & quotations) ──────────────────
   /// Result of creating a sales document.
   ///
-  /// The server prices the lines, so the totals come back from it.
+  /// The server prices lines without a manual `price` from the price list, so
+  /// the totals come back from it.
   Future<SalesDocResult> createCashInvoiceDraft({
     required int warehouseId,
     int? customerId,
-    required List<({int itemId, int qty})> lines,
+    required List<({int itemId, int qty, double? price})> lines,
     required String idempotencyKey,
   }) async {
     final j = await _client.postJson(
@@ -255,7 +256,9 @@ class LeoRepository {
       body: {
         'warehouseId': warehouseId,
         if (customerId != null) 'customerId': customerId,
-        'lines': [for (final l in lines) {'itemId': l.itemId, 'qty': l.qty}],
+        'lines': [
+          for (final l in lines) {'itemId': l.itemId, 'qty': l.qty, if (l.price != null) 'price': l.price},
+        ],
       },
     );
     return SalesDocResult.fromJson(j);
@@ -263,7 +266,7 @@ class LeoRepository {
 
   Future<SalesDocResult> createQuotation({
     required int customerId,
-    required List<({int itemId, int qty})> lines,
+    required List<({int itemId, int qty, double? price})> lines,
     required String idempotencyKey,
   }) async {
     final j = await _client.postJson(
@@ -271,7 +274,9 @@ class LeoRepository {
       idempotencyKey: idempotencyKey,
       body: {
         'customerId': customerId,
-        'lines': [for (final l in lines) {'itemId': l.itemId, 'qty': l.qty}],
+        'lines': [
+          for (final l in lines) {'itemId': l.itemId, 'qty': l.qty, if (l.price != null) 'price': l.price},
+        ],
       },
     );
     return SalesDocResult.fromJson(j);

@@ -176,6 +176,9 @@ const Map<String, String> kArabic = {
       'لا يوجد تطبيق على هذا الهاتف لفتح ملفات PDF. ثبّت عارض PDF مجاني لفتح كشوف الحسابات والمستندات، أو شارك هذا الملف مع تطبيق آخر.',
   'Could not open the PDF here. Install a PDF viewer, or share this file to another app.':
       'تعذّر فتح ملف PDF هنا. ثبّت عارض PDF، أو شارك هذا الملف مع تطبيق آخر.',
+  'Saved to Downloads': 'تم الحفظ في التنزيلات',
+  'The file was saved to your Downloads folder.': 'تم حفظ الملف في مجلد التنزيلات.',
+  'Could not share the statement': 'تعذّرت مشاركة كشف الحساب',
 
   // ── Capture pages → PDF ────────────────────────────────────────────
   'Capture pages': 'التقاط صفحات',
@@ -250,6 +253,23 @@ const Map<String, String> kArabic = {
   'Complete sale · print receipt': 'إتمام البيع · طباعة الإيصال',
   'No items yet': 'لا توجد أصناف بعد',
   'Scan a barcode or add items from Products.': 'امسح باركود أو أضف أصنافاً من المنتجات.',
+  'Search above or scan a barcode to add items.': 'ابحث في الأعلى أو امسح باركود لإضافة الأصناف.',
+  'Search product by ID, name, brand or category': 'ابحث عن منتج بالرقم أو الاسم أو العلامة التجارية أو الفئة',
+  'ID, name, brand or category': 'الرقم أو الاسم أو العلامة أو الفئة',
+  'Searching…': 'جارٍ البحث…',
+  'No matching products': 'لا توجد منتجات مطابقة',
+  'Unit price': 'سعر الوحدة',
+  'Use list price': 'استخدام سعر القائمة',
+  'Enter a valid price': 'أدخل سعراً صحيحاً',
+  'Apply': 'تطبيق',
+  'Save changes?': 'حفظ التغييرات؟',
+  'This quotation has unsaved items. Save it before leaving, or discard the changes?':
+      'يحتوي عرض السعر هذا على أصناف غير محفوظة. هل تريد حفظه قبل المغادرة أم تجاهل التغييرات؟',
+  'This cash sale has unsaved items. Save it as a draft before leaving, or discard the changes?':
+      'تحتوي فاتورة البيع النقدي هذه على أصناف غير محفوظة. هل تريد حفظها كمسودة قبل المغادرة أم تجاهل التغييرات؟',
+  'Discard': 'تجاهل',
+  'Keep editing': 'متابعة التعديل',
+  'Save': 'حفظ',
 
   // ── Reports ────────────────────────────────────────────────────────
   'Today': 'اليوم',

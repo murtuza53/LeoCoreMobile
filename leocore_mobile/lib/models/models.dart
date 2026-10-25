@@ -120,5 +120,8 @@ class DeadRow {
 class CartLine {
   int pid;
   int qty;
-  CartLine(this.pid, this.qty);
+
+  /// Unit price typed by the user; null = the product's list price.
+  double? price;
+  CartLine(this.pid, this.qty, [this.price]);
 }

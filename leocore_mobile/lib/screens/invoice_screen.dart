@@ -5,6 +5,7 @@ import '../state/app_state.dart';
 import '../theme/tokens.dart';
 import '../utils/money.dart';
 import '../widgets/common.dart';
+import '../widgets/product_picker.dart';
 
 class InvoiceScreen extends StatelessWidget {
   const InvoiceScreen({super.key});
@@ -21,7 +22,7 @@ class InvoiceScreen extends StatelessWidget {
             ScreenHeader(
               title: context.tr('Cash sale'),
               subtitle: 'INV-10497 · ${context.tr('Walk-in customer')}',
-              onBack: () => app.nav(Screen.home),
+              onBack: app.leaveDoc,
               actions: [
                 GestureDetector(
                   onTap: app.openScan,
@@ -38,6 +39,10 @@ class InvoiceScreen extends StatelessWidget {
                 ),
               ],
             ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 4, 16, 8),
+              child: AddItemBar(),
+            ),
             Expanded(
               child: app.cart.isEmpty
                   ? _EmptyCart()
@@ -45,32 +50,7 @@ class InvoiceScreen extends StatelessWidget {
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 260),
                       itemCount: app.cart.length,
                       separatorBuilder: (_, __) => const SizedBox(height: 8),
-                      itemBuilder: (_, i) {
-                        final line = app.cart[i];
-                        final p = app.productById(line.pid);
-                        return LcCard(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          child: Row(
-                            children: [
-                              InitialsThumb(p, size: 42, fontSize: 12),
-                              const SizedBox(width: 11),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                                    Text('${Money.fmt(p.price)} × ${line.qty}', style: TextStyle(fontSize: 11.5, color: lc.mut)),
-                                  ],
-                                ),
-                              ),
-                              _MiniStep('−', border: lc.line, fg: lc.mut, onTap: () => app.decLine(line.pid)),
-                              SizedBox(width: 24, child: Text('${line.qty}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700))),
-                              _MiniStep('+', border: lc.prim, fg: lc.tprim, onTap: () => app.incLine(line.pid)),
-                              SizedBox(width: 64, child: Text(Money.fmt(p.price * line.qty), textAlign: TextAlign.right, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700))),
-                            ],
-                          ),
-                        );
-                      },
+                      itemBuilder: (_, i) => DocLineCard(app.cart[i], quote: false),
                     ),
             ),
           ],
@@ -154,26 +134,6 @@ class InvoiceScreen extends StatelessWidget {
   }
 }
 
-class _MiniStep extends StatelessWidget {
-  final String label;
-  final Color border;
-  final Color fg;
-  final VoidCallback onTap;
-  const _MiniStep(this.label, {required this.border, required this.fg, required this.onTap});
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 34,
-        height: 34,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(borderRadius: BorderRadius.circular(9), border: Border.all(color: border, width: 1.5)),
-        child: Text(label, style: TextStyle(fontSize: 17, color: fg)),
-      ),
-    );
-  }
-}
 
 class _EmptyCart extends StatelessWidget {
   @override
@@ -189,7 +149,7 @@ class _EmptyCart extends StatelessWidget {
             const SizedBox(height: 12),
             Text(context.tr('No items yet'), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
             const SizedBox(height: 8),
-            Text(context.tr('Scan a barcode or add items from Products.'), textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: lc.mut)),
+            Text(context.tr('Search above or scan a barcode to add items.'), textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: lc.mut)),
           ],
         ),
       ),
