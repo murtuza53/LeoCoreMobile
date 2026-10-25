@@ -79,16 +79,16 @@ flutter {
 }
 
 // ── 16 KB page-size compliance ─────────────────────────────────────────────
-// mobile_scanner 5.x pulls older ML Kit (libbarhopper_v3.so) and CameraX
-// (libimage_processing_util_jni.so) whose native libraries are only 4 KB
-// aligned, which fails the Android 15/16 "16 KB-compatible" ELF check and
-// blocks Play uploads. Force the versions that ship 16 KB-aligned .so files.
+// Older ML Kit (libbarhopper_v3.so) is only 4 KB aligned, which fails the
+// Android 15/16 "16 KB-compatible" ELF check and blocks Play uploads. Force the
+// version that ships 16 KB-aligned .so files.
+//
+// Do NOT pin CameraX here: mobile_scanner 7.x is compiled against CameraX 1.6
+// (already 16 KB aligned). Forcing an older CameraX made mobile_scanner throw
+// NoSuchFieldError while attaching, which aborted plugin registration and left
+// every later plugin (open_filex, share_plus, package_info_plus, …) missing.
 configurations.all {
     resolutionStrategy {
         force("com.google.mlkit:barcode-scanning:17.3.0")
-        force("androidx.camera:camera-core:1.4.2")
-        force("androidx.camera:camera-camera2:1.4.2")
-        force("androidx.camera:camera-lifecycle:1.4.2")
-        force("androidx.camera:camera-view:1.4.2")
     }
 }
