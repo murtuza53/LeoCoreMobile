@@ -1,0 +1,1 @@
+Product photos now load every time — tap one for a full-screen, zoomable view. Products list shows live stock and price, and Attach Docs turns camera pages into one PDF.

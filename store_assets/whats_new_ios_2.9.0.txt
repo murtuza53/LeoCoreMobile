@@ -1,0 +1,12 @@
+• Product photos now load reliably — and you can tap any photo to view it full
+  screen, swipe between photos and pinch to zoom
+• Products list now shows live stock on every item — green when in stock, red
+  when out of stock or oversold — plus a photo thumbnail, the full product name
+  and the list price
+• Attach Docs: capture several pages with the camera, delete or replace any
+  page, then combine them into one PDF and upload it
+• Attach Docs: match several files to their documents at once by filename
+• Customer and supplier lists now show the full name instead of cutting it off
+• Account statement now shows the full name and the outstanding balance in a
+  clear, colour-coded highlight
+• Faster, lower-memory image loading, plus stability improvements

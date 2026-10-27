@@ -1,6 +1,7 @@
 # LeoCore ERP — App Store Submission Pack
 
-Bundle ID: `sek.leocore.erp` · Team: `QH862RRRJ6` · Latest shipped: `2.7.0` build `9`
+Bundle ID: `sek.leocore.erp` · Team: `QH862RRRJ6` · Latest shipped: `2.9.0` build `11`
+In flight: nothing (iOS skipped 2.8.0 — Android shipped 2.8.0/vc10, then both met at 2.9.0/vc11)
 Target: iPhone only · Min iOS 15.0
 
 ---
@@ -22,10 +23,19 @@ Target: iPhone only · Min iOS 15.0
 
 | Field | Value |
 |---|---|
-| Privacy Policy URL | `https://leocoreerp.seksolution.com/leocore-erp-mobile-privacy.html` |
+| Privacy Policy URL | `https://seksolution.com/leocore-erp-mobile-privacy.html` |
 | Support URL | `https://leocoreerp.seksolution.com` |
 | Marketing URL | `https://leocoreerp.seksolution.com` |
 
+> **The Privacy Policy URL is on the apex domain, not the `leocoreerp.` subdomain.**
+> `leocoreerp.seksolution.com/leocore-erp-mobile-privacy.html` does **not** serve the
+> policy — it 301s to `seksolution.com/leocoreerp.html`, the product marketing page.
+> Pointing the privacy field there is the same class of error as the 3.2 rejection.
+> Verified 2026-09-24: the apex URL returns 200 and the title
+> "Privacy Policy — LeoCore ERP Mobile". The Support and Marketing URLs on the
+> subdomain are correct — they redirect to the product page, which is what those
+> two fields want.
+>
 > **Never point any of these at `souqekamil.com`.** That domain is parked and
 > serves the hosting provider's placeholder page; a reviewer who followed the
 > Support URL there is what triggered the 3.2 rejection on 2026-09-04. All three
@@ -39,8 +49,8 @@ erp,inventory,barcode,stock,invoice,pos,sales,quotation,supplier,warehouse,scann
 
 ## 4. Promotional Text (≤170)
 
-> Shown below is the 2.6.0 text. Promotional text is **blank on every new
-> version** and must be re-entered — the current one is `promo_text_2.7.0.txt`.
+> Promotional text is **blank on every new version** and must be re-entered.
+> Current: **`promo_text_2.9.0.txt`** (169/170 chars). Shown below is the 2.6.0 text.
 
 ```
 Run your business from your pocket — scan barcodes, raise invoices and quotations,
@@ -88,7 +98,15 @@ by your company's administrator. It is not a standalone product.
 
 ## 6. What's New in This Version
 
-> Shown below is the 2.6.0 text. Current release notes: `whats_new_2.7.0.txt`.
+> Current iOS release notes: **`whats_new_ios_2.9.0.txt`**.
+>
+> iOS went 2.7.0 → 2.9.0 and never shipped 2.8.0, so the iOS note is the 2.8.0 and
+> 2.9.0 bullets merged — `whats_new_2.8.0.txt` / `whats_new_2.9.0.txt` are the
+> Android-only originals and neither is complete on its own. The 2.9.0 "no PDF app"
+> bullet is deliberately dropped: iOS always opens PDFs via Quick Look, so that
+> prompt never fires there and the line would describe behaviour iOS users cannot see.
+>
+> Shown below is the 2.6.0 text.
 
 ```
 • Manager Reports — receivables aging, cash position, margin and trend analysis
@@ -317,8 +335,9 @@ xcrun altool --upload-app -f build/ios/ipa/*.ipa -t ios \
 
 Flutter generates `ExportOptions.plist` with `manageAppVersionAndBuildNumber = true`.
 On export, Xcode queries App Store Connect, finds the highest build already
-uploaded, and stamps the IPA with **that number + 1** — whatever `pubspec.yaml`
-says. Verified 2026-08-19:
+uploaded, and stamps the IPA with **max(`pubspec.yaml` build, highest-on-ASC + 1)**.
+So it will never duplicate a build number, but it *does* honour `pubspec.yaml` when
+that is already higher. Verified 2026-08-19:
 
 | Artifact | CFBundleVersion |
 |---|---|
@@ -330,6 +349,9 @@ says. Verified 2026-08-19:
 Consequences:
 
 - You cannot accidentally upload a duplicate build number. Convenient.
+- Confirmed again 2026-09-24 for 2.9.0: `pubspec.yaml` said 11 and the highest on
+  ASC was 9, so +1 would have given 10 — the exported IPA was stamped **11**, i.e.
+  the pubspec value won. iOS build 11 therefore lines up with Android vc11.
 - The number shown in App Store Connect may not match `pubspec.yaml`. Read the
   IPA, not the pubspec, when you need to know what you actually shipped:
   ```
@@ -426,6 +448,44 @@ each new version and has to be re-entered (`promo_text_2.7.0.txt`).
 **2026-09-13** — **APPROVED.** `READY_FOR_SALE`, build 9 `VALID`, phased release
 `ACTIVE`, day 1 of 7, started 19:20 UTC. No questions this cycle: the 2.1 and
 3.2 answers written for 2.6.0 carried over unchallenged.
+
+**2026-09-20** — 2.7.0 phased release `COMPLETE`, day 7. At 100% of users.
+
+**2026-09-24** — 2.9.0 build 11 uploaded and submitted, `WAITING_FOR_REVIEW`
+(submission `44264fa4`, 11:14 UTC). **iOS skipped 2.8.0** — Android shipped
+2.8.0/vc10 and 2.9.0/vc11 while iOS was still on 2.7.0/9 — so the release notes
+are the 2.8.0 and 2.9.0 bullets merged, minus the "no PDF app" line, which
+describes an Android-only prompt (iOS opens PDFs via Quick Look).
+
+Nothing in the 7 commits touched `ios/` or `android/`, and no dependency
+changed: it is all shared Dart, so iOS inherited every feature on merge. Checks
+before upload — `flutter analyze` clean; `Info.plist` camera/photo strings
+already covered the new capture-pages flow from the 2.7.0 widening; the single
+`Platform.isIOS` branch (PDF-viewer store link) correctly targets
+`apps.apple.com`; `in_app_update` (Play-only) stays try/caught, so it no-ops.
+
+Verified on the Simulator against the demo server before submitting: the new
+authenticated image loader, the products list (stock badge, full name, list
+price, thumbnail) and the fullscreen pinch-to-zoom viewer all work on iOS.
+
+Also this cycle: the recorded Privacy Policy URL was corrected (§2 — the
+`leocoreerp.` subdomain path 301s to the marketing page), promotional text and
+reviewer notes re-entered, phased release re-enabled, and the products
+screenshot reshot after adding catalogue images to four demo products so the
+thumbnail feature is actually visible.
+
+**2026-09-24** — **APPROVED the same day.** Submitted 11:14 UTC, released
+19:33 UTC — about eight hours, the fastest turnaround of any cycle so far.
+`READY_FOR_SALE`, build 11 `VALID`, submission `44264fa4` `COMPLETE`, phased
+release day 1 of 7. No questions again: the trimmed reviewer notes (4816 ->
+3992 chars to fit the 4000 cap) held up, including the "Match by name" warning
+that arbitrary filenames correctly report "not found".
+
+**2026-09-30** — 2.9.0 phased release `COMPLETE`, day 7. At 100% of users.
+
+**2026-10-20** — upstream checked: `origin/main` still at `8069288`
+(2026-09-15), no new commits, branches or tags. Both platforms are on
+2.9.0 / 11 and in sync for the first time since Android shipped 2.8.0.
 
 ## What phased release actually throttles
 
@@ -587,6 +647,36 @@ with "not allowed assistive access".
 Apple rejects screenshots that show only a login screen, a splash screen or an
 empty form, so put real data on screen before capturing. For `07` that meant a
 looked-up document plus a queued file whose name matches it.
+
+**The Simulator also works, and needs no physical device.** The **iPhone 17 Pro
+Max** simulator renders at exactly 1320 x 2868, so it drops in like a device
+capture. That is how `02_products.png` was reshot for 2.9.0:
+
+```
+xcrun simctl boot "iPhone 17 Pro Max"
+xcrun simctl install <udid> build/ios/iphonesimulator/Runner.app
+# clean, consistent status bar - Apple's own marketing time
+xcrun simctl status_bar <udid> override --time "09:41" \
+  --batteryState charged --batteryLevel 100 \
+  --cellularMode active --cellularBars 4 --wifiMode active --wifiBars 3
+xcrun simctl io <udid> screenshot shot.png
+```
+
+**Two gotchas:**
+
+1. **Simulator captures carry an alpha channel and App Store Connect rejects
+   them.** Device captures do not, which is why this never came up before. There
+   is no ImageMagick or PIL on this machine and a `sips` PNG->BMP->PNG round trip
+   *keeps* the alpha, so strip it with CoreGraphics - see
+   `deopaque.swift` in the session scratchpad, or inline:
+   `CGContext(..., bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)`, draw the
+   image, re-encode. Verify with `sips -g hasAlpha`.
+2. **Two screenshots in one set cannot share a `fileName`.** Reserving an upload
+   whose name matches an existing shot fails with a misleading *"An unexpected
+   error occurred on the server side"*. Upload under a new name
+   (`02_products_290.png`), then delete the old one and re-order the set with
+   `PATCH /v1/appScreenshotSets/{id}/relationships/appScreenshots`, which takes
+   the full ordered id list.
 
 ## Appendix D — App Store Connect API without altool
 
