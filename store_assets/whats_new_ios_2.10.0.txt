@@ -1,0 +1,7 @@
+• Cash sale and quotation: find any item fast — search the catalogue by product
+  ID, code, name, brand, category or barcode, and see what you have already
+  added to the document
+• Change the unit price of any item on a cash sale or quotation
+• Leaving a cash sale or quotation with unsaved items now asks whether to save
+  or discard them
+• Stability improvements

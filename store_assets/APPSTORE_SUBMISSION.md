@@ -1,7 +1,7 @@
 # LeoCore ERP — App Store Submission Pack
 
 Bundle ID: `sek.leocore.erp` · Team: `QH862RRRJ6` · Latest shipped: `2.9.0` build `11`
-In flight: nothing (iOS skipped 2.8.0 — Android shipped 2.8.0/vc10, then both met at 2.9.0/vc11)
+In flight: `2.10.0` build `12`
 Target: iPhone only · Min iOS 15.0
 
 ---
@@ -50,7 +50,7 @@ erp,inventory,barcode,stock,invoice,pos,sales,quotation,supplier,warehouse,scann
 ## 4. Promotional Text (≤170)
 
 > Promotional text is **blank on every new version** and must be re-entered.
-> Current: **`promo_text_2.9.0.txt`** (169/170 chars). Shown below is the 2.6.0 text.
+> Current: **`promo_text_2.10.0.txt`** (148/170 chars). Shown below is the 2.6.0 text.
 
 ```
 Run your business from your pocket — scan barcodes, raise invoices and quotations,
@@ -98,13 +98,28 @@ by your company's administrator. It is not a standalone product.
 
 ## 6. What's New in This Version
 
-> Current iOS release notes: **`whats_new_ios_2.9.0.txt`**.
+> Current iOS release notes: **`whats_new_ios_2.10.0.txt`**.
 >
-> iOS went 2.7.0 → 2.9.0 and never shipped 2.8.0, so the iOS note is the 2.8.0 and
-> 2.9.0 bullets merged — `whats_new_2.8.0.txt` / `whats_new_2.9.0.txt` are the
-> Android-only originals and neither is complete on its own. The 2.9.0 "no PDF app"
-> bullet is deliberately dropped: iOS always opens PDFs via Quick Look, so that
-> prompt never fires there and the line would describe behaviour iOS users cannot see.
+> **Keep an iOS-only copy of every release note.** `whats_new_<ver>.txt` is Murtuza's
+> Android text and routinely contains bullets iOS never gets, so it cannot be used
+> verbatim. Dropped so far:
+>
+> - 2.9.0 "no PDF app" prompt — iOS always opens PDFs via Quick Look, so it never fires.
+> - 2.10.0 "Statements and PDFs save to Downloads … Share sends the saved file" — the
+>   Downloads write, the MediaStore call and the "Saved to Downloads" toast all sit
+>   behind `Platform.isAndroid`. On iOS `_savePdf` writes to the app's Documents
+>   directory and `_deliverPdf` opens it with `OpenFilex` exactly as in 2.9.0, so iOS
+>   gained nothing. Verified against the diff, not the commit message.
+> - 2.10.0 "Fixed sharing, PDF opening and barcode scanning on some phones" — that is
+>   the CameraX unpin (see the log for 2026-10-27); iOS registers plugins via pods and
+>   was never affected.
+>
+> iOS also skipped 2.8.0 entirely, so `whats_new_ios_2.9.0.txt` is the 2.8.0 and 2.9.0
+> bullets merged and neither Android file is complete on its own.
+>
+> **Send the notes unwrapped.** The `.txt` files are hard-wrapped for editing, and
+> 2.9.0 was pushed to App Store Connect with those wraps still in, which double-wraps
+> on a narrow phone. Join each bullet onto one line before the PATCH.
 >
 > Shown below is the 2.6.0 text.
 
