@@ -502,6 +502,42 @@ that arbitrary filenames correctly report "not found".
 (2026-09-15), no new commits, branches or tags. Both platforms are on
 2.9.0 / 11 and in sync for the first time since Android shipped 2.8.0.
 
+**2026-10-27** — 2.10.0 build 12 uploaded and submitted, `WAITING_FOR_REVIEW`
+(submission `4dea4458`, 19:55 UTC). Android shipped 2.10.0/vc12 on 2026-10-25
+and iOS followed two days later, so there is no version gap this time.
+
+Unlike 2.9.0, this release **does** touch native code — and still needed no iOS
+work, for reasons worth recording because the commit messages do not say so:
+
+- `MainActivity.kt` gained a `leocore/downloads` MethodChannel (MediaStore
+  save / open / share, ~115 lines). There is no iOS counterpart and none is
+  needed: both call sites in `app_state.dart` sit behind `Platform.isAndroid`,
+  and on iOS `_savePdf` writes to the app's Documents directory and
+  `_deliverPdf` opens it with `OpenFilex` exactly as in 2.9.0. No
+  `MissingPluginException` path exists.
+- `build.gradle.kts` unpinned CameraX. Pinning 1.4.2 against mobile_scanner 7.x
+  threw `NoSuchFieldError` while attaching, which aborted plugin registration
+  and left `open_filex`, `share_plus` and `package_info_plus` missing on some
+  Android phones. **iOS was never affected** — pods register independently of
+  gradle — so the Android "fixed sharing, PDF opening and barcode scanning"
+  bullet does not belong in an iOS release note.
+
+No dependency changed: `pubspec.lock` was untouched and only the version line
+moved. `flutter analyze` clean. The IPA stamped build 12 from pubspec `2.10.0+12`
+with 11 the highest on ASC, as A4b predicts.
+
+Checked before submitting: the privacy URL on **both** `appInfo` records (live
+and editable) still holds the apex `seksolution.com` URL, so the 2.9.0
+correction persisted; all 7 screenshots carried over 1320x2868 and `COMPLETE`;
+review details carried over intact at 3992/4000 with demo `mic`; export
+compliance is declared in the Info.plist (`ITSAppUsesNonExemptEncryption=false`)
+so App Store Connect never asks.
+
+No screenshot was reshot: all three new features live in Cash Sale and
+Quotation, and no screenshot in the set shows either screen.
+
+Build 12 finished processing in **four minutes**, not the 10-30 in A5.
+
 ## What phased release actually throttles
 
 Days 1-7 release to 1 / 2 / 5 / 10 / 20 / 50 / 100 percent of users — but **only
