@@ -1,7 +1,7 @@
 # LeoCore ERP — App Store Submission Pack
 
-Bundle ID: `sek.leocore.erp` · Team: `QH862RRRJ6` · Latest shipped: `2.9.0` build `11`
-In flight: `2.10.0` build `12`
+Bundle ID: `sek.leocore.erp` · Team: `QH862RRRJ6` · Latest shipped: `2.10.0` build `12`
+In flight: nothing (phased release ends 2026-11-02)
 Target: iPhone only · Min iOS 15.0
 
 ---
@@ -537,6 +537,18 @@ No screenshot was reshot: all three new features live in Cash Sale and
 Quotation, and no screenshot in the set shows either screen.
 
 Build 12 finished processing in **four minutes**, not the 10-30 in A5.
+
+**2026-10-27** — **APPROVED in about three and a half hours.** Submitted 19:55
+UTC, released 23:20 UTC — faster still than 2.9.0's eight hours, and the fastest
+of any cycle. `READY_FOR_SALE`, build 12 `VALID`, submission `4dea4458`
+`COMPLETE`, phased release `ACTIVE` day 1 of 7. No reviewer questions for the
+third cycle running.
+
+Review turnaround so far: 2.7.0 one day, 2.9.0 ~8 hours, 2.10.0 ~3.5 hours. The
+reviewer notes have now carried unchanged across three submissions, so leaving
+an approved 3992/4000-char block alone is worth more than squeezing in new
+feature guidance — add a note only when a feature needs seeded data to look like
+it works (the Attach Docs lesson from 2.7.0).
 
 ## What phased release actually throttles
 
