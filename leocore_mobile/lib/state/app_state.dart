@@ -79,9 +79,37 @@ StockLevel stockLevelOf(int stock) => stock <= 0
 ///  • **live** — signed into a real LeoCore server, data from `/api/mobile/v1`.
 ///
 /// Screens read the same getters in both modes, so the UI is mode-agnostic.
-class AppState extends ChangeNotifier {
+class AppState extends ChangeNotifier with WidgetsBindingObserver {
   AppState() {
+    WidgetsBinding.instance.addObserver(this);
     _restoreSession();
+  }
+
+  /// Coming back to the app renews the session, so the sign-in lasts as long
+  /// as the app keeps being opened (each renewal restarts the server's
+  /// refresh-token lifetime). Throttled so quick app switches don't hit the
+  /// server every time.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed || demoMode || sessionLocked) return;
+    final last = _lastRenewal;
+    if (last != null && DateTime.now().difference(last) < const Duration(hours: 1)) return;
+    _renewSession();
+  }
+
+  DateTime? _lastRenewal;
+
+  /// Rotates the tokens. Returns false only when the server rejected the
+  /// session (the user is sent to login); offline keeps the saved session.
+  Future<bool> _renewSession() async {
+    final outcome = await api.renewSession();
+    if (outcome == RefreshOutcome.ok) _lastRenewal = DateTime.now();
+    if (outcome != RefreshOutcome.rejected) return true;
+    if (screen != Screen.login) {
+      await _store.clearTokens();
+      _onSessionExpired();
+    }
+    return false;
   }
 
   /// Global navigator key so state-level flows (e.g. the "no PDF viewer" prompt)
@@ -497,6 +525,10 @@ class AppState extends ChangeNotifier {
     sessionLocked = false;
     screen = Screen.home;
     notifyListeners();
+    // Renew first: it restarts the sign-in lifetime on every app open, and the
+    // loads below then start with a fresh access token instead of all racing
+    // into 401s.
+    if (!await _renewSession()) return;
     try {
       me = await _auth.me();
       notifyListeners();
@@ -2741,6 +2773,7 @@ class AppState extends ChangeNotifier {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _toastTimer?.cancel();
     super.dispose();
   }

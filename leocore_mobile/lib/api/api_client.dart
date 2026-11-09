@@ -282,8 +282,8 @@ class ApiClient {
 
     if (res.statusCode == 401 && auth && !isRetry) {
       // Try one rotating refresh, then retry the original request.
-      final refreshed = await _tryRefresh();
-      if (refreshed) {
+      final outcome = await _refresh();
+      if (outcome == RefreshOutcome.ok) {
         return _send(method, path,
             query: query,
             body: body,
@@ -291,6 +291,11 @@ class ApiClient {
             isRetry: true,
             responseBytes: responseBytes,
             idempotencyKey: idempotencyKey);
+      }
+      // Only a refresh token the server rejected ends the session. If the
+      // phone is offline, keep the session and report a network error.
+      if (outcome == RefreshOutcome.offline) {
+        throw const ApiException('NETWORK', 'No connection to the server. Check your internet and try again.');
       }
       onSessionExpired?.call();
     }
@@ -301,39 +306,55 @@ class ApiClient {
     throw _envelope(res);
   }
 
-  bool _refreshing = false;
+  Future<RefreshOutcome>? _inflightRefresh;
 
-  Future<bool> _tryRefresh() async {
-    if (_refreshing) return false;
-    _refreshing = true;
+  /// Rotates the refresh token. Concurrent callers share one in-flight refresh:
+  /// the server revokes the old token on use, so a second parallel refresh
+  /// would be rejected and wrongly sign the user out.
+  Future<RefreshOutcome> _refresh() =>
+      _inflightRefresh ??= _doRefresh().whenComplete(() => _inflightRefresh = null);
+
+  Future<bool> _tryRefresh() async => await _refresh() == RefreshOutcome.ok;
+
+  /// Renews the session on app open / resume. Each refresh restarts the
+  /// server's refresh-token lifetime, so a regularly used app stays signed in.
+  Future<RefreshOutcome> renewSession() => _refresh();
+
+  Future<RefreshOutcome> _doRefresh() async {
+    final refresh = await _store.refreshToken;
+    if (refresh == null || refresh.isEmpty) return RefreshOutcome.rejected;
+    final Response<dynamic> res;
     try {
-      final refresh = await _store.refreshToken;
-      if (refresh == null || refresh.isEmpty) return false;
-      final res = await _dio.post(
+      res = await _dio.post(
         '$_baseUrl/auth/refresh',
         data: {'refreshToken': refresh},
       );
-      if (res.statusCode == 200) {
-        final m = _asMap(res.data);
-        final access = m['accessToken'] as String?;
-        final newRefresh = m['refreshToken'] as String?;
-        if (access != null && newRefresh != null) {
-          _accessToken = access;
-          await _store.saveTokens(access: access, refresh: newRefresh, scope: m['scope'] as String?);
-          return true;
-        }
-      }
-      // Access revoked during refresh → route to the access-revoked handler
-      // (not a generic session-expiry) so the user sees the real reason.
-      if (res.statusCode == 403 && _errorCode(res) == 'MOBILE_ACCESS_DISABLED') {
-        onAccessRevoked?.call(_envelope(res).message);
-      }
-      return false;
-    } catch (_) {
-      return false;
-    } finally {
-      _refreshing = false;
+    } on DioException {
+      return RefreshOutcome.offline;
     }
+    if (res.statusCode == 200) {
+      final m = _asMap(res.data);
+      final access = m['accessToken'] as String?;
+      final newRefresh = m['refreshToken'] as String?;
+      if (access != null && newRefresh != null) {
+        _accessToken = access;
+        await _store.saveTokens(access: access, refresh: newRefresh, scope: m['scope'] as String?);
+        return RefreshOutcome.ok;
+      }
+    }
+    // Access revoked during refresh → route to the access-revoked handler
+    // (not a generic session-expiry) so the user sees the real reason.
+    final code = _errorCode(res);
+    if ((res.statusCode == 403 && code == 'MOBILE_ACCESS_DISABLED') ||
+        (res.statusCode == 401 && code == 'SESSION_TERMINATED')) {
+      onAccessRevoked?.call(_envelope(res).message);
+      return RefreshOutcome.rejected;
+    }
+    // A server error (5xx, proxy page) isn't a verdict on the token.
+    if (res.statusCode == 401 || res.statusCode == 400 || res.statusCode == 403) {
+      return RefreshOutcome.rejected;
+    }
+    return RefreshOutcome.offline;
   }
 
   ApiException _envelope(Response<dynamic> res) {
@@ -369,4 +390,15 @@ class ApiClient {
         return 'Network error. Please try again.';
     }
   }
+}
+
+/// Result of a refresh-token rotation.
+enum RefreshOutcome {
+  ok,
+
+  /// The server refused the refresh token — the user must sign in again.
+  rejected,
+
+  /// Network or server trouble — keep the session and try again later.
+  offline,
 }
