@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart' show DateFormat;
 
 import '../state/app_state.dart';
 import '../theme/tokens.dart';
@@ -83,22 +84,22 @@ class HomeScreen extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text('${context.tr('Good morning,')} ${app.userFirstName}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-                  Text('04 Jul 2026', style: TextStyle(fontSize: 12, color: lc.mut)),
+                  Text(DateFormat('dd MMM yyyy').format(DateTime.now()), style: TextStyle(fontSize: 12, color: lc.mut)),
                 ],
               ),
               const SizedBox(height: 14),
               // KPI grid 2×2
-              Row(children: [
+              IntrinsicHeight(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 Expanded(child: _Kpi(label: context.tr("Today's sales"), value: app.kpiSales, unit: 'BHD', chip: app.kpiSalesChip, chipFg: lc.ok, chipBg: lc.okbg, onTap: app.mReports ? app.goReports : null)),
                 const SizedBox(width: 10),
                 Expanded(child: _Kpi(label: context.tr('Collections'), value: app.kpiCollections, unit: 'BHD', chip: app.kpiCollectionsChip, chipFg: lc.mut, chipBg: lc.soft)),
-              ]),
+              ])),
               const SizedBox(height: 10),
-              Row(children: [
+              IntrinsicHeight(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 Expanded(child: _Kpi(label: context.tr('Outstanding AR'), value: app.kpiOutstanding, unit: 'BHD', valueColor: lc.prim2, chip: app.kpiArChip, chipFg: lc.bad, chipBg: lc.badbg, onTap: () => app.nav(Screen.customers))),
                 const SizedBox(width: 10),
                 Expanded(child: _Kpi(label: context.tr('Low stock'), value: app.kpiLowStock, unit: context.tr('items'), valueColor: lc.warn, chip: app.kpiLowChip, chipFg: lc.warn, chipBg: lc.warnbg, onTap: app.goLow)),
-              ]),
+              ])),
               const SizedBox(height: 14),
               _SalesTrendCard(),
               const SizedBox(height: 14),
@@ -140,7 +141,7 @@ class _Kpi extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label.toUpperCase(), style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, letterSpacing: 0.6, color: lc.mut)),
+          Text(label.toUpperCase(), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, letterSpacing: 0.6, color: lc.mut)),
           const SizedBox(height: 6),
           Row(
             crossAxisAlignment: CrossAxisAlignment.baseline,
@@ -157,10 +158,16 @@ class _Kpi extends StatelessWidget {
               Text(unit, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: lc.mut)),
             ],
           ),
-          if (chip.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Pill(chip, bg: chipBg, fg: chipFg, size: 11),
-          ],
+          const SizedBox(height: 6),
+          // Every card keeps the chip row (invisible when empty) so all four
+          // KPI cards are the same height.
+          Visibility(
+            visible: chip.isNotEmpty,
+            maintainSize: true,
+            maintainAnimation: true,
+            maintainState: true,
+            child: Pill(chip.isNotEmpty ? chip : ' ', bg: chipBg, fg: chipFg, size: 11),
+          ),
         ],
       ),
     );
