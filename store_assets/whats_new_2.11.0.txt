@@ -1,0 +1,7 @@
+• Stay signed in: the app no longer logs you out unexpectedly
+• Saved quotations: browse past quotations, view items and download or share
+  the PDF
+• Attach Docs: see files already attached, open, share, save or delete them
+• Product photos: thumbnails and a full-screen viewer with share and download
+• Home screen cards are now all the same size, with today's date
+• Fixes and stability improvements

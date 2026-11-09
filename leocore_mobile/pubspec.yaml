@@ -1,7 +1,7 @@
 name: leocore_mobile
 description: "LeoCore ERP Mobile — companion app for LeoCore ERP (Bahrain)."
 publish_to: 'none'
-version: 2.10.0+12
+version: 2.11.0+13
 
 environment:
   sdk: ^3.5.0
