@@ -268,6 +268,23 @@ const Map<String, String> kArabic = {
   'Enter a valid price': 'أدخل سعراً صحيحاً',
   'Apply': 'تطبيق',
   'Save changes?': 'حفظ التغييرات؟',
+
+  // ── Saved quotations ───────────────────────────────────────────────
+  'Quotations': 'عروض الأسعار',
+  'Saved quotations': 'عروض الأسعار المحفوظة',
+  'Saved quotations · PDF': 'عروض الأسعار المحفوظة · PDF',
+  'View past quotations, download PDF': 'عرض عروض الأسعار السابقة وتنزيل PDF',
+  'Search by number or customer': 'ابحث بالرقم أو العميل',
+  'No quotations yet': 'لا توجد عروض أسعار بعد',
+  'No matching quotations': 'لا توجد عروض أسعار مطابقة',
+  'Load more': 'تحميل المزيد',
+  'Could not load the quotation': 'تعذّر تحميل عرض السعر',
+  'Could not load quotations': 'تعذّر تحميل عروض الأسعار',
+  'Saved quotations are available after live sign-in': 'عروض الأسعار المحفوظة متاحة بعد تسجيل الدخول الفعلي',
+  'Accepted': 'مقبول',
+  'Rejected': 'مرفوض',
+  'Expired': 'منتهي',
+  'Invoiced': 'تمت فوترته',
   'This quotation has unsaved items. Save it before leaving, or discard the changes?':
       'يحتوي عرض السعر هذا على أصناف غير محفوظة. هل تريد حفظه قبل المغادرة أم تجاهل التغييرات؟',
   'This cash sale has unsaved items. Save it as a draft before leaving, or discard the changes?':

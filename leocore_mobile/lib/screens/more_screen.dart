@@ -15,6 +15,7 @@ class MoreScreen extends StatelessWidget {
     final items = <(IconData, String, String, VoidCallback)>[
       if (app.mSale) (Icons.receipt_long_outlined, context.tr('Cash sales invoice'), context.tr('Scan items, save as draft'), () => app.newSale()),
       if (app.mSale) (Icons.request_quote_outlined, context.tr('Quotation'), context.tr('Save & send as PDF'), () => app.newQuotation()),
+      if (app.mSale) (Icons.history, context.tr('Saved quotations'), context.tr('View past quotations, download PDF'), app.openQuoteHistory),
       if (app.mCount) (Icons.checklist_rounded, context.tr('Stock count'), context.tr('Expected vs counted, variance'), app.goCount),
       if (app.mCount) (Icons.warning_amber_rounded, context.tr('Stock alerts'), context.tr('Low stock & dead stock'), app.goLow),
       if (app.mReports) (Icons.show_chart, context.tr('Reports'), context.tr('Sales & purchases, top lists'), app.goReports),

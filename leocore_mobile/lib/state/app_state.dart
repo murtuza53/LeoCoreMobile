@@ -47,6 +47,7 @@ enum Screen {
   low,
   invoice,
   quotation,
+  quotations,
   receipt,
   managerReports,
   labels,
@@ -670,6 +671,9 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       case Screen.quotation:
       case Screen.invoice:
         leaveDoc();
+        return true;
+      case Screen.quotations:
+        closeQuoteHistory();
         return true;
       case Screen.settings:
       case Screen.managerReports:
@@ -1391,6 +1395,17 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  /// Saves the PDF to Downloads first, then opens the share sheet with that
+  /// saved file (iOS / no Downloads: shares the private copy).
+  Future<void> _sharePdf(Uint8List bytes, String filename, String subject) async {
+    final (:file, :uri) = await _savePdf(bytes, filename);
+    if (uri != null) {
+      await _downloads.invokeMethod<String>('share', {'uri': uri, 'mime': 'application/pdf', 'subject': subject});
+    } else {
+      await Share.shareXFiles([XFile(file.path, mimeType: 'application/pdf')], subject: subject);
+    }
+  }
+
   Future<void> shareStmt() async {
     if (demoMode) {
       showToast(t('Statement PDF is available after live sign-in'));
@@ -1410,15 +1425,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     }
     try {
       if (pdf == null) return;
-      // Save to Downloads first, then share that saved file.
-      final (:file, :uri) = await _savePdf(pdf.bytes, pdf.filename);
-      final subject = 'Account statement — $statementPartyName';
-      if (uri != null) {
-        await _downloads.invokeMethod<String>(
-            'share', {'uri': uri, 'mime': 'application/pdf', 'subject': subject});
-      } else {
-        await Share.shareXFiles([XFile(file.path, mimeType: 'application/pdf')], subject: subject);
-      }
+      await _sharePdf(pdf.bytes, pdf.filename, 'Account statement — $statementPartyName');
     } catch (e) {
       debugPrint('Statement share failed: $e');
       showToast(t('Could not share the statement'));
@@ -1944,6 +1951,106 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       showToast(t('Could not download the quotation PDF'));
     } finally {
       quotePdfBusy = false;
+      notifyListeners();
+    }
+  }
+
+  // ── saved quotations ───────────────────────────────────────────────
+  static const _quoteHistoryPageSize = 30;
+  List<QuotationSummary> quoteHistory = [];
+  bool quoteHistoryLoading = false;
+  bool quoteHistoryHasMore = false;
+  String? quoteHistoryError;
+  String quoteHistoryQuery = '';
+  int _quoteHistoryPage = 0;
+  Screen _quoteHistoryReturn = Screen.more;
+
+  /// Quotation whose PDF is being fetched (download or share), for row spinners.
+  int? quotePdfId;
+
+  /// Loaded quotations filtered by number or customer name.
+  List<QuotationSummary> get quoteHistoryRows {
+    final q = quoteHistoryQuery.trim().toLowerCase();
+    if (q.isEmpty) return quoteHistory;
+    return quoteHistory
+        .where((x) => x.number.toLowerCase().contains(q) || x.customer.toLowerCase().contains(q))
+        .toList();
+  }
+
+  void openQuoteHistory() {
+    _quoteHistoryReturn = screen == Screen.quotation ? Screen.quotation : Screen.more;
+    quoteHistoryQuery = '';
+    nav(Screen.quotations);
+    loadQuoteHistory();
+  }
+
+  void closeQuoteHistory() => nav(_quoteHistoryReturn);
+
+  void setQuoteHistoryQuery(String v) {
+    quoteHistoryQuery = v;
+    notifyListeners();
+  }
+
+  /// Loads the first page, or the next one with [more].
+  Future<void> loadQuoteHistory({bool more = false}) async {
+    if (quoteHistoryLoading) return;
+    if (demoMode) {
+      quoteHistory = [];
+      quoteHistoryHasMore = false;
+      quoteHistoryError = t('Saved quotations are available after live sign-in');
+      notifyListeners();
+      return;
+    }
+    quoteHistoryLoading = true;
+    quoteHistoryError = null;
+    notifyListeners();
+    try {
+      final page = more ? _quoteHistoryPage + 1 : 1;
+      final rows = await _repo.quotations(page: page, pageSize: _quoteHistoryPageSize);
+      quoteHistory = more ? [...quoteHistory, ...rows] : rows;
+      _quoteHistoryPage = page;
+      quoteHistoryHasMore = rows.length >= _quoteHistoryPageSize;
+    } on ApiException catch (e) {
+      quoteHistoryError = e.message;
+    } catch (_) {
+      quoteHistoryError = t('Could not load quotations');
+    } finally {
+      quoteHistoryLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<QuotationDetail?> loadQuotationDetail(int id) async {
+    try {
+      return await _repo.quotation(id);
+    } on ApiException catch (e) {
+      showToast(e.message);
+    } catch (_) {
+      showToast(t('Could not load the quotation'));
+    }
+    return null;
+  }
+
+  /// Saves the quotation PDF to Downloads and opens it.
+  Future<void> downloadSavedQuotationPdf(int id) => _withQuotePdf(id, (pdf) => _deliverPdf(pdf.bytes, pdf.filename));
+
+  /// Saves the quotation PDF to Downloads, then opens the share sheet.
+  Future<void> shareQuotationPdf(QuotationSummary q) => _withQuotePdf(
+      q.id, (pdf) => _sharePdf(pdf.bytes, pdf.filename, 'Quotation ${q.number} — ${q.customer}'));
+
+  Future<void> _withQuotePdf(int id, Future<void> Function(({Uint8List bytes, String filename}) pdf) use) async {
+    if (quotePdfId != null) return;
+    quotePdfId = id;
+    notifyListeners();
+    try {
+      final pdf = _validatePdf(await _repo.quotationPdf(id));
+      if (pdf != null) await use(pdf);
+    } on ApiException catch (e) {
+      showToast(e.message);
+    } catch (_) {
+      showToast(t('Could not download the quotation PDF'));
+    } finally {
+      quotePdfId = null;
       notifyListeners();
     }
   }

@@ -166,6 +166,100 @@ class SalesDocResult {
 }
 
 /// Repository over the read + item-master endpoints.
+/// A row of the saved-quotations list (`GET /sales/quotations`).
+class QuotationSummary {
+  final int id;
+  final String number;
+  final DateTime? date;
+  final DateTime? expiryDate;
+  final String customer;
+  final String status;
+  final double grandTotal;
+  final String currency;
+  const QuotationSummary({
+    required this.id,
+    required this.number,
+    this.date,
+    this.expiryDate,
+    this.customer = '',
+    this.status = '',
+    this.grandTotal = 0,
+    this.currency = 'BHD',
+  });
+
+  factory QuotationSummary.fromJson(Map j) => QuotationSummary(
+        id: _i(j, ['id']),
+        number: _s(j, ['number']),
+        date: DateTime.tryParse(_s(j, ['date'])),
+        expiryDate: DateTime.tryParse(_s(j, ['expiryDate'])),
+        customer: _s(j, ['customer']),
+        status: _s(j, ['status']),
+        grandTotal: _d(j, ['grandTotal']),
+        currency: _s(j, ['currency'], 'BHD'),
+      );
+}
+
+/// One line of a saved quotation. `unitPrice` is always excl. VAT (1.6.51+);
+/// money shown to the user comes from `net` / `total`.
+class QuotationLine {
+  final String name;
+  final double qty;
+  final double unitPrice;
+  final double net;
+  final double total;
+  const QuotationLine({required this.name, this.qty = 0, this.unitPrice = 0, this.net = 0, this.total = 0});
+
+  factory QuotationLine.fromJson(Map j) => QuotationLine(
+        // A typed line description overrides the item name.
+        name: _s(j, ['description']).trim().isNotEmpty ? _s(j, ['description']).trim() : _s(j, ['name']),
+        qty: _d(j, ['qty']),
+        unitPrice: _d(j, ['unitPrice']),
+        net: _d(j, ['net']),
+        total: _d(j, ['total']),
+      );
+}
+
+/// A saved quotation with its lines (`GET /sales/quotations/{id}`).
+class QuotationDetail {
+  final QuotationSummary head;
+  final double subTotal;
+  final double discount;
+  final double vatAmount;
+  final String notes;
+  final List<QuotationLine> lines;
+  const QuotationDetail({
+    required this.head,
+    this.subTotal = 0,
+    this.discount = 0,
+    this.vatAmount = 0,
+    this.notes = '',
+    this.lines = const [],
+  });
+
+  factory QuotationDetail.fromJson(Map j) {
+    final c = j['customer'];
+    return QuotationDetail(
+      head: QuotationSummary(
+        id: _i(j, ['id']),
+        number: _s(j, ['number']),
+        date: DateTime.tryParse(_s(j, ['date'])),
+        expiryDate: DateTime.tryParse(_s(j, ['expiryDate'])),
+        customer: c is Map ? _s(c, ['name']) : _s(j, ['customer']),
+        status: _s(j, ['status']),
+        grandTotal: _d(j, ['grandTotal']),
+        currency: _s(j, ['currency'], 'BHD'),
+      ),
+      subTotal: _d(j, ['subTotal']),
+      discount: _d(j, ['discount']),
+      vatAmount: _d(j, ['vatAmount']),
+      notes: _s(j, ['notes']),
+      lines: [
+        for (final l in (j['lines'] is List ? j['lines'] as List : const [])) if (l is Map) QuotationLine.fromJson(l),
+      ],
+    );
+  }
+}
+
 class LeoRepository {
   LeoRepository(this._client);
   final ApiClient _client;
@@ -281,6 +375,15 @@ class LeoRepository {
     );
     return SalesDocResult.fromJson(j);
   }
+
+  /// Saved quotations, newest first.
+  Future<List<QuotationSummary>> quotations({int page = 1, int pageSize = 30}) async {
+    final list = await _client.getList('/sales/quotations', query: {'page': page, 'pageSize': pageSize});
+    return list.whereType<Map>().map(QuotationSummary.fromJson).toList();
+  }
+
+  Future<QuotationDetail> quotation(int id) async =>
+      QuotationDetail.fromJson(await _client.getJson('/sales/quotations/$id'));
 
   Future<({List<int> bytes, String filename, String contentType})> quotationPdf(int id) {
     return _client.downloadBytes('/sales/quotations/$id/pdf', fallbackName: 'quotation_$id.pdf');
@@ -420,34 +523,6 @@ class LeoRepository {
     return list
         .whereType<Map>()
         .map((m) => (accountId: _i(m, ['accountId', 'id']), name: _s(m, ['name']), type: _s(m, ['type'])))
-        .toList();
-  }
-
-  // ── Quotation history ──────────────────────────────────────────────────
-  Future<List<({int id, String number, String date, String customer, String status, double total})>> quotations({
-    String? from,
-    String? to,
-    int? customerId,
-    int page = 1,
-    int pageSize = 25,
-  }) async {
-    final list = await _client.getList('/sales/quotations', query: {
-      'page': page,
-      'pageSize': pageSize,
-      if (from != null) 'from': from,
-      if (to != null) 'to': to,
-      if (customerId != null) 'customerId': customerId,
-    });
-    return list
-        .whereType<Map>()
-        .map((m) => (
-              id: _i(m, ['id']),
-              number: _s(m, ['number']),
-              date: _fmtDate(_s(m, ['date'])),
-              customer: _s(m, ['customer', 'customerName']),
-              status: _s(m, ['status']),
-              total: _d(m, ['grandTotal', 'total']),
-            ))
         .toList();
   }
 

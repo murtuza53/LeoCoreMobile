@@ -30,6 +30,16 @@ class QuotationScreen extends StatelessWidget {
               onBack: app.leaveDoc,
               actions: [
                 GestureDetector(
+                  onTap: app.openQuoteHistory,
+                  child: Container(
+                    width: 42,
+                    height: 42,
+                    margin: const EdgeInsetsDirectional.only(end: 8),
+                    decoration: BoxDecoration(color: lc.card, border: Border.all(color: lc.line), borderRadius: BorderRadius.circular(12)),
+                    child: Tooltip(message: context.tr('Saved quotations'), child: Icon(Icons.history, size: 19, color: lc.icon)),
+                  ),
+                ),
+                GestureDetector(
                   onTap: app.openScan,
                   child: Container(
                     height: 42,
