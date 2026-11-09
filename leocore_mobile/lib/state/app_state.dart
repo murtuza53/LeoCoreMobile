@@ -2207,9 +2207,16 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   // Files staged for upload (local path + display name).
   final List<({String path, String name})> attachFiles = [];
 
+  /// Files already on the looked-up document (1.6.52+); null on older servers.
+  List<DocAttachment>? docAttachments;
+
+  /// Attachment being fetched or deleted, for row spinners.
+  int? attachmentBusyId;
+
   void openAttachDocs() {
     docNumber = '';
     docLookup = null;
+    docAttachments = null;
     attachResult = null;
     attachFiles.clear();
     pageShots.clear();
@@ -2221,7 +2228,10 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   void setDocNumber(String v) {
     docNumber = v;
     // Editing the number invalidates a previous lookup.
-    if (docLookup != null) docLookup = null;
+    if (docLookup != null) {
+      docLookup = null;
+      docAttachments = null;
+    }
     notifyListeners();
   }
 
@@ -2242,6 +2252,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
     try {
       docLookup = await _repo.documentLookup(number);
+      docAttachments = docLookup!.attachments;
     } on ApiException catch (e) {
       showToast(e.message);
     } catch (_) {
@@ -2553,6 +2564,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       final res = await _repo.attachDocuments(look.docNumber.isNotEmpty ? look.docNumber : docNumber.trim(),
           attachFiles.map((f) => f.path).toList());
       attachResult = res;
+      if (res.attachments != null) docAttachments = res.attachments;
       if (res.success && res.attached > 0) {
         showToast('${res.attached} ${t('file(s) attached')}');
         attachFiles.clear();
@@ -2565,6 +2577,119 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       showToast(t('Could not attach the files'));
     } finally {
       attachBusy = false;
+      notifyListeners();
+    }
+  }
+
+  /// Pull-to-refresh / resync of the looked-up document's attachments.
+  Future<void> reloadAttachments() async {
+    final look = docLookup;
+    if (look == null || !look.found || docAttachments == null) return;
+    try {
+      docAttachments = await _repo.documentAttachments(look.docType, look.docId);
+      notifyListeners();
+    } catch (_) {/* keep the current list */}
+  }
+
+  /// Downloads the attachment (with the Bearer token) to a temp file.
+  Future<File?> _fetchAttachment(DocAttachment a) async {
+    if (attachmentBusyId != null) return null;
+    attachmentBusyId = a.id;
+    notifyListeners();
+    try {
+      final res = await _repo.attachmentFile(a);
+      final dir = await getTemporaryDirectory();
+      final name = a.fileName.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+      final file = File('${dir.path}/$name');
+      await file.writeAsBytes(res.bytes, flush: true);
+      return file;
+    } on ApiException catch (e) {
+      showToast(e.message);
+      // Deleted by someone else meanwhile → refresh the list.
+      if (e.code == 'NOT_FOUND') await reloadAttachments();
+    } catch (_) {
+      showToast(t('Could not open the file'));
+    } finally {
+      attachmentBusyId = null;
+      notifyListeners();
+    }
+    return null;
+  }
+
+  /// Opens the attachment in the phone's app for its type (image viewer, PDF
+  /// app, …); falls back to the share sheet when nothing can open it.
+  Future<void> openAttachment(DocAttachment a) async {
+    final file = await _fetchAttachment(a);
+    if (file == null) return;
+    try {
+      final res = await OpenFilex.open(file.path, type: a.mime);
+      if (res.type == ResultType.done) return;
+    } catch (_) {/* fall back to share */}
+    await Share.shareXFiles([XFile(file.path, mimeType: a.mime)]);
+  }
+
+  Future<void> shareAttachment(DocAttachment a) async {
+    final file = await _fetchAttachment(a);
+    if (file == null) return;
+    try {
+      await Share.shareXFiles([XFile(file.path, mimeType: a.mime)], subject: a.fileName);
+    } catch (_) {
+      showToast(t('Could not share the file'));
+    }
+  }
+
+  /// Saves the attachment to the phone's Downloads folder (Android).
+  Future<void> saveAttachment(DocAttachment a) async {
+    final file = await _fetchAttachment(a);
+    if (file == null) return;
+    if (!Platform.isAndroid) {
+      await Share.shareXFiles([XFile(file.path, mimeType: a.mime)]);
+      return;
+    }
+    try {
+      await _downloads.invokeMethod<String>(
+          'save', {'bytes': await file.readAsBytes(), 'name': a.fileName, 'mime': a.mime});
+      showToast('${t('Saved to Downloads')} · ${a.fileName}');
+    } on PlatformException catch (_) {
+      showToast(t('Could not save the file'));
+    }
+  }
+
+  /// Deletes an attachment after the user confirms. Removes the file for the
+  /// web too and cannot be undone.
+  Future<void> deleteAttachment(DocAttachment a) async {
+    final ctx = navigatorKey.currentContext;
+    if (ctx == null || attachmentBusyId != null) return;
+    final ok = await showDialog<bool>(
+      context: ctx,
+      builder: (dctx) => AlertDialog(
+        title: Text(t('Delete attachment?'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+        content: Text(
+          '${a.fileName}\n\n${t('The file is removed for everyone, including the web app. This cannot be undone.')}',
+          style: const TextStyle(fontSize: 13.5, height: 1.5),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dctx, false), child: Text(t('Cancel'))),
+          TextButton(
+            onPressed: () => Navigator.pop(dctx, true),
+            child: Text(t('Delete'), style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFFB3261E))),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    attachmentBusyId = a.id;
+    notifyListeners();
+    try {
+      docAttachments = await _repo.deleteAttachment(a.id);
+      showToast(t('Attachment deleted'));
+    } on ApiException catch (e) {
+      showToast(e.message);
+      if (e.code == 'NOT_FOUND') await reloadAttachments();
+    } catch (_) {
+      showToast(t('Could not delete the attachment'));
+    } finally {
+      attachmentBusyId = null;
       notifyListeners();
     }
   }

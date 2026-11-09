@@ -1,6 +1,7 @@
 import 'dart:io' show File;
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart' show DateFormat;
 import 'package:provider/provider.dart';
 
 import '../models/documents.dart';
@@ -111,7 +112,23 @@ class _AttachDocsScreenState extends State<AttachDocsScreen> {
         ),
         const SizedBox(height: 12),
         if (look != null && !app.docLookupBusy) _resultBanner(context, look),
-        if (found) ...[
+        if (found && app.docAttachments != null) ...[
+          const SizedBox(height: 16),
+          SectionLabel('${context.tr('Attached')} (${app.docAttachments!.length})'),
+          const SizedBox(height: 8),
+          if (app.docAttachments!.isEmpty)
+            Text(context.tr('Nothing attached yet'), style: TextStyle(fontSize: 13, color: lc.mut))
+          else
+            for (final a in app.docAttachments!) ...[
+              _AttachmentRow(a, canDelete: look!.canDelete),
+              const SizedBox(height: 8),
+            ],
+        ],
+        if (found && !look!.canAttach) ...[
+          const SizedBox(height: 12),
+          Text(context.tr('You can view these files but not attach new ones.'), style: TextStyle(fontSize: 12, color: lc.mut)),
+        ],
+        if (found && look!.canAttach) ...[
           const SizedBox(height: 16),
           SectionLabel(context.tr('Add files')),
           const SizedBox(height: 10),
@@ -343,7 +360,8 @@ class _AttachDocsScreenState extends State<AttachDocsScreen> {
   // ── Sticky action bar ───────────────────────────────────────────────────
   Widget _buildStickyBar(BuildContext context, AppState app) {
     final lc = context.lc;
-    final show = app.docBatchMode ? app.batchFoundCount > 0 : (app.docLookup?.found == true);
+    final look = app.docLookup;
+    final show = app.docBatchMode ? app.batchFoundCount > 0 : (look != null && look.found && look.canAttach);
     if (!show) return const SizedBox.shrink();
     return Positioned(
       left: 0,
@@ -581,6 +599,88 @@ class _Source extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// One file already attached to the document: thumbnail or type icon, name,
+/// size, when / who. Tap opens it; the menu shares, saves or deletes it.
+class _AttachmentRow extends StatelessWidget {
+  final DocAttachment a;
+  final bool canDelete;
+  const _AttachmentRow(this.a, {required this.canDelete});
+
+  static String _size(int b) {
+    if (b <= 0) return '';
+    if (b < 1024) return '$b B';
+    if (b < 1024 * 1024) return '${(b / 1024).toStringAsFixed(0)} KB';
+    return '${(b / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final lc = context.lc;
+    final app = context.watch<AppState>();
+    final busy = app.attachmentBusyId == a.id;
+    final meta = [
+      _size(a.size),
+      if (a.uploadedAt != null) DateFormat('dd MMM yyyy, HH:mm').format(a.uploadedAt!),
+      if (a.uploadedBy.isNotEmpty) a.uploadedBy,
+    ].where((x) => x.isNotEmpty).join(' · ');
+
+    return LcCard(
+      onTap: busy ? null : () => app.openAttachment(a),
+      padding: const EdgeInsets.fromLTRB(10, 8, 2, 8),
+      child: Row(children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: SizedBox(
+            width: 46,
+            height: 46,
+            child: a.isImage && a.url.isNotEmpty
+                ? AuthedNetworkImage(url: app.imageUrl(a.url), compact: true)
+                : Container(
+                    color: lc.soft,
+                    alignment: Alignment.center,
+                    child: Icon(a.isPdf ? Icons.picture_as_pdf_outlined : Icons.insert_drive_file_outlined, size: 22, color: lc.icon),
+                  ),
+          ),
+        ),
+        const SizedBox(width: 11),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(a.fileName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+              if (meta.isNotEmpty)
+                Text(meta, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11.5, color: lc.mut)),
+            ],
+          ),
+        ),
+        SizedBox(
+          width: 44,
+          height: 44,
+          child: busy
+              ? Padding(padding: const EdgeInsets.all(12), child: CircularProgressIndicator(strokeWidth: 2, color: lc.prim))
+              : PopupMenuButton<String>(
+                  icon: Icon(Icons.more_vert, size: 20, color: lc.mut),
+                  onSelected: (v) => switch (v) {
+                    'open' => app.openAttachment(a),
+                    'share' => app.shareAttachment(a),
+                    'save' => app.saveAttachment(a),
+                    'delete' => app.deleteAttachment(a),
+                    _ => null,
+                  },
+                  itemBuilder: (_) => [
+                    PopupMenuItem(value: 'open', child: Text(context.tr('Open'))),
+                    PopupMenuItem(value: 'share', child: Text(context.tr('Share'))),
+                    PopupMenuItem(value: 'save', child: Text(context.tr('Save to Downloads'))),
+                    if (canDelete)
+                      PopupMenuItem(value: 'delete', child: Text(context.tr('Delete'), style: TextStyle(color: lc.bad))),
+                  ],
+                ),
+        ),
+      ]),
     );
   }
 }

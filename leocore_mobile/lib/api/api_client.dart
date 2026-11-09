@@ -133,6 +133,11 @@ class ApiClient {
     await _send('DELETE', path, auth: auth);
   }
 
+  Future<Map<String, dynamic>> deleteJson(String path, {bool auth = true}) async {
+    final res = await _send('DELETE', path, auth: auth);
+    return _asMap(res.data);
+  }
+
   /// Uploads files as `multipart/form-data` under [field].
   Future<Map<String, dynamic>> postMultipart(
     String path, {

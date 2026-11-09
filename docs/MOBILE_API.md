@@ -1,75 +1,132 @@
 # LeoCore Mobile API — Reference (v1)
 
-For the mobile app team. **Current as of LeoCore ERP 1.6.52 (9 Nov 2026).** This is the complete
-reference; the dated notes below give extra detail and test steps for individual changes:
+For the mobile app team. **Current as of LeoCore ERP 1.6.52 (9 Nov 2026).** This one file is the complete
+reference: it replaces the separate notes (`MOBILE_ACCESS_API.md`, `MOBILE_API_UPDATE_2026-08.md`,
+`MOBILE_API_UPDATE_2026-09.md`, `MOBILE_API_DOCUMENT_UPLOAD.md`), whose content is merged in below.
 
-- [`MOBILE_ACCESS_API.md`](MOBILE_ACCESS_API.md) — per-employee mobile access (`MOBILE_ACCESS_DISABLED`)
-- [`MOBILE_API_UPDATE_2026-08.md`](MOBILE_API_UPDATE_2026-08.md) — single-device sessions (`SESSION_TERMINATED`), label empty state
-- [`MOBILE_API_UPDATE_2026-09.md`](MOBILE_API_UPDATE_2026-09.md) — `onHand` on the product list
-- [`MOBILE_API_DOCUMENT_UPLOAD.md`](MOBILE_API_DOCUMENT_UPLOAD.md) — attach scanned documents to records
-
-What changed recently is listed in **§7**.
-
-- **Base URL:** `{serverBaseUrl}/api/mobile/v1`
+- **Base URL:** `{serverBaseUrl}/api/mobile/v1` (e.g. `https://erp.client.com/api/mobile/v1`)
 - **Auth:** Bearer JWT — header `Authorization: Bearer <accessToken>`
-- **Content type:** `application/json` for all JSON bodies (image upload uses `multipart/form-data`)
-- **All responses are JSON.** Errors use one envelope (see §3).
+- **Content type:** `application/json` for JSON bodies; uploads use `multipart/form-data`
+- **All responses are JSON** except files/PDFs. Errors use one envelope (§3).
+- **No `companyId` parameter anywhere** — company scope comes from the token.
+
+## Contents
+
+1. [Authentication & sessions](#1-authentication--sessions)
+2. [Scopes & permissions](#2-scopes--permissions)
+3. [Errors & access control](#3-errors--access-control)
+4. [Conventions](#4-conventions)
+5. [Endpoint reference](#5-endpoint-reference)
+6. [Products & pictures](#6-products--pictures)
+7. [Barcode labels](#7-barcode-labels)
+8. [Attach Docs (document attachments)](#8-attach-docs-document-attachments)
+9. [Manager reports](#9-manager-reports)
+10. [Write request bodies](#10-write-request-bodies)
+11. [App checklist & tests](#11-app-checklist--tests)
+12. [What changed (newest first)](#12-what-changed-newest-first)
 
 ---
 
-## 1. Authentication
+## 1. Authentication & sessions
 
 JWT access token + rotating refresh token. The access token is short-lived; use `expiresIn`
 (seconds, returned by login/refresh) to schedule refresh. Refresh tokens are **single-use**
-(rotated on every refresh). Access-token claims: user id, name, roles, `companyId`, `scope`.
+(rotated on every refresh). Access-token claims: user id, name, roles, `companyId`, `scope`, and an
+internal `sid` (session id) that the app never reads or sends.
 
 ### POST `/auth/login`
 ```json
-{ "username": "john", "password": "••••", "deviceId": "uuid-optional", "deviceName": "Samsung A54 (optional)" }
+{ "username": "jsmith", "password": "••••", "deviceId": "a1b2c3-stable-per-install", "deviceName": "John's iPhone 15" }
 ```
+- **`deviceId`** — a **stable per-install identifier**, so a re-login from the same phone is not reported
+  as "another device".
+- **`deviceName`** — human-friendly; it is shown to the user in the displacement message.
+
 **200**
 ```json
 {
   "accessToken": "eyJ…",
   "refreshToken": "…",
-  "expiresIn": 3600,
+  "expiresIn": 1800,
   "scope": "read write",
-  "user": { "id": "…", "name": "john", "roles": ["Sales"] },
+  "user": { "id": "…", "name": "jsmith", "roles": ["Sales"] },
   "session": {
-    "displacedOtherDevice": false,
-    "previousDeviceName": null,
-    "previousLastSeenAt": null,
-    "message": null            // non-null → show it: the account was open on another device, now signed out
+    "displacedOtherDevice": true,
+    "previousDeviceName": "John's iPad",
+    "previousLastSeenAt": "2026-08-18T18:12:03Z",
+    "message": "This account was already signed in on \"John's iPad\". That device has been signed out automatically."
   }
 }
 ```
-**One live session per account.** A new login signs out every other device; that device gets
-`401 SESSION_TERMINATED` on its next call (§3). Refresh keeps the same session.
+When the account was not signed in elsewhere, `session` is
+`{ "displacedOtherDevice": false, "previousDeviceName": null, "previousLastSeenAt": null, "message": null }`.
+**If `session.message` is non-null, show it** (toast/alert).
+
+Login can fail with `401 UNAUTHENTICATED`, `401 LOCKED_OUT` or `403 MOBILE_ACCESS_DISABLED` (§3).
 
 ### POST `/auth/refresh`
 ```json
 { "refreshToken": "…" }
 ```
 **200** → `{ "accessToken", "refreshToken", "expiresIn", "scope" }` (both tokens are new — store them).
+A refresh keeps the **same** session alive; only a new **login** signs other devices out.
 
 ### POST `/auth/logout`
 ```json
 { "refreshToken": "…" }
 ```
-**204** No Content. (Revokes the refresh token. Also clear tokens locally.)
+**204** No Content. Revokes the refresh token; also clear tokens locally.
 
-### GET `/auth/me`  *(auth required)*
+### GET `/auth/me`
 **200** → `{ "id", "name", "email", "roles": [...], "scope": "read" | "read write" }`
+
+### 1a. One live session per account
+
+- Each account holds **one active session**. When the user logs in on device **B**, device **A** is signed
+  out on its **very next API call** (not only when its token expires).
+- Device A then gets **`401 SESSION_TERMINATED`** on any endpoint. Treat it as a hard sign-out: clear tokens,
+  go to login, show `error.message`. **Do not refresh** — the old refresh token returns `401 UNAUTHENTICATED`.
+
+```
+HTTP/1.1 401 Unauthorized
+{ "error": { "code": "SESSION_TERMINATED",
+             "message": "You have been signed out because your account was signed in on another device." } }
+```
 
 ---
 
-## 2. Scopes
+## 2. Scopes & permissions
 
-The `scope` claim controls write access to **product** edits:
-- `read` — read-only everywhere; product-edit endpoints are still auth-gated by permission.
-- `read write` — user may edit product barcode/model/price and manage product images.
+**Scope** (`scope` claim) controls write access to **product** edits:
+- `read` — read-only; product edit/image endpoints refuse.
+- `read write` — may edit product barcode/model/price and manage product images.
 
-Other write endpoints (sales, receipts, stock count) are gated by RBAC permissions on the user's role, not by `scope`.
+**Permissions (RBAC).** Everything else is gated by the user's role permissions, group **"Mobile App"** on
+the web permission page (User Roles). Admin/SuperAdmin always have every permission.
+
+| Feature key | Name on permission page | Access used |
+|---|---|---|
+| `MobileAccess` | Mobile App (Access) | View — may use the app at all |
+| `MobileDashboard` | Dashboard & KPIs | View |
+| `MobileProducts` | Products | View; Edit = barcode/model/price/images |
+| `MobileLabels` | Barcode Labels | View + Print |
+| `MobileCustomers` / `MobileSuppliers` | Customers / Suppliers | View |
+| `MobileStatements` | Statements & Ledgers | View |
+| `MobileStockLedger` | Stock Ledger | View |
+| `MobileDocuments` | Document Attachments | View = look up/list/open; Edit = attach; **Delete = delete an attachment** |
+| `MobileReports` | Reports | View (sales analytics, §9) |
+| `MobileFinanceReports` | Finance Reports | View (AR/cash/VAT/margin/valuation, §9) |
+| `MobileCashSales` | Cash Sales | View + Create + Print |
+| `MobileQuotations` | Quotations | View + Create + Print |
+| `MobileStockCount` | Stock Counting | View + Create |
+| `MobileReceipts` | Receipts | View + Create |
+
+**Build the app menu from `GET /menu`** — it returns only the items the user has View on:
+```json
+{ "version": 1, "items": [ { "id": "documents", "title": "Attach Docs", "icon": "attach_file",
+  "route": "/documents", "section": "Transactions", "order": 110, "canEdit": true } ] }
+```
+A missing permission on an endpoint → `403 FORBIDDEN`.
 
 ---
 
@@ -86,27 +143,53 @@ All errors share this envelope:
 | 400 | `IDEMPOTENCY_KEY_REQUIRED` | A write was sent without the `Idempotency-Key` header (§4). |
 | 401 | `UNAUTHENTICATED` | Bad credentials, or expired/invalid token → run the refresh flow; if refresh also 401, go to login. |
 | 401 | `LOCKED_OUT` | Too many failed logins. Tell the user to wait. |
-| 401 | `SESSION_TERMINATED` | The account signed in on another device. Show `error.message`, clear tokens, go to login. **Do not** refresh. |
-| 403 | `FORBIDDEN` | The account/role isn't allowed the mobile app at all. |
-| 403 | **`MOBILE_ACCESS_DISABLED`** | **NEW.** The user's mobile access is off (never granted, revoked, or seat reassigned). Can be returned by **login**, **refresh**, and **any** data endpoint. |
+| 401 | `SESSION_TERMINATED` | Signed in on another device (§1a). Clear tokens, show message, go to login. **No refresh.** |
+| 403 | `FORBIDDEN` | The role lacks the permission for this endpoint (§2). |
+| 403 | `MOBILE_ACCESS_DISABLED` | The user's mobile access is off (§3a). Clear tokens, show message, go to login. **No refresh.** |
+| 404 | `NOT_FOUND` | The record doesn't exist (or was deleted). |
+| 409 | `STORAGE_NOT_CONFIGURED` | File storage is not set up on the server (attachments). |
 
-**`MOBILE_ACCESS_DISABLED` is the key change.** Mobile access is now granted **per employee** and
-limited by the customer's **Mobile device licenses**. The server checks the user's access flag on
-**every request**, so revoking access blocks the user on their **next call** — not at token expiry.
+### 3a. Per-employee mobile access — `MOBILE_ACCESS_DISABLED`
 
-**Required app handling:** on any `403` with `code === "MOBILE_ACCESS_DISABLED"` →
-clear tokens, show `error.message`, return to login, and **do not** run the refresh flow.
-Full details + test steps: [`MOBILE_ACCESS_API.md`](MOBILE_ACCESS_API.md).
+Mobile access is granted **per employee** and limited by the customer's **mobile device licences**. An admin
+can switch a user's access off at any time, or reassign the seat. The server checks the access flag on
+**every request**, so revoking blocks the user on their **next call**, not at token expiry.
+
+```json
+{ "error": { "code": "MOBILE_ACCESS_DISABLED",
+             "message": "Your mobile access has been disabled. Please contact your administrator." } }
+```
+
+| Returned by | When |
+|---|---|
+| `POST /auth/login` | Access is off → login refused |
+| `POST /auth/refresh` | Access was turned off since the last token (the refresh token is revoked too) |
+| **any** data endpoint | Access was turned off while the user was signed in |
+
+The seat limit is enforced by the server; the app doesn't track seats.
+
+### 3b. HTTP layer (interceptor)
+
+```
+onResponse(res):
+    code = res.body?.error?.code
+    if res.status == 403 and code == "MOBILE_ACCESS_DISABLED"
+       or res.status == 401 and code == "SESSION_TERMINATED":
+        clearTokens(); showMessage(res.body.error.message); navigateToLogin()
+        return                      // hard sign-out — do NOT refresh
+    if res.status == 401:           // UNAUTHENTICATED
+        refresh once and retry; if refresh fails → login
+```
 
 ---
 
 ## 4. Conventions
 
-- **Pagination:** list endpoints accept `?page=1&pageSize=25` (and usually `?search=`). Responses
-  are paginated JSON (items + paging info).
+- **Pagination:** list endpoints accept `?page=1&pageSize=25` (and usually `?search=`); responses are
+  `{ page, pageSize, total, items:[…] }`.
 - **Money/quantities:** decimals in the company base currency (BHD, 3 dp by default). VAT handling
   follows `pricesIncludeVat` on write requests.
-- **Dates:** ISO-8601 (`2026-08-15` or full timestamp). Optional date fields default server-side.
+- **Dates:** ISO-8601 (`2026-08-15` or a full timestamp). Timestamps ending in `Z` are UTC — show them in local time.
 - **`Idempotency-Key` header is required** on `POST /sales/cash-invoice/draft`, `/sales/cash-invoice`,
   `/sales/quotations`, `/inventory/stock-count` and `/receipts`. Send a fresh UUID per user action and
   **reuse the same key when retrying** that action: a repeat returns the first result instead of creating
@@ -116,57 +199,34 @@ Full details + test steps: [`MOBILE_ACCESS_API.md`](MOBILE_ACCESS_API.md).
   `pricesIncludeVat` to say which it is; the server stores the line's `unitPrice` **excluding VAT**
   at full precision (e.g. 1.400 incl. 10% → `1.272727…`). So `GET /sales/quotations/{id}` returns
   `lines[].unitPrice` excl. VAT even when `pricesIncludeVat` is true — round it for display, and use
-  the line/header totals and `vatAmount` for money. Totals and VAT are unchanged by this.
-- **Picture URLs are root-relative (1.6.52+)**, e.g. `/Files/Pictures/<guid>.jpg` — see §5a.
+  the line/header totals and `vatAmount` for money.
+- **Links are root-relative (1.6.52+).** Picture and attachment links look like `/Files/…` or
+  `/api/mobile/v1/…`. Join them to the **origin** of the API base URL the user signed in with
+  (`https://erp.client.com/api/mobile/v1` → `https://erp.client.com` + link) — not to the API path.
+  Standard URI resolution does this: `resolve("https://host/api/mobile/v1/x", "/Files/Pictures/a.jpg")`.
+  A value that already starts with `http` is used as is.
 
 ---
 
 ## 5. Endpoint reference
 
-> All endpoints below require `Authorization: Bearer <accessToken>` and are subject to
-> `MOBILE_ACCESS_DISABLED` (§3). `{id}` is an integer.
+> All endpoints require `Authorization: Bearer <accessToken>` (except the two picture files, §6) and can
+> return `MOBILE_ACCESS_DISABLED` / `SESSION_TERMINATED` (§3). `{id}` is an integer.
 
 ### App / catalog
 | Method | Path | Purpose / params |
 |---|---|---|
-| GET | `/menu` | Menu/features the user may see |
-| GET | `/products` | List. `?page&pageSize&search&categoryId&brandId` — `search` matches id, code, name, barcode, brand or category |
-| GET | `/products/{id}` | One product |
-| PATCH | `/products/{id}` | Edit product (scope `read write`) — body below |
-| POST | `/products/{id}/images` | Upload images — `multipart/form-data`, field `images` (multiple); jpg/png/webp, ≤ 5 MB each |
+| GET | `/menu` | Menu items the user may see (§2) |
+| GET | `/products` | List. `?page&pageSize&search&categoryId&brandId` — `search` matches id, code, name, barcode, brand or category (§6) |
+| GET | `/products/{id}` | One product (§6) |
+| PATCH | `/products/{id}` | Edit product (scope `read write`) — §10 |
+| POST | `/products/{id}/images` | Upload images (§6) |
 | DELETE | `/products/{id}/images/{imageId}` | Remove a product image |
 | GET | `/products/by-barcode/{code}` | Lookup by barcode |
 | GET | `/categories` | Category list |
 | GET | `/brands` | Brand list |
 | GET | `/warehouses` | Warehouse list |
 | GET | `/price-list/resolve?itemId=` | Resolved selling price for an item |
-
-### 5a. Product pictures  🆕 (1.6.52)
-
-Every picture comes with two links:
-
-| Field | What it is | Use it for |
-|---|---|---|
-| `imageUrl` (list) / `images[].url` | The original upload (can be several MB) | Full-screen viewer, share, download |
-| `thumbUrl` (list) / `images[].thumbUrl` | A 256 × 256 centre-cropped JPEG, cached on the server | List rows, photo strips |
-
-```jsonc
-// GET /products → items[]
-{ "id": 1826, "code": "201384", "name": "…", "imageUrl": "/Files/Pictures/3f2c….jpg",
-  "thumbUrl": "/Files/Thumb/3f2c….jpg?s=256", "onHand": 4 }
-
-// GET /products/{id}, GET /products/by-barcode/{code}, POST /products/{id}/images → images[]
-{ "id": 7, "url": "/Files/Pictures/3f2c….jpg", "thumbUrl": "/Files/Thumb/3f2c….jpg?s=256", "isPrimary": true }
-```
-
-- **Links are root-relative.** Join them to the origin of the API base URL the user signed in with
-  (`https://erp.client.com/api/mobile/v1` → `https://erp.client.com` + link). Don't build your own host.
-  A value that already starts with `http` is an external picture — use it as is.
-- **`thumbUrl` can be `null`** (no picture, an external picture, or a server older than 1.6.52) → use the full `url`.
-- Both picture endpoints are **anonymous** (file names are unguessable GUIDs); sending the Bearer header is harmless.
-- `images[]` is ordered primary first. No picture → `imageUrl: null`, `images: []`.
-- Servers before 1.6.52 sent absolute URLs whose host or scheme could be wrong for the phone. To support
-  them, take the **path** of any absolute link that starts with `/Files/` and join it to your origin.
 
 ### Parties
 | Method | Path | Purpose / params |
@@ -184,24 +244,13 @@ Every picture comes with two links:
 | GET | `/inventory/low-stock` | `?threshold&warehouseId&page&pageSize` |
 | GET | `/inventory/dead-stock` | `?days&warehouseId&page&pageSize` |
 | GET | `/inventory/stock-count/sheet` | Count sheet. `?warehouseId&search&page&pageSize` |
-| POST | `/inventory/stock-count` | Submit a count — body below |
+| POST | `/inventory/stock-count` | Submit a count — §10 |
 
-### Barcode labels  🆕 (v1.4.7)
-Print barcode/QR labels from the item list. Templates are designed in the web app (Item Master →
-Barcode/Label Designer). Gated by the **`MobileLabels`** permission (Mobile App group). The mobile
-menu exposes this as **Print Labels** (`/labels`) when the permission is granted.
-
-| Method | Path | Purpose / params |
+### Barcode labels (§7)
+| Method | Path | Purpose |
 |---|---|---|
-| GET | `/label-templates` | Active templates → `{ version, count, hasLabels, message, templates:[{ id, name, widthMm, heightMm }] }` — `message` is non-null when no designs exist (show it as the empty state) |
-| POST | `/labels/print` | Render a print-ready **PDF** (`application/pdf`). Body below. One label page per copy. |
-
-`POST /labels/print` body:
-```json
-{ "templateId": 3, "items": [ { "itemId": 12, "quantity": 5 }, { "itemId": 40, "quantity": 2 } ] }
-```
-Response is the PDF binary (`Content-Type: application/pdf`); open/share/print it on the device.
-Items with `quantity <= 0` are ignored; unknown items are skipped. Company scope comes from the token.
+| GET | `/label-templates` | Label designs the user may print |
+| POST | `/labels/print` | Render a print-ready PDF |
 
 ### Dashboard & reports
 | Method | Path | Purpose / params |
@@ -209,63 +258,280 @@ Items with `quantity <= 0` are ignored; unknown items are skipped. Company scope
 | GET | `/dashboard/kpis` | `?from&to` |
 | GET | `/reports/sales` | `?from&to` |
 | GET | `/reports/purchase` | `?from&to` |
+| GET | `/reports/…` | Manager reports — §9 |
 
 ### Sales
 | Method | Path | Purpose / params |
 |---|---|---|
 | GET | `/sales/tenders` | Payment tenders (cash/bank accounts) for cash sale |
-| POST | `/sales/cash-invoice/draft` | Price a cart before posting — body below |
-| POST | `/sales/cash-invoice` | Post a cash sale — body below |
+| POST | `/sales/cash-invoice/draft` | Price a cart before posting — §10 |
+| POST | `/sales/cash-invoice` | Post a cash sale — §10 |
 | GET | `/sales/cash-invoice/{id}/receipt?format=` | Receipt (`format=pdf` for PDF) |
 | GET | `/sales/quotations` | `?from&to&customerId&page&pageSize` |
-| POST | `/sales/quotations` | Create quotation — body below |
+| POST | `/sales/quotations` | Create quotation — §10 |
 | GET | `/sales/quotations/{id}` | One quotation |
 | GET | `/sales/quotations/{id}/pdf` | Quotation PDF |
 
 ### Receipts
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/receipts` | Record a customer receipt / allocation — body below |
+| POST | `/receipts` | Record a customer receipt / allocation — §10 |
 
-### Documents (attach scans)
-| Method | Path | Purpose |
-|---|---|---|
-| GET | `/documents/lookup` | Find a record by document number |
-| POST | `/documents/attach` | Attach files — `multipart/form-data` |
-| GET | `/documents/{docType}/{docId}/attachments` | Existing attachments |
-
-Request/response details: [`MOBILE_API_DOCUMENT_UPLOAD.md`](MOBILE_API_DOCUMENT_UPLOAD.md).
+### Attach Docs (§8)
+| Method | Path | Purpose | `MobileDocuments` access |
+|---|---|---|---|
+| GET | `/documents/lookup?number=` | Find a document **and its existing attachments** | View |
+| POST | `/documents/attach` | Attach one or more files (multipart) | Edit |
+| GET | `/documents/{docType}/{docId}/attachments` | Re-load the attachment list | View |
+| GET | `/documents/attachments/{id}/file` | Open a file; `?download=true` to download | View |
+| DELETE | `/documents/attachments/{id}` | Delete an attachment (record **and** file) | Delete |
 
 ---
 
-## 5b. Manager reports  🆕 (v1.4.5)
+## 6. Products & pictures
 
-Server-aggregated summaries — the app renders them directly and **never** pulls raw invoices to
-compute totals. All are `GET`, all return `currency: "BHD"`, all are subject to
-`MOBILE_ACCESS_DISABLED`. Two RBAC gates apply (grant per role in **User Roles → Mobile App**):
+### GET `/products?page=1&pageSize=25&search=&categoryId=&brandId=`
+```jsonc
+{
+  "page": 1, "pageSize": 25, "total": 137,
+  "items": [
+    {
+      "id": 10104,
+      "code": "10104",
+      "name": "Shubbakh Sugar 1kg",
+      "barcode": "6291000000000",
+      "price": 0.220,                                  // DefaultPrice, base currency
+      "cost": 0.200,                                   // DefaultCost
+      "brand": "Shubbakh",                             // string | null
+      "category": "Sugar",                             // string | null
+      "imageUrl": "/Files/Pictures/3f2c….jpg",         // primary picture, full size | null
+      "thumbUrl": "/Files/Thumb/3f2c….jpg?s=256",      // 256 px thumbnail | null
+      "onHand": 134.000                                // stock, base unit, all warehouses (may be 0 or negative)
+    }
+  ]
+}
+```
 
-- **Reports** (`MobileReports`) — sales analytics: collections, sales trend, top items, by-category, by-salesman.
-- **Finance Reports** (`MobileFinanceReports`) — sensitive money/profit/cost: AR aging, cash position, margin, VAT, inventory valuation.
+### GET `/products/{id}` and GET `/products/by-barcode/{code}`
+```jsonc
+{
+  "id": 10104, "code": "10104", "name": "Shubbakh Sugar 1kg", "barcode": "6291000000000",
+  "model": null, "type": "Stock", "price": 0.220, "cost": 0.200,
+  "brand": "Shubbakh", "category": "Sugar", "uom": "Ea",
+  "onHand": 134.000,
+  "canEdit": true,
+  "images": [
+    { "id": 55, "url": "/Files/Pictures/3f2c….jpg", "thumbUrl": "/Files/Thumb/3f2c….jpg?s=256", "isPrimary": true }
+  ]
+}
+```
+`onHand` is a decimal in the item's **base unit**, summed across **all warehouses**, from the stock ledger.
+Treat `<= 0` as out of stock.
 
-A `403 FORBIDDEN` means the role lacks that gate. Date params are `YYYY-MM-DD`; `from`/`to` default to the current month.
+### POST `/products/{id}/images`
+`multipart/form-data`, field **`images`** (repeatable). Types `.jpg .jpeg .png .webp`, ≤ 5 MB each.
+Scope `read write`. → `{ "images": [ {id, url, thumbUrl, isPrimary} ] }`.
 
-### Tier 1 — cash-flow
-**GET `/reports/receivables/aging?asOn=`**  · gate: Finance Reports
+### Pictures
+
+| Field | What it is | Use it for |
+|---|---|---|
+| `imageUrl` (list) / `images[].url` | The original upload (can be several MB) | Full-screen viewer, share, download |
+| `thumbUrl` (list) / `images[].thumbUrl` | A 256 × 256 centre-cropped JPEG, cached on the server | List rows, photo strips |
+
+- Links are **root-relative** — join to the API origin (§4).
+- **`thumbUrl` can be `null`** (no picture, an external picture, or a server older than 1.6.52) → use `url`.
+- Both picture endpoints (`/Files/Pictures/…`, `/Files/Thumb/…`) are **anonymous** (file names are
+  unguessable GUIDs); sending the Bearer header is harmless.
+- `images[]` is ordered primary first. No picture → `imageUrl: null`, `images: []`.
+- **Servers before 1.6.52** sent absolute URLs whose host or scheme could be wrong for the phone. To
+  support them, take the **path** of any absolute link that starts with `/Files/` and join it to your origin.
+
+---
+
+## 7. Barcode labels
+
+Print barcode/QR labels from the item list. Designs are made in the web app (Barcode/Label Designer).
+Permission **`MobileLabels`**; the menu item is **Print Labels** (`/labels`).
+
+### GET `/label-templates`
+```json
+{
+  "version": 1, "count": 2, "hasLabels": true, "message": null,
+  "templates": [
+    { "id": 1, "name": "Shelf label 50×30", "widthMm": 50, "heightMm": 30 },
+    { "id": 4, "name": "Barcode 40×20",     "widthMm": 40, "heightMm": 20 }
+  ]
+}
+```
+When no designs exist: `count: 0`, `hasLabels: false`, `templates: []` and `message` =
+"No label designs have been created yet. Add one in the web app under Barcode Labels, then it will appear here."
+→ `hasLabels: true` shows the picker; `false` shows `message` as the empty state.
+
+### POST `/labels/print`
+```json
+{ "templateId": 1, "items": [ { "itemId": 12, "quantity": 3 }, { "itemId": 34, "quantity": 1 } ] }
+```
+- `200` → `application/pdf` (one label per copy) — open/share/print it on the device.
+- Items with `quantity <= 0` are ignored; unknown items are skipped.
+- `400 BAD_REQUEST` (missing template/items, no valid quantities) · `404 NOT_FOUND` (template not found).
+
+---
+
+## 8. Attach Docs (document attachments)
+
+Look up any document by its number, see the files already attached (open, share, delete a wrong one),
+and attach more scans/photos — the phone version of the web **DropBox** and per-document **Attachments**
+panel. Same store, so files attached from the phone show on the web and vice versa.
+Permission **`MobileDocuments`**: View (look up/list/open), Edit (attach), Delete (delete) — §2.
+Menu item `documents` → `/documents`.
+
+### 8.0 The attachment object
+
+Every endpoint returns attachments in this one shape, **newest first**:
+```json
+{
+  "id": 191,
+  "fileName": "JV-2026-0035_a9860bfd.png",
+  "size": 81234,
+  "contentType": "image/png",
+  "isImage": true,
+  "isPdf": false,
+  "uploadedAt": "2026-11-09T19:10:33.277Z",
+  "uploadedBy": "admin",
+  "url": "/api/mobile/v1/documents/attachments/191/file",
+  "downloadUrl": "/api/mobile/v1/documents/attachments/191/file?download=true"
+}
+```
+- `fileName` is the stored name: `<document number>_<8 random chars><ext>` (the phone's filename is not kept).
+- `uploadedAt` is UTC; `uploadedBy` can be `null` on very old attachments.
+- `url`/`downloadUrl` are root-relative (§4) and — unlike pictures — **need the Bearer header**
+  (business documents are not public). Load them with an authenticated HTTP client / image loader.
+- `isImage` / `isPdf` pick the viewer (image viewer, PDF viewer, else share sheet / "Open with").
+
+### 8.1 GET `/documents/lookup?number=<documentNumber>`
+
+Exact match across all document types (sales & purchase quotations, orders, invoices, returns, delivery
+notes, GRNs, purchase inquiries, journal vouchers). A file extension on `number` is ignored
+(`INV-2026-0001.pdf` works).
+
+**Found — 200**
+```json
+{
+  "found": true,
+  "docType": "JournalEntry",
+  "docId": 3361,
+  "docNumber": "JV-2026-0035",
+  "docTypeLabel": "Journal / Voucher",
+  "canAttach": true,
+  "canDelete": false,
+  "attachmentCount": 2,
+  "attachments": [ { …attachment… }, { …attachment… } ]
+}
+```
+`attachments` is `[]` when nothing is attached. Use `canAttach` / `canDelete` to show or hide the buttons.
+
+**Not found — 200** (not an error): `{ "found": false, "number": "INV-2026-9999" }`
+Errors: `400 BAD_REQUEST` (empty number) · `403 FORBIDDEN`.
+
+### 8.2 POST `/documents/attach`  (`multipart/form-data`)
+
+| field | type | notes |
+|---|---|---|
+| `number` | text | the document number (use `docNumber` from the lookup) |
+| `files` | file (repeatable) | one or more files — one `files` part per file |
+
+Max request 60 MB; each file is checked (type + size). The server re-matches `number`, so the app can only
+attach to a real document.
+
+**200**
+```json
+{
+  "success": true,
+  "docType": "JournalEntry", "docId": 3361, "docNumber": "JV-2026-0035",
+  "attached": 2,
+  "files": [
+    { "id": 191, "fileName": "JV-2026-0035_a9860bfd.png", "originalName": "scan1.png", "size": 81234 },
+    { "id": 192, "fileName": "JV-2026-0035_00b4607e.pdf", "originalName": "note.pdf",  "size": 23111 }
+  ],
+  "errors": [],
+  "attachments": [ …the full list after the upload… ]
+}
+```
+Redraw from `attachments` — no second call needed. Rejected files are listed in `errors`
+(`[ { "originalName": "huge.mov", "message": "File exceeds the maximum allowed size." } ]`).
+
+| status | code | meaning |
+|---|---|---|
+| 400 | `BAD_REQUEST` | missing `number` or no files |
+| 400 | `UPLOAD_FAILED` | every file was rejected |
+| 404 | `NOT_FOUND` | no document has that number |
+| 409 | `STORAGE_NOT_CONFIGURED` | file storage is not set up on the server |
+| 403 | `FORBIDDEN` | no Edit |
+
+**No idempotency key here:** each call stores new files, so a retried upload creates duplicates. Don't
+auto-retry after a timeout — re-run the lookup and check the list first.
+
+### 8.3 GET `/documents/{docType}/{docId}/attachments`
+→ `{ "docType", "docId", "attachments": [ … ] }`. Use for pull-to-refresh.
+
+### 8.4 GET `/documents/attachments/{id}/file[?download=true]`
+Returns the raw file with its `Content-Type`; `Content-Disposition: inline` (or `attachment` with
+`download=true`) and `Cache-Control: private, no-store` (a temp file for viewing/sharing is fine).
+Errors come back as JSON — check the status before treating the body as a file:
+
+| status | code | meaning |
+|---|---|---|
+| 403 | `FORBIDDEN` | no View |
+| 404 | `NOT_FOUND` | attachment deleted (by someone else) — reload the list |
+| 404 | `FILE_MISSING` | the record exists but the file is gone from the server — show the message; the user can delete the entry |
+
+### 8.5 DELETE `/documents/attachments/{id}`
+Deletes the record **and** the stored file — gone for the web too, cannot be undone, recorded in the
+Audit Log. **Always ask the user to confirm** (show the name/thumbnail).
+**200** → `{ "success": true, "id": 191, "docType": "JournalEntry", "docId": 3361, "attachments": [ …what is left… ] }`
+Errors: `403 FORBIDDEN` (no Delete) · `404 NOT_FOUND` (already deleted — reload).
+
+### 8.6 Suggested screen
+1. User types or scans the document number → **8.1**.
+   `found:false` → "Document not found". `found:true` → header `docTypeLabel` · `docNumber`, then
+   **"Attached (n)"**: image thumbnails (load `url` with Bearer), file icons for PDFs/others; each row shows
+   name, size, local time and `uploadedBy`. Empty → "Nothing attached yet".
+2. Tap → full-screen viewer (zoom for images, PDF viewer) with **Share** and **Download**.
+3. Delete icon/swipe (only when `canDelete`) → confirm → **8.5** → redraw from `attachments`.
+4. **Add** (only when `canAttach`) → camera scan or pick files → **8.2** → redraw; show `attached` and any `errors`.
+
+**Servers before 1.6.52:** a found lookup has no `attachments` key, and the file/delete endpoints return
+404 — detect the missing key and hide view/delete.
+
+---
+
+## 9. Manager reports
+
+Server-aggregated summaries — the app renders them directly and **never** pulls raw invoices to compute
+totals. All `GET`, all return `currency: "BHD"`. Two gates (§2):
+- **Reports** (`MobileReports`) — collections, sales trend, top items, by category, by salesman.
+- **Finance Reports** (`MobileFinanceReports`) — AR aging, cash position, margin, VAT, inventory valuation.
+
+Date params are `YYYY-MM-DD`; `from`/`to` default to the current month.
+
+### Cash flow
+**GET `/reports/receivables/aging?asOn=`**  · Finance Reports
 ```json
 { "asOn":"2026-08-15","currency":"BHD","total":12500.000,
   "buckets":{"current":4000,"d30":3000,"d60":2500,"d90":2000,"d180plus":1000},
   "topDebtors":[{"customerId":12,"name":"Acme WLL","outstanding":3200.000,"oldestDays":91}] }
 ```
-> Buckets are by invoice age since document date: `current`=1–30d, `d30`=31–60, `d60`=61–90, `d90`=91–180, `d180plus`=180+.
+> Buckets by invoice age since document date: `current`=1–30d, `d30`=31–60, `d60`=61–90, `d90`=91–180, `d180plus`=180+.
 
-**GET `/reports/collections?from&to`**  · gate: Reports
+**GET `/reports/collections?from&to`**  · Reports
 ```json
 { "from":"…","to":"…","currency":"BHD","total":8400.000,"count":37,
   "byMethod":[{"method":"Cash","amount":5000},{"method":"BankTransfer","amount":3400}],
   "byDay":[{"date":"2026-08-01","amount":1200}] }
 ```
 
-**GET `/reports/cash-position?asOn=`**  · gate: Finance Reports
+**GET `/reports/cash-position?asOn=`**  · Finance Reports
 ```json
 { "asOn":"2026-08-15","currency":"BHD",
   "accounts":[{"accountId":5,"name":"NBB Current","type":"Bank","balance":21000.000},
@@ -273,8 +539,8 @@ A `403 FORBIDDEN` means the role lacks that gate. Date params are `YYYY-MM-DD`; 
   "totalCash":850.000,"totalBank":21000.000 }
 ```
 
-### Tier 2 — performance & profit
-**GET `/reports/sales/trend?from&to&groupBy=day|week|month`**  · gate: Reports
+### Performance & profit
+**GET `/reports/sales/trend?from&to&groupBy=day|week|month`**  · Reports
 ```json
 { "from":"…","to":"…","groupBy":"day","currency":"BHD",
   "points":[{"label":"2026-08-01","sales":1200.000,"invoices":6}],
@@ -282,47 +548,47 @@ A `403 FORBIDDEN` means the role lacks that gate. Date params are `YYYY-MM-DD`; 
 ```
 > `week` labels are ISO weeks, e.g. `2026-W33`.
 
-**GET `/reports/margin?from&to`**  · gate: Finance Reports
+**GET `/reports/margin?from&to`**  · Finance Reports
 ```json
 { "from":"…","to":"…","currency":"BHD","revenue":36000,"cost":24000,"grossProfit":12000,"marginPct":33.33,
   "byCategory":[{"name":"Sugar","revenue":12000,"margin":3000}] }
 ```
 
-**GET `/reports/top-items?from&to&limit=10&by=value|qty`**  · gate: Reports
+**GET `/reports/top-items?from&to&limit=10&by=value|qty`**  · Reports
 ```json
 { "from":"…","to":"…","by":"value","currency":"BHD",
   "items":[{"itemId":101,"code":"SHB-SUG-1","name":"Sugar 1kg","qty":500,"value":610.000}] }
 ```
 
-**GET `/reports/sales/by-category?from&to`**  · gate: Reports
+**GET `/reports/sales/by-category?from&to`**  · Reports
 ```json
 { "from":"…","to":"…","currency":"BHD","categories":[{"name":"Sugar","sales":12000,"qty":9800}] }
 ```
 
-### Tier 3 — compliance & operations
-**GET `/reports/vat?from&to`**  · gate: Finance Reports — output (sales + cash + direct) vs input (purchase + direct)
+### Compliance & operations
+**GET `/reports/vat?from&to`**  · Finance Reports — output (sales + cash + direct) vs input (purchase + direct)
 ```json
 { "from":"…","to":"…","currency":"BHD","outputVat":1800.000,"inputVat":1100.000,"netPayable":700.000 }
 ```
 
-**GET `/reports/sales/by-salesman?from&to`**  · gate: Reports
+**GET `/reports/sales/by-salesman?from&to`**  · Reports
 ```json
 { "from":"…","to":"…","currency":"BHD",
   "salesmen":[{"salesmanId":3,"name":"Ali Hassan","sales":15000,"invoices":42,"collections":9000}] }
 ```
-> There is no salesman field on invoices — sales/collections are attributed via each **customer's assigned employee** (Employees → Assigned Customers). Customers with no assigned employee roll up under `salesmanId:0, "Unassigned"`.
+> Attributed via each **customer's assigned employee**; customers with none roll up under `salesmanId:0, "Unassigned"`.
 
-**GET `/reports/inventory/valuation?warehouseId=`**  · gate: Finance Reports — stock value at weighted-average cost
+**GET `/reports/inventory/valuation?warehouseId=`**  · Finance Reports — stock value at weighted-average cost
 ```json
 { "asOn":"2026-08-15","currency":"BHD","totalValue":48000.000,"totalQty":9800,
   "byCategory":[{"name":"Sugar","value":12000,"qty":2000}],
   "byWarehouse":[{"name":"WH FACTORY","value":48000,"qty":9800}] }
 ```
-> `warehouseId` is reserved; totals currently span all warehouses with a per-warehouse split in `byWarehouse`.
+> `warehouseId` is reserved; totals span all warehouses with a split in `byWarehouse`.
 
 ---
 
-## 6. Write request bodies
+## 10. Write request bodies
 
 **PATCH `/products/{id}`** — send only the fields to change; omitted/null fields are left as they are
 ```json
@@ -336,7 +602,7 @@ A `403 FORBIDDEN` means the role lacks that gate. Date params are `YYYY-MM-DD`; 
   "uomId": null, "vatCategoryId": null, "description": null }                          // null → item's unit / VAT category / name
 ```
 
-**POST `/sales/cash-invoice/draft`**
+**POST `/sales/cash-invoice/draft`**  (Idempotency-Key required)
 ```json
 {
   "customerId": 0,               // 0 = walk-in
@@ -349,7 +615,7 @@ A `403 FORBIDDEN` means the role lacks that gate. Date params are `YYYY-MM-DD`; 
 }
 ```
 
-**POST `/sales/cash-invoice`**
+**POST `/sales/cash-invoice`**  (Idempotency-Key required)
 ```json
 {
   "warehouseId": 1,
@@ -360,7 +626,7 @@ A `403 FORBIDDEN` means the role lacks that gate. Date params are `YYYY-MM-DD`; 
 }
 ```
 
-**POST `/sales/quotations`**
+**POST `/sales/quotations`**  (Idempotency-Key required)
 ```json
 {
   "customerId": 12,
@@ -373,16 +639,12 @@ A `403 FORBIDDEN` means the role lacks that gate. Date params are `YYYY-MM-DD`; 
 }
 ```
 
-**POST `/inventory/stock-count`**
+**POST `/inventory/stock-count`**  (Idempotency-Key required)
 ```json
-{
-  "warehouseId": 1,
-  "notes": null,
-  "lines": [ { "itemId": 101, "countedQty": 48 } ]
-}
+{ "warehouseId": 1, "notes": null, "lines": [ { "itemId": 101, "countedQty": 48 } ] }
 ```
 
-**POST `/receipts`**
+**POST `/receipts`**  (Idempotency-Key required)
 ```json
 {
   "customerId": 12,
@@ -397,17 +659,43 @@ A `403 FORBIDDEN` means the role lacks that gate. Date params are `YYYY-MM-DD`; 
 
 ---
 
-## 7. What changed (newest first)
+## 11. App checklist & tests
+
+**Checklist**
+- [ ] Send a stable `deviceId` + friendly `deviceName` on login; show `session.message` when non-null.
+- [ ] Interceptor (§3b): `403 MOBILE_ACCESS_DISABLED` and `401 SESSION_TERMINATED` → hard sign-out, no refresh;
+      other `401` → refresh once.
+- [ ] Build navigation from `GET /menu`.
+- [ ] Send `Idempotency-Key` on the five writes in §4 and reuse it on retry.
+- [ ] Join every root-relative link to the API origin (§4).
+- [ ] Product lists show `thumbUrl`; viewer uses `url`; stock badge from `onHand`.
+- [ ] Label screen: picker when `hasLabels`, else `message`.
+- [ ] Attach Docs: show attachments after lookup; open with Bearer; delete with confirmation; hide buttons by `canAttach`/`canDelete`.
+
+**Tests**
+1. *Mobile access:* admin turns Mobile Access off while the app is open → next call returns
+   `403 MOBILE_ACCESS_DISABLED` → app shows the message and returns to login; login is refused; re-enable → login works.
+2. *Single device:* sign in on phone A, then on phone B → B shows "already signed in on …"; A's next call
+   returns `401 SESSION_TERMINATED` → A returns to login.
+3. *Pictures:* a product with pictures shows thumbnails in the list and the full picture in the viewer.
+4. *Attach Docs:* look up a number with files → list shows them; open an image and a PDF; attach a scan →
+   list updates; delete it (with Delete permission) → list updates; without Delete the button is hidden.
+
+---
+
+## 12. What changed (newest first)
 
 | Version | Change | App action |
 |---|---|---|
-| **1.6.52** (Nov 2026) | Picture links are **root-relative**; new `thumbUrl` on every picture (§5a) | Join links to your API origin; show `thumbUrl` in lists, `url` full screen |
-| **1.6.51** (Nov 2026) | Line `unitPrice` in responses is always **excl. VAT** (§4) | Don't treat `unitPrice` as inclusive on inclusive quotations; show money from the totals fields |
+| **1.6.52** (Nov 2026) | Attach Docs: lookup returns the existing `attachments` + `canAttach`/`canDelete`; new open-file and **delete** endpoints; new **Delete** access on `MobileDocuments`; attachment `url` now opens through the API; added `isImage`, `isPdf`, `downloadUrl`; `uploadedAt` marked UTC (§8) | Show the files after lookup; open with Bearer; delete with confirmation |
+| **1.6.52** (Nov 2026) | Picture links are **root-relative**; new `thumbUrl` on every picture (§6) | Join links to your API origin; `thumbUrl` in lists, `url` full screen |
+| **1.6.51** (Nov 2026) | Line `unitPrice` in responses is always **excl. VAT** (§4) | Don't treat `unitPrice` as inclusive; show money from the totals |
 | 1.6.4x (Oct 2026) | `/products?search=` also matches id, brand and category | None |
-| 1.6.25 (Sep 2026) | `onHand` on `/products` list and detail | Bind stock badges to `onHand` |
-| Sep 2026 | Document attach endpoints (§5 Documents) | Optional feature |
-| Aug 2026 | One live session per account: `session` on login, `401 SESSION_TERMINATED` (§1, §3); label-templates empty state | Handle `SESSION_TERMINATED` like `MOBILE_ACCESS_DISABLED` |
-| 1.4.x | `403 MOBILE_ACCESS_DISABLED` (§3) | Clear tokens, show message, back to login, no refresh |
+| 1.6.25 (Sep 2026) | `onHand` on `/products` list and detail; `/Files/Pictures` made anonymous; `.webp`/`.gif` content types fixed | Bind stock badges to `onHand` |
+| Sep 2026 | Attach Docs: lookup, attach, list | Optional feature |
+| Aug 2026 | One live session per account: `session` on login, `401 SESSION_TERMINATED` (§1a); label-templates `count`/`hasLabels`/`message` (§7) | Hard sign-out on `SESSION_TERMINATED`; label empty state |
+| 1.4.x | Per-employee access: `403 MOBILE_ACCESS_DISABLED` (§3a) | Hard sign-out, no refresh |
 
-Corrections to earlier editions of this file: product edit is **`PATCH`** (it was shown as `PUT`); the
-September note's "image URLs are now absolute" is superseded by 1.6.52 (relative).
+Corrections to earlier editions: product edit is **`PATCH`** (it was shown as `PUT`); the September note's
+"image URLs are absolute" is replaced by root-relative links (1.6.52). This file now includes the content of
+the former separate notes, which have been removed.

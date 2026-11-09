@@ -457,9 +457,17 @@ class LeoRepository {
 
   Future<List<DocAttachment>> documentAttachments(String docType, int docId) async {
     final j = await _client.getJson('/documents/$docType/$docId/attachments');
-    final raw = _pick(j, ['attachments']);
-    if (raw is! List) return const [];
-    return raw.whereType<Map>().map(DocAttachment.fromJson).toList();
+    return parseAttachments(_pick(j, ['attachments'])) ?? const [];
+  }
+
+  /// The attachment's file, fetched with the Bearer token (1.6.52+).
+  Future<({List<int> bytes, String filename, String contentType})> attachmentFile(DocAttachment a) =>
+      _client.downloadBytes('/documents/attachments/${a.id}/file', fallbackName: a.fileName);
+
+  /// Deletes an attachment (record and stored file); returns what is left.
+  Future<List<DocAttachment>> deleteAttachment(int id) async {
+    final j = await _client.deleteJson('/documents/attachments/$id');
+    return parseAttachments(_pick(j, ['attachments'])) ?? const [];
   }
 
   // ── Barcode labels (v1.4.7, gate: MobileLabels) ────────────────────────

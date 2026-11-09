@@ -11,6 +11,17 @@ import '../widgets/common.dart';
 final _dateFmt = DateFormat('dd MMM yyyy');
 String _fmt(DateTime? d) => d == null ? '' : _dateFmt.format(d);
 
+// Quotation statuses (Open, Accepted, Rejected, Expired, Invoiced). Kept apart
+// from the shared translations, where "Open" is the verb.
+const _statusAr = {
+  'Open': 'مفتوح',
+  'Accepted': 'مقبول',
+  'Rejected': 'مرفوض',
+  'Expired': 'منتهي',
+  'Invoiced': 'تمت فوترته',
+};
+String _status(AppState app, String s) => app.lang == 'ar' ? (_statusAr[s] ?? s) : s;
+
 /// Saved quotations, newest first. Tap one to see its lines and totals, and
 /// download or share its PDF.
 class QuotationsScreen extends StatelessWidget {
@@ -111,7 +122,7 @@ class _QuoteRow extends StatelessWidget {
                   ),
                   if (q.status.isNotEmpty) ...[
                     const SizedBox(width: 8),
-                    Pill(context.tr(q.status), bg: lc.soft, fg: lc.mut, size: 10.5),
+                    Pill(_status(app, q.status), bg: lc.soft, fg: lc.mut, size: 10.5),
                   ],
                 ]),
                 const SizedBox(height: 2),
