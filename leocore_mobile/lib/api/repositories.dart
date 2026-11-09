@@ -519,6 +519,7 @@ class LeoRepository {
       return ProductImage(
         id: _i(m, ['id']),
         url: _s(m, ['url']),
+        thumbUrl: _s(m, ['thumbUrl']),
         isPrimary: _pick(m, ['isPrimary']) == true,
       );
     }).where((i) => i.url.isNotEmpty).toList();
@@ -653,7 +654,9 @@ class LeoRepository {
     var images = mapProductImages(_pick(j, ['images']));
     if (images.isEmpty) {
       final single = _s(j, ['imageUrl', 'image', 'thumbnailUrl']);
-      if (single.isNotEmpty) images = [ProductImage(id: 0, url: single, isPrimary: true)];
+      if (single.isNotEmpty) {
+        images = [ProductImage(id: 0, url: single, thumbUrl: _s(j, ['thumbUrl']), isPrimary: true)];
+      }
     }
     return Product(
       id: _i(j, ['id', 'itemId']),

@@ -476,6 +476,16 @@ class AuthedNetworkImage extends StatefulWidget {
   /// Process-lifetime cache of already-fetched image bytes, keyed by URL.
   static final Map<String, Uint8List> _cache = {};
 
+  /// The picture's bytes — from the cache when already shown, else fetched
+  /// through the same authenticated pipeline. Null when it can't be loaded.
+  static Future<Uint8List?> bytesFor(AppState app, String url) async {
+    final hit = _cache[url];
+    if (hit != null) return hit;
+    final raw = await app.api.getImageBytes(url);
+    if (raw == null || raw.isEmpty) return null;
+    return _cache[url] = Uint8List.fromList(raw);
+  }
+
   @override
   State<AuthedNetworkImage> createState() => _AuthedNetworkImageState();
 }

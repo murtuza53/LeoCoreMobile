@@ -13,9 +13,15 @@ const int kUnknownStock = -1000000000;
 /// (e.g. `/Files/Pictures/<guid>.png`) and is resolved against the host.
 class ProductImage {
   final int id;
+  /// The full-size picture (viewer, share, download).
   final String url;
+  /// A small square copy for lists and photo strips. Empty when the server
+  /// doesn't offer one (older servers) — use [listUrl], which falls back.
+  final String thumbUrl;
   final bool isPrimary;
-  const ProductImage({required this.id, required this.url, this.isPrimary = false});
+  const ProductImage({required this.id, required this.url, this.thumbUrl = '', this.isPrimary = false});
+
+  String get listUrl => thumbUrl.isNotEmpty ? thumbUrl : url;
 }
 
 class Product {

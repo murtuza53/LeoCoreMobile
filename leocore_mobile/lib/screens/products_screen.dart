@@ -5,6 +5,7 @@ import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme/tokens.dart';
 import '../widgets/common.dart';
+import '../widgets/photo_viewer.dart';
 
 class ProductsScreen extends StatefulWidget {
   const ProductsScreen({super.key});
@@ -164,8 +165,10 @@ class ProductRow extends StatelessWidget {
   }
 }
 
-/// Product list thumbnail: shows the first server photo when available,
-/// otherwise the coloured initials tile.
+/// Product list thumbnail: shows the first server photo (a small cached copy)
+/// when available, otherwise the coloured initials tile. Tapping the photo
+/// opens it full screen (share / download); the rest of the row opens the
+/// product as before.
 class _ProductThumb extends StatelessWidget {
   final Product product;
   const _ProductThumb(this.product);
@@ -173,15 +176,18 @@ class _ProductThumb extends StatelessWidget {
   Widget build(BuildContext context) {
     if (product.images.isEmpty) return InitialsThumb(product);
     final lc = context.lc;
-    return Container(
-      width: 48,
-      height: 48,
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(color: lc.soft, borderRadius: BorderRadius.circular(11)),
-      child: AuthedNetworkImage(
-        url: context.read<AppState>().imageUrl(product.images.first.url),
-        fit: BoxFit.cover,
-        compact: true,
+    return GestureDetector(
+      onTap: () => openProductPhotos(context, product),
+      child: Container(
+        width: 48,
+        height: 48,
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(color: lc.soft, borderRadius: BorderRadius.circular(11)),
+        child: AuthedNetworkImage(
+          url: context.read<AppState>().imageUrl(product.images.first.listUrl),
+          fit: BoxFit.cover,
+          compact: true,
+        ),
       ),
     );
   }

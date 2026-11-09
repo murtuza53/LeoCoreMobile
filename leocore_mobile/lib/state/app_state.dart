@@ -1161,6 +1161,61 @@ class AppState extends ChangeNotifier {
     return (file: file, uri: uri);
   }
 
+  // ── picture save / share (full-screen photo viewer) ───────────────────
+
+  /// File name for a downloaded product picture: "<code>_<n>.<ext>", with the
+  /// extension taken from the server file so a PNG stays a PNG.
+  static String pictureFileName(String code, String url, int index) {
+    final path = Uri.tryParse(url)?.path ?? url;
+    final dot = path.lastIndexOf('.');
+    var ext = dot > path.lastIndexOf('/') ? path.substring(dot + 1).toLowerCase() : 'jpg';
+    if (!const ['jpg', 'jpeg', 'png', 'webp', 'gif'].contains(ext)) ext = 'jpg';
+    final base = (code.isEmpty ? 'product' : code).replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+    return '${base}_${index + 1}.$ext';
+  }
+
+  static String _pictureMime(String filename) {
+    final f = filename.toLowerCase();
+    if (f.endsWith('.png')) return 'image/png';
+    if (f.endsWith('.webp')) return 'image/webp';
+    if (f.endsWith('.gif')) return 'image/gif';
+    return 'image/jpeg';
+  }
+
+  Future<File> _pictureTemp(Uint8List bytes, String filename) async {
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/$filename');
+    await file.writeAsBytes(bytes, flush: true);
+    return file;
+  }
+
+  /// Saves a picture to the phone. Android: Pictures/LeoCore, where it shows
+  /// in the gallery (no permission needed on Android 10+). iOS has no public
+  /// folder, so the share sheet opens — "Save Image" puts it in Photos.
+  Future<void> savePicture(Uint8List bytes, String filename) async {
+    final mime = _pictureMime(filename);
+    if (Platform.isAndroid) {
+      try {
+        await _downloads.invokeMethod<String>(
+            'save', {'bytes': bytes, 'name': filename, 'mime': mime, 'folder': 'pictures'});
+        showToast('${t('Saved to Pictures')} · $filename');
+        return;
+      } on PlatformException catch (e) {
+        debugPrint('Save picture failed: ${e.message}');
+        showToast(t('Could not save the picture'));
+        return;
+      }
+    }
+    final file = await _pictureTemp(bytes, filename);
+    await Share.shareXFiles([XFile(file.path, mimeType: mime, name: filename)]);
+  }
+
+  /// Opens the system share sheet with the picture (WhatsApp, mail, …).
+  Future<void> sharePicture(Uint8List bytes, String filename, {String? text}) async {
+    final file = await _pictureTemp(bytes, filename);
+    await Share.shareXFiles([XFile(file.path, mimeType: _pictureMime(filename), name: filename)], text: text);
+  }
+
   /// Saves the PDF to the phone's public Downloads folder and opens it in the
   /// default PDF app. On iOS (no Downloads folder) it is kept in the app's
   /// documents directory and opened from there. Falls back to a prompt (install
@@ -1376,10 +1431,18 @@ class AppState extends ChangeNotifier {
   String? pendingPhotoPath;
   bool photoUploading = false;
 
-  /// Absolute URL for a server-relative image path.
+  /// Absolute URL for a server image path, always on the address the app is
+  /// signed in to. Older servers sent absolute links built from a guessed
+  /// host and `https`, which the phone often couldn't reach (plain-http or LAN
+  /// servers) while the API itself worked — so a link to the server's own
+  /// `/Files/...` is re-pointed at [api.origin]. Other external links are kept.
   String imageUrl(String relative) {
     if (relative.isEmpty) return relative;
-    if (relative.startsWith('http')) return relative;
+    if (relative.startsWith('http')) {
+      final u = Uri.tryParse(relative);
+      if (u == null || !u.path.startsWith('/Files/')) return relative;
+      return '${api.origin}${u.path}${u.hasQuery ? '?${u.query}' : ''}';
+    }
     final path = relative.startsWith('/') ? relative : '/$relative';
     return '${api.origin}$path';
   }

@@ -177,6 +177,11 @@ const Map<String, String> kArabic = {
   'Could not open the PDF here. Install a PDF viewer, or share this file to another app.':
       'تعذّر فتح ملف PDF هنا. ثبّت عارض PDF، أو شارك هذا الملف مع تطبيق آخر.',
   'Saved to Downloads': 'تم الحفظ في التنزيلات',
+  'Saved to Pictures': 'تم الحفظ في الصور',
+  'Could not save the picture': 'تعذر حفظ الصورة',
+  'Could not load the picture': 'تعذر تحميل الصورة',
+  'Download': 'تنزيل',
+  'Close': 'إغلاق',
   'The file was saved to your Downloads folder.': 'تم حفظ الملف في مجلد التنزيلات.',
   'Could not share the statement': 'تعذّرت مشاركة كشف الحساب',
 

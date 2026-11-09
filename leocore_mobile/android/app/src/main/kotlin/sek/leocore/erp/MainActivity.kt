@@ -26,7 +26,10 @@ class MainActivity : FlutterFragmentActivity() {
                             val bytes = call.argument<ByteArray>("bytes")!!
                             val name = call.argument<String>("name")!!
                             val mime = call.argument<String>("mime") ?: "application/pdf"
-                            result.success(saveToDownloads(bytes, name, mime))
+                            if (call.argument<String>("folder") == "pictures")
+                                result.success(saveToPictures(bytes, name, mime))
+                            else
+                                result.success(saveToDownloads(bytes, name, mime))
                         }
                         "open" -> {
                             val uri = call.argument<String>("uri")!!
@@ -90,6 +93,49 @@ class MainActivity : FlutterFragmentActivity() {
             File(getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), name).apply { writeBytes(bytes) }
         }
         return FileProvider.getUriForFile(this, "$packageName.fileProvider.com.crazecoder.openfile", target).toString()
+    }
+
+    /**
+     * Writes a picture to Pictures/LeoCore so it appears in the phone's gallery.
+     * Android 10+ uses MediaStore (no permission); older versions write the file
+     * directly and ask the media scanner to index it.
+     */
+    private fun saveToPictures(bytes: ByteArray, name: String, mime: String): String {
+        val folder = Environment.DIRECTORY_PICTURES + "/LeoCore"
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val resolver = contentResolver
+            val collection = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+            // Re-saving the same picture replaces it instead of adding "(1)" copies.
+            // A copy left by an earlier install isn't ours to delete — then just add.
+            try {
+                resolver.delete(
+                    collection,
+                    "${MediaStore.MediaColumns.DISPLAY_NAME}=? AND ${MediaStore.MediaColumns.RELATIVE_PATH}=?",
+                    arrayOf(name, "$folder/")
+                )
+            } catch (_: SecurityException) { }
+            val values = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+                put(MediaStore.MediaColumns.MIME_TYPE, mime)
+                put(MediaStore.MediaColumns.RELATIVE_PATH, folder)
+                put(MediaStore.MediaColumns.IS_PENDING, 1)
+            }
+            val uri = resolver.insert(collection, values)
+                ?: throw IllegalStateException("Could not create the picture")
+            resolver.openOutputStream(uri, "w").use { out ->
+                (out ?: throw IllegalStateException("Could not write the picture")).write(bytes)
+            }
+            values.clear()
+            values.put(MediaStore.MediaColumns.IS_PENDING, 0)
+            resolver.update(uri, values, null, null)
+            return uri.toString()
+        }
+        @Suppress("DEPRECATION")
+        val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "LeoCore")
+        dir.mkdirs()
+        val target = File(dir, name).apply { writeBytes(bytes) }
+        android.media.MediaScannerConnection.scanFile(this, arrayOf(target.absolutePath), arrayOf(mime), null)
+        return target.absolutePath
     }
 
     /** Opens the system share sheet for the saved file at [uri]. */
