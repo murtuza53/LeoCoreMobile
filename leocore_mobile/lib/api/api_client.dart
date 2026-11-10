@@ -274,12 +274,16 @@ class ApiClient {
       throw ApiException('NETWORK', _networkMessage(e));
     }
 
-    // Hard sign-out cases — bounce to login immediately, never refresh:
-    //  • 403 MOBILE_ACCESS_DISABLED — mobile access revoked.
-    //  • 401 SESSION_TERMINATED — the account signed in on another device.
+    // Hard sign-out: 403 MOBILE_ACCESS_DISABLED — mobile access revoked.
+    // A 401 SESSION_TERMINATED is NOT trusted on a data call: a request still
+    // carrying the previous access token can land while the server is rotating
+    // the session's refresh token and see the session as momentarily ended.
+    // It goes through the refresh below instead, and the refresh endpoint —
+    // which knows whether another device really took over — decides.
     final errCode = _errorCode(res);
+    final terminated = res.statusCode == 401 && errCode == 'SESSION_TERMINATED';
     if ((res.statusCode == 403 && errCode == 'MOBILE_ACCESS_DISABLED') ||
-        (res.statusCode == 401 && errCode == 'SESSION_TERMINATED')) {
+        (terminated && (isRetry || !auth))) {
       final ex = _envelope(res);
       onAccessRevoked?.call(ex.message);
       throw ex;
@@ -302,7 +306,8 @@ class ApiClient {
       if (outcome == RefreshOutcome.offline) {
         throw const ApiException('NETWORK', 'No connection to the server. Check your internet and try again.');
       }
-      onSessionExpired?.call();
+      // `revoked` already signed out with the server's own reason.
+      if (outcome == RefreshOutcome.rejected) onSessionExpired?.call();
     }
 
     if (res.statusCode != null && res.statusCode! >= 200 && res.statusCode! < 300) {
@@ -353,7 +358,7 @@ class ApiClient {
     if ((res.statusCode == 403 && code == 'MOBILE_ACCESS_DISABLED') ||
         (res.statusCode == 401 && code == 'SESSION_TERMINATED')) {
       onAccessRevoked?.call(_envelope(res).message);
-      return RefreshOutcome.rejected;
+      return RefreshOutcome.revoked;
     }
     // A server error (5xx, proxy page) isn't a verdict on the token.
     if (res.statusCode == 401 || res.statusCode == 400 || res.statusCode == 403) {
@@ -403,6 +408,10 @@ enum RefreshOutcome {
 
   /// The server refused the refresh token — the user must sign in again.
   rejected,
+
+  /// Access was revoked or another device signed in. The client has already
+  /// signed out via [ApiClient.onAccessRevoked] with the server's message.
+  revoked,
 
   /// Network or server trouble — keep the session and try again later.
   offline,

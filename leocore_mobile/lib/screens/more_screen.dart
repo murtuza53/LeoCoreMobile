@@ -25,6 +25,7 @@ class MoreScreen extends StatelessWidget {
       if (app.mSuppliers) (Icons.local_shipping_outlined, context.tr('Suppliers'), context.tr('Directory & account statements'), app.goSuppliers),
       (Icons.settings_outlined, context.tr('Settings'), context.tr('Language, theme, devices, role'), () => app.nav(Screen.settings)),
     ];
+    if (app.appVersion.isEmpty) app.loadAppVersion();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -41,7 +42,17 @@ class MoreScreen extends StatelessWidget {
                 _MoreRow(icon: it.$1, title: it.$2, subtitle: it.$3, onTap: it.$4),
                 const SizedBox(height: 8),
               ],
-              const SizedBox(height: 8),
+              _MoreRow(
+                icon: Icons.system_update_outlined,
+                title: context.tr('Check for updates'),
+                subtitle: app.updateAvailable
+                    ? context.tr('A new version is available — tap to update')
+                    : '${context.tr('Version')} ${app.appVersion}',
+                onTap: app.checkForUpdateNow,
+                busy: app.checkingUpdate,
+                highlight: app.updateAvailable,
+              ),
+              const SizedBox(height: 16),
               _SignOutButton(),
             ],
           ),
@@ -81,27 +92,44 @@ class _MoreRow extends StatelessWidget {
   final String title;
   final String subtitle;
   final VoidCallback onTap;
-  const _MoreRow({required this.icon, required this.title, required this.subtitle, required this.onTap});
+  final bool busy;
+  final bool highlight;
+  const _MoreRow({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+    this.busy = false,
+    this.highlight = false,
+  });
   @override
   Widget build(BuildContext context) {
     final lc = context.lc;
     return LcCard(
-      onTap: onTap,
+      onTap: busy ? null : onTap,
       padding: const EdgeInsets.all(14),
       child: Row(
         children: [
-          Icon(icon, size: 22, color: lc.icon),
+          Icon(icon, size: 22, color: highlight ? lc.prim : lc.icon),
           const SizedBox(width: 13),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-                Text(subtitle, style: TextStyle(fontSize: 12, color: lc.mut)),
+                Text(subtitle,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: highlight ? lc.prim : lc.mut,
+                      fontWeight: highlight ? FontWeight.w600 : FontWeight.w400,
+                    )),
               ],
             ),
           ),
-          Icon(Icons.chevron_right, size: 15, color: lc.mut),
+          if (busy)
+            SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: lc.prim))
+          else
+            Icon(Icons.chevron_right, size: 15, color: lc.mut),
         ],
       ),
     );

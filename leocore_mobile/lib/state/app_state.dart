@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:convert' show jsonDecode;
 import 'dart:io' show File, Platform;
 import 'dart:math' show Random;
 
+import 'package:dio/dio.dart' show Dio, Options, ResponseType;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show MethodChannel, PlatformException;
@@ -10,6 +12,7 @@ import 'package:in_app_review/in_app_review.dart';
 import 'package:in_app_update/in_app_update.dart';
 import 'package:intl/intl.dart';
 import 'package:open_filex/open_filex.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
@@ -105,6 +108,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   Future<bool> _renewSession() async {
     final outcome = await api.renewSession();
     if (outcome == RefreshOutcome.ok) _lastRenewal = DateTime.now();
+    if (outcome == RefreshOutcome.revoked) return false; // already signed out
     if (outcome != RefreshOutcome.rejected) return true;
     if (screen != Screen.login) {
       await _store.clearTokens();
@@ -779,6 +783,9 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
         deviceName: _deviceName(),
       );
       me = res.user;
+      // A fresh login is as good as a renewal — don't rotate again on the
+      // first app switch (share sheet, PDF viewer, file picker…).
+      _lastRenewal = DateTime.now();
       demoMode = false;
       loggingIn = false;
       loginPass = '';
@@ -1594,6 +1601,113 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       await InAppUpdate.performImmediateUpdate();
     } catch (_) {
       showToast(t('Update could not be started'));
+    }
+  }
+
+  /// Installed version, e.g. "2.12.0 (14)" — shown on More → Check for updates.
+  String appVersion = '';
+  bool checkingUpdate = false;
+
+  Future<void> loadAppVersion() async {
+    if (appVersion.isNotEmpty) return;
+    try {
+      final p = await PackageInfo.fromPlatform();
+      appVersion = '${p.version} (${p.buildNumber})';
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  static const _storeId = 'sek.leocore.erp';
+
+  /// More → Check for updates. Android: asks Google Play and, when a newer
+  /// version exists, runs Play's full-screen update right away (it downloads,
+  /// installs and restarts the app; the sign-in is kept). iOS, or a copy not
+  /// installed from Play: compares with the store and opens the store page.
+  Future<void> checkForUpdateNow() async {
+    if (checkingUpdate) return;
+    checkingUpdate = true;
+    notifyListeners();
+    try {
+      if (Platform.isAndroid) {
+        AppUpdateInfo? info;
+        try {
+          info = await InAppUpdate.checkForUpdate();
+        } catch (_) {/* not installed from Google Play */}
+        if (info == null) {
+          await _openStorePage();
+          return;
+        }
+        final avail = info.updateAvailability;
+        if (avail == UpdateAvailability.updateAvailable ||
+            avail == UpdateAvailability.developerTriggeredUpdateInProgress) {
+          updateAvailable = true;
+          updateDismissed = true; // the banner/dialog isn't needed any more
+          checkingUpdate = false;
+          notifyListeners();
+          try {
+            await InAppUpdate.performImmediateUpdate();
+          } catch (_) {
+            await _openStorePage();
+          }
+          return;
+        }
+        showToast(t('You have the latest version'));
+      } else {
+        await _checkAppStore();
+      }
+    } finally {
+      checkingUpdate = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _checkAppStore() async {
+    try {
+      final res = await Dio().get<dynamic>(
+        'https://itunes.apple.com/lookup',
+        queryParameters: {'bundleId': _storeId, 't': DateTime.now().millisecondsSinceEpoch},
+        options: Options(responseType: ResponseType.plain),
+      );
+      final m = jsonDecode(res.data.toString()) as Map<String, dynamic>;
+      final list = (m['results'] as List?) ?? const [];
+      if (list.isEmpty) {
+        showToast(t('Could not check for updates'));
+        return;
+      }
+      final r = list.first as Map<String, dynamic>;
+      final store = (r['version'] ?? '').toString();
+      final mine = (await PackageInfo.fromPlatform()).version;
+      if (_isNewer(store, mine)) {
+        final url = (r['trackViewUrl'] ?? '').toString();
+        if (url.isNotEmpty) await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+      } else {
+        showToast(t('You have the latest version'));
+      }
+    } catch (_) {
+      showToast(t('Could not check for updates'));
+    }
+  }
+
+  static bool _isNewer(String a, String b) {
+    List<int> p(String v) => v.split('.').map((x) => int.tryParse(x) ?? 0).toList();
+    final x = p(a), y = p(b);
+    for (var i = 0; i < 3; i++) {
+      final d = (i < x.length ? x[i] : 0) - (i < y.length ? y[i] : 0);
+      if (d != 0) return d > 0;
+    }
+    return false;
+  }
+
+  Future<void> _openStorePage() async {
+    final market = Uri.parse('market://details?id=$_storeId');
+    final web = Uri.parse('https://play.google.com/store/apps/details?id=$_storeId');
+    try {
+      if (await launchUrl(market, mode: LaunchMode.externalApplication)) return;
+    } catch (_) {}
+    try {
+      await launchUrl(web, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      showToast(t('Could not check for updates'));
     }
   }
 
