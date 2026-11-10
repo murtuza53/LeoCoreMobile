@@ -73,6 +73,7 @@ class ProductDetailScreen extends StatelessWidget {
                                           fontSize: 13.5,
                                           fontWeight: FontWeight.w600,
                                           letterSpacing: 0.4))),
+                              if (app.mProductEdit)
                               GestureDetector(
                                 onTap: app.openEdit,
                                 child: Text(context.tr('Edit barcode / price'),
@@ -158,12 +159,14 @@ class ProductDetailScreen extends StatelessWidget {
                 border: Border(top: BorderSide(color: lc.line))),
             child: Row(
               children: [
+                if (app.mSale)
                 Expanded(
                     flex: 15,
                     child: PrimaryButton(context.tr('Add to memo'),
                         icon: Icons.shopping_cart_outlined,
                         onTap: app.addCurrentToCart)),
-                const SizedBox(width: 10),
+                if (app.mSale && app.mCountSubmit) const SizedBox(width: 10),
+                if (app.mCountSubmit)
                 Expanded(
                     flex: 10,
                     child: OutlineButton2(context.tr('Count'), onTap: app.goCount)),
@@ -351,13 +354,14 @@ class _PhotoStrip extends StatelessWidget {
               for (var i = 0; i < images.length; i++)
                 tile(
                   onTap: () => _openGallery(context, app, i),
-                  onLongPress: () => _confirmRemove(context, app, images[i].id),
+                  onLongPress: app.mProductEdit ? () => _confirmRemove(context, app, images[i].id) : null,
                   // Loads through the authenticated API pipeline (Bearer token +
                   // refresh) so protected server photos render instead of
                   // showing a broken image.
                   child: AuthedNetworkImage(url: app.imageUrl(images[i].listUrl), fit: BoxFit.cover),
                 ),
-              // Add-photo tile.
+              // Add-photo tile — MobileProducts Edit.
+              if (app.mProductEdit)
               GestureDetector(
                 onTap: app.photoUploading ? null : () => _pickSource(context, app),
                 child: Container(

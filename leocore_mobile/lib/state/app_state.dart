@@ -31,6 +31,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../data/mock_data.dart';
 import '../l10n/ar.dart';
 import '../models/documents.dart';
+import '../models/permissions.dart';
 import '../models/models.dart';
 import '../models/reports.dart';
 import '../utils/money.dart';
@@ -97,12 +98,28 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed || demoMode || sessionLocked) return;
+    _refreshPermissions();
     final last = _lastRenewal;
     if (last != null && DateTime.now().difference(last) < const Duration(hours: 1)) return;
     _renewSession();
   }
 
   DateTime? _lastRenewal;
+
+  /// Re-reads the menu so a change on the server's permission page reaches
+  /// the phone when the app comes back to the foreground (at most once a
+  /// minute). A failed read keeps the rights already known.
+  DateTime? _permsAt;
+  Future<void> _refreshPermissions() async {
+    final at = _permsAt;
+    if (at != null && DateTime.now().difference(at) < const Duration(minutes: 1)) return;
+    _permsAt = DateTime.now();
+    try {
+      _perms = await _repo.permissions();
+      if (!_screenAllowed(screen)) screen = Screen.home;
+      notifyListeners();
+    } catch (_) {/* offline — keep what we had */}
+  }
 
   /// Rotates the tokens. Returns false only when the server rejected the
   /// session (the user is sent to login); offline keeps the saved session.
@@ -143,7 +160,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   bool dataLoading = false;
   String? dataError;
   ApiUser? me;
-  Set<String> _menuKeys = {};
+  MobilePermissions _perms = MobilePermissions.unknown;
   List<String> _liveCategories = [];
   Map<String, int> _categoryIds = {};
 
@@ -581,27 +598,66 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   // ══════════════════════════════════════════════════════════════════
   //  Permissions (menu-driven in live mode, role-driven in demo)
   // ══════════════════════════════════════════════════════════════════
-  bool _menuHas(String needle) => _menuKeys.any((k) => k.contains(needle));
+  /// Rights for a Mobile App feature (see models/permissions.dart). Demo mode
+  /// has no server, so it uses the demo role picked in Settings.
+  Rights rights(String feature) => _perms.of(feature);
+  bool _can(String feature, bool Function(Rights r) right) => right(_perms.of(feature));
 
-  bool get mSuppliers => demoMode ? role == Role.manager : (_menuKeys.isEmpty || _menuHas('supplier'));
-  bool get mReports => demoMode ? role == Role.manager : (_menuKeys.isEmpty || _menuHas('report'));
+  // Pages (View)
+  bool get mDashboard => demoMode ? true : _can(Feat.dashboard, (r) => r.view);
+  bool get mProducts => demoMode ? true : _can(Feat.products, (r) => r.view);
+  bool get mCustomers => demoMode ? true : _can(Feat.customers, (r) => r.view);
+  bool get mSuppliers => demoMode ? role == Role.manager : _can(Feat.suppliers, (r) => r.view);
+  bool get mStatements => demoMode ? true : _can(Feat.statements, (r) => r.view);
+  bool get mStockAlerts => demoMode ? role != Role.salesRep : _can(Feat.stockAlerts, (r) => r.view);
+  bool get mReports => demoMode ? role == Role.manager : _can(Feat.reports, (r) => r.view);
 
   /// Manager reports (v1.4.5+) split by RBAC gate.
   /// `MobileReports` → analytics; `MobileFinanceReports` → money/profit/cost.
-  bool get mAnalytics => demoMode ? role == Role.manager : _menuHas('report');
-  bool get mFinance => demoMode ? role == Role.manager : (_menuHas('finance') || _menuHas('financ'));
+  bool get mAnalytics => mReports;
+  bool get mFinance => demoMode ? role == Role.manager : _can(Feat.financeReports, (r) => r.view);
 
-  /// Print Labels (v1.4.7) — gate: `MobileLabels`.
-  bool get mLabels => demoMode ? role != Role.salesRep : _menuHas('label');
+  /// Print Labels (v1.4.7) — page `MobileLabels` View; the Print button needs Print.
+  bool get mLabels => demoMode ? role != Role.salesRep : _can(Feat.labels, (r) => r.view);
+  bool get mLabelPrint => demoMode ? mLabels : _can(Feat.labels, (r) => r.print);
 
-  /// Attach Docs (1.6.x) — gate: `MobileDocuments` (menu id `documents`).
-  bool get mDocuments => demoMode ? role != Role.salesRep : _menuHas('document');
-  bool get mCount => demoMode
-      ? role != Role.salesRep
-      : (_menuKeys.isEmpty || _menuHas('count') || _menuHas('stock'));
-  bool get mSale => demoMode
-      ? role != Role.storekeeper
-      : (_menuKeys.isEmpty || _menuHas('sale') || _menuHas('invoice') || _menuHas('cash'));
+  /// Attach Docs (1.6.x) — `MobileDocuments`; attach/delete come per document from /documents/lookup.
+  bool get mDocuments => demoMode ? role != Role.salesRep : _can(Feat.documents, (r) => r.view);
+
+  // Stock count: View opens the sheet, Create submits (and the "Count" buttons).
+  bool get mCount => demoMode ? role != Role.salesRep : _can(Feat.stockCount, (r) => r.view);
+  bool get mCountSubmit => demoMode ? mCount : _can(Feat.stockCount, (r) => r.create);
+
+  // Cash sale: the screen only makes drafts, so it needs Create; Print = its PDF.
+  bool get mSale => demoMode ? role != Role.storekeeper : _can(Feat.cashSales, (r) => r.view && r.create);
+  bool get mSalePrint => demoMode ? mSale : _can(Feat.cashSales, (r) => r.print);
+
+  // Quotations: View = saved list, Create = new quotation, Print = PDF download/share.
+  bool get mQuotes => demoMode ? role != Role.storekeeper : _can(Feat.quotations, (r) => r.view);
+  bool get mQuoteNew => demoMode ? mQuotes : _can(Feat.quotations, (r) => r.create);
+  bool get mQuotePrint => demoMode ? mQuotes : _can(Feat.quotations, (r) => r.print);
+
+  // Products: Edit = barcode / price and photos.
+  bool get mProductEdit => demoMode ? true : _can(Feat.products, (r) => r.edit);
+
+  /// Whether the user may be on [s]; used to leave a page whose permission
+  /// was just taken away.
+  bool _screenAllowed(Screen s) => switch (s) {
+        Screen.products || Screen.product || Screen.scan => mProducts,
+        Screen.customers || Screen.customer => mCustomers,
+        Screen.managerReports => mAnalytics || mFinance,
+        Screen.documents => mDocuments,
+        Screen.suppliers => mSuppliers,
+        Screen.statementPicker || Screen.statement => mStatements,
+        Screen.invoice => mSale,
+        Screen.quotation => mQuoteNew,
+        Screen.quotations => mQuotes,
+        Screen.count => mCount,
+        Screen.low => mStockAlerts,
+        Screen.reports => mReports,
+        Screen.labels => mLabels,
+        _ => true,
+      };
 
   bool get showNav => const {
         Screen.home,
@@ -712,17 +768,18 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
     try {
       final results = await Future.wait([
-        _repo.products(pageSize: 200),
-        _repo.customers(pageSize: 200),
+        _repo.products(pageSize: 200).catchError((Object e) => e is ApiException && e.isForbidden ? <Product>[] : throw e),
+        _repo.customers(pageSize: 200).catchError((Object e) => e is ApiException && e.isForbidden ? <Customer>[] : throw e),
         _repo.kpis().catchError((_) => const KpiData()),
-        _repo.menuKeys().catchError((_) => <String>[]),
+        _repo.permissions().catchError((_) => MobilePermissions.unknown),
         _repo.categories().catchError((_) => <({int id, String name})>[]),
         _repo.warehouses().catchError((_) => <({int id, String code, String name})>[]),
       ]);
       _products = results[0] as List<Product>;
       _customers = results[1] as List<Customer>;
       kpis = results[2] as KpiData;
-      _menuKeys = (results[3] as List<String>).toSet();
+      _perms = results[3] as MobilePermissions;
+      _permsAt = DateTime.now();
       final cats = results[4] as List<({int id, String name})>;
       _liveCategories = [for (final c in cats) c.name];
       _categoryIds = {for (final c in cats) c.name: c.id};
@@ -996,7 +1053,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     _ledger = null;
     kpis = null;
     me = null;
-    _menuKeys = {};
+    _perms = MobilePermissions.unknown;
     _resetLists();
     nav(Screen.login);
   }

@@ -88,7 +88,8 @@ class HomeScreen extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 14),
-              // KPI grid 2×2
+              // KPI grid 2×2 — MobileDashboard
+              if (app.mDashboard) ...[
               IntrinsicHeight(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 Expanded(child: _Kpi(label: context.tr("Today's sales"), value: app.kpiSales, unit: 'BHD', chip: app.kpiSalesChip, chipFg: lc.ok, chipBg: lc.okbg, onTap: app.mReports ? app.goReports : null)),
                 const SizedBox(width: 10),
@@ -96,13 +97,14 @@ class HomeScreen extends StatelessWidget {
               ])),
               const SizedBox(height: 10),
               IntrinsicHeight(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                Expanded(child: _Kpi(label: context.tr('Outstanding AR'), value: app.kpiOutstanding, unit: 'BHD', valueColor: lc.prim2, chip: app.kpiArChip, chipFg: lc.bad, chipBg: lc.badbg, onTap: () => app.nav(Screen.customers))),
+                Expanded(child: _Kpi(label: context.tr('Outstanding AR'), value: app.kpiOutstanding, unit: 'BHD', valueColor: lc.prim2, chip: app.kpiArChip, chipFg: lc.bad, chipBg: lc.badbg, onTap: app.mCustomers ? () => app.nav(Screen.customers) : null)),
                 const SizedBox(width: 10),
-                Expanded(child: _Kpi(label: context.tr('Low stock'), value: app.kpiLowStock, unit: context.tr('items'), valueColor: lc.warn, chip: app.kpiLowChip, chipFg: lc.warn, chipBg: lc.warnbg, onTap: app.goLow)),
+                Expanded(child: _Kpi(label: context.tr('Low stock'), value: app.kpiLowStock, unit: context.tr('items'), valueColor: lc.warn, chip: app.kpiLowChip, chipFg: lc.warn, chipBg: lc.warnbg, onTap: app.mStockAlerts ? app.goLow : null)),
               ])),
               const SizedBox(height: 14),
               _SalesTrendCard(),
               const SizedBox(height: 14),
+              ],
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -331,14 +333,14 @@ class _WorkspaceGrid extends StatelessWidget {
     final app = context.watch<AppState>();
 
     final tiles = <(IconData, String, VoidCallback?)>[
-      (Icons.inventory_2_outlined, context.tr('Products'), () => app.nav(Screen.products)),
-      (Icons.people_outline, context.tr('Customers'), () => app.nav(Screen.customers)),
+      if (app.mProducts) (Icons.inventory_2_outlined, context.tr('Products'), () => app.nav(Screen.products)),
+      if (app.mCustomers) (Icons.people_outline, context.tr('Customers'), () => app.nav(Screen.customers)),
       if (app.mSuppliers) (Icons.local_shipping_outlined, context.tr('Suppliers'), app.goSuppliers),
       if (app.mSale) (Icons.receipt_long_outlined, context.tr('Cash Sale'), () => app.nav(Screen.invoice)),
       if (app.mCount) (Icons.checklist_rounded, context.tr('Stock Count'), app.goCount),
-      if (app.mCount) (Icons.warning_amber_rounded, context.tr('Low Stock'), app.goLow),
+      if (app.mStockAlerts) (Icons.warning_amber_rounded, context.tr('Low Stock'), app.goLow),
       if (app.mReports) (Icons.show_chart, context.tr('Reports'), app.goReports),
-      (Icons.description_outlined, context.tr('Statements'), app.openStatementPicker),
+      if (app.mStatements) (Icons.description_outlined, context.tr('Statements'), app.openStatementPicker),
       (Icons.settings_outlined, context.tr('Settings'), () => app.nav(Screen.settings)),
     ];
 

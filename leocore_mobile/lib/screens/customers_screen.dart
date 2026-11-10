@@ -250,6 +250,7 @@ class CustomerScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 12),
+              if (app.mStatements)
               LcCard(
                 onTap: app.goStatement,
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),

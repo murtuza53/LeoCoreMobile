@@ -50,13 +50,15 @@ class LcBottomNav extends StatelessWidget {
           child: Row(
             children: [
               item(Icons.home_outlined, context.tr('Home'), s == Screen.home, () => app.nav(Screen.home)),
-              item(Icons.inventory_2_outlined, context.tr('Products'), s == Screen.products, () => app.nav(Screen.products)),
-              const SizedBox(width: 72),
-              item(Icons.people_outline, context.tr('Customers'), s == Screen.customers, () => app.nav(Screen.customers)),
+              if (app.mProducts) item(Icons.inventory_2_outlined, context.tr('Products'), s == Screen.products, () => app.nav(Screen.products)),
+              if (app.mProducts) const SizedBox(width: 72),
+              if (app.mCustomers) item(Icons.people_outline, context.tr('Customers'), s == Screen.customers, () => app.nav(Screen.customers)),
               item(Icons.grid_view_outlined, context.tr('More'), s == Screen.more, () => app.nav(Screen.more)),
             ],
           ),
         ),
+        // Scan looks products up by barcode — MobileProducts.
+        if (app.mProducts)
         Positioned(
           top: -26,
           child: GestureDetector(

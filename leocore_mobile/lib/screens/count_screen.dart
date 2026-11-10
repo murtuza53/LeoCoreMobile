@@ -50,7 +50,7 @@ class CountScreen extends StatelessWidget {
                 children: [
                   IconChip(Icons.qr_code_scanner, size: 52, fg: lc.gold, border: Border.all(color: lc.gold, width: 1.5), onTap: app.openScan),
                   const SizedBox(width: 10),
-                  Expanded(child: PrimaryButton('${context.tr('Submit count')} (${app.countedLines})', onTap: app.submitCount, busy: app.submittingCount)),
+                  Expanded(child: PrimaryButton('${context.tr('Submit count')} (${app.countedLines})', onTap: app.mCountSubmit ? app.submitCount : null, busy: app.submittingCount)),
                 ],
               ),
             ),

@@ -319,10 +319,14 @@ class _MatchSheet extends StatelessWidget {
                   const SizedBox(height: 14),
                   Row(children: [
                     Expanded(flex: 10, child: OutlineButton2(context.tr('Open'), height: 48, borderColor: lc.line, onTap: app.openScanned)),
-                    const SizedBox(width: 9),
-                    Expanded(flex: 14, child: PrimaryButton(context.tr('Add to memo'), height: 48, onTap: app.addScanned)),
-                    const SizedBox(width: 9),
-                    Expanded(flex: 10, child: OutlineButton2(context.tr('Count'), height: 48, borderColor: lc.gold, onTap: app.countScanned)),
+                    if (app.mSale) ...[
+                      const SizedBox(width: 9),
+                      Expanded(flex: 14, child: PrimaryButton(context.tr('Add to memo'), height: 48, onTap: app.addScanned)),
+                    ],
+                    if (app.mCountSubmit) ...[
+                      const SizedBox(width: 9),
+                      Expanded(flex: 10, child: OutlineButton2(context.tr('Count'), height: 48, borderColor: lc.gold, onTap: app.countScanned)),
+                    ],
                   ]),
                 ],
               ),

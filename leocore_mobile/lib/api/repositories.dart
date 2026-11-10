@@ -1,6 +1,7 @@
 import 'package:intl/intl.dart';
 
 import '../models/documents.dart';
+import '../models/permissions.dart';
 import '../models/models.dart';
 import '../models/reports.dart';
 import '../state/paged_list.dart';
@@ -748,16 +749,9 @@ class LeoRepository {
       );
 
   // ── Menu (permission-filtered) ─────────────────────────────────────────
-  Future<List<String>> menuKeys() async {
-    final j = await _client.getJson('/menu');
-    final items = j['items'];
-    if (items is! List) return const [];
-    return items
-        .whereType<Map>()
-        .map((m) => '${_s(m, ['id'])} ${_s(m, ['route'])} ${_s(m, ['title'])}'.toLowerCase())
-        .where((s) => s.trim().isNotEmpty)
-        .toList();
-  }
+  /// The user's rights per mobile page (role permission page → Mobile App tab).
+  Future<MobilePermissions> permissions() async =>
+      MobilePermissions.fromMenu(await _client.getJson('/menu'));
 
   Future<void> updateProduct(int id, {String? barcode, String? model, double? defaultPrice}) async {
     final body = {

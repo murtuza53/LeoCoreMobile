@@ -146,7 +146,7 @@ class _LabelsScreenState extends State<LabelsScreen> {
                   child: PrimaryButton(
                     context.tr('Print PDF'),
                     icon: Icons.print_outlined,
-                    onTap: app.printLabels,
+                    onTap: app.mLabelPrint ? app.printLabels : null,
                     busy: app.labelsBusy,
                   ),
                 ),

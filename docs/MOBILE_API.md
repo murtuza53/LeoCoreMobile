@@ -1,6 +1,6 @@
 # LeoCore Mobile API — Reference (v1)
 
-For the mobile app team. **Current as of LeoCore ERP 1.6.52 (10 Nov 2026).** This one file is the complete
+For the mobile app team. **Current as of LeoCore ERP 1.6.54 (10 Nov 2026).** This one file is the complete
 reference: it replaces the separate notes (`MOBILE_ACCESS_API.md`, `MOBILE_API_UPDATE_2026-08.md`,
 `MOBILE_API_UPDATE_2026-09.md`, `MOBILE_API_DOCUMENT_UPLOAD.md`), whose content is merged in below.
 
@@ -118,31 +118,66 @@ HTTP/1.1 401 Unauthorized
 - `read` — read-only; product edit/image endpoints refuse.
 - `read write` — may edit product barcode/model/price and manage product images.
 
-**Permissions (RBAC).** Everything else is gated by the user's role permissions, group **"Mobile App"** on
-the web permission page (User Roles). Admin/SuperAdmin always have every permission.
+**Permissions (RBAC).** Everything else is gated by the user's role permissions. On the web, **Administration →
+User Roles → Permissions** has a **Mobile App** tab: one row per mobile page, with the rights View / Create / Edit /
+Delete / Print / Email, and under each row a note of which buttons each right turns on. Mobile rights are separate
+from the web rights. Admin/SuperAdmin always have every permission.
 
-| Feature key | Name on permission page | Access used |
-|---|---|---|
-| `MobileAccess` | Mobile App (Access) | View — may use the app at all |
-| `MobileDashboard` | Dashboard & KPIs | View |
-| `MobileProducts` | Products | View; Edit = barcode/model/price/images |
-| `MobileLabels` | Barcode Labels | View + Print |
-| `MobileCustomers` / `MobileSuppliers` | Customers / Suppliers | View |
-| `MobileStatements` | Statements & Ledgers | View |
-| `MobileStockLedger` | Stock Ledger | View |
-| `MobileDocuments` | Document Attachments | View = look up/list/open; Edit = attach; **Delete = delete an attachment** |
-| `MobileReports` | Reports | View (sales analytics, §9) |
-| `MobileFinanceReports` | Finance Reports | View (AR/cash/VAT/margin/valuation, §9) |
-| `MobileCashSales` | Cash Sales | View + Create + Print |
-| `MobileQuotations` | Quotations | View + Create + Print |
-| `MobileStockCount` | Stock Counting | View + Create |
-| `MobileReceipts` | Receipts | View + Create |
+**The rule for the app:** a page appears (menu, Home tile, More list, bottom bar) only when its feature has **View**;
+each button appears only when its feature has the right in the table. The server enforces the same rules on every
+call (`403 FORBIDDEN`), so hiding is about not offering what would be refused.
 
-**Build the app menu from `GET /menu`** — it returns only the items the user has View on:
+| Feature key | Permission-page row | Menu id | View | Other rights → buttons |
+|---|---|---|---|---|
+| `MobileAccess` | Mobile App (Access) | — | may sign in at all | — |
+| `MobileDashboard` | Dashboard & KPIs | `dashboard` | Home KPI cards and sales trend | — |
+| `MobileProducts` | Products | `products` | Products list/detail, **Scan** button | **Edit** = "Edit barcode / price", add / remove photos |
+| `MobileLabels` | Barcode Labels | `labels` | Print Labels screen | **Print** = Print button |
+| `MobileCustomers` | Customers | `customers` | Customers tab, customer detail | — |
+| `MobileSuppliers` | Suppliers | `suppliers` | Suppliers list | — |
+| `MobileStatements` | Statements & Ledgers | `statements` | Statements tile; statement card on a customer; tapping a supplier | — (download/share/print come with View) |
+| `MobileStockLedger` | Stock Ledger | `stock-ledger` | stock movements, warehouse list | — |
+| `MobileStockAlerts` | Stock Alerts (Low / Dead Stock) | `stock-alerts` | Low stock tile, Stock alerts, the Low-stock KPI tap | — |
+| `MobileReports` | Reports | `reports` | Reports; sales analytics in Business Health | — |
+| `MobileFinanceReports` | Finance Reports | `finance-reports` | finance cards in Business Health (§9) | — |
+| `MobileCashSales` | Cash Sales | `cash-sale` | — | **Create** = Cash Sale screen and "Add to memo" (product, scan); **Print** = sale PDF |
+| `MobileQuotations` | Quotations | `quotations` | Saved quotations | **Create** = new quotation; **Print** = Download / Share PDF |
+| `MobileStockCount` | Stock Counting | `stock-count` | Stock count sheet | **Create** = Submit count, "Count" (product, scan) |
+| `MobileReceipts` | Receipts | `receipts` | customer outstanding invoices | **Create** = record a receipt (no screen yet) |
+| `MobileDocuments` | Document Attachments | `documents` | Attach Docs, open files | **Edit** = attach; **Delete** = delete an attachment (also per document as `canAttach` / `canDelete`, §8) |
+
+**1.6.54:** `MobileStockAlerts` is new. Low / dead stock used to need `MobileStockLedger`; on upgrade every role
+gets Stock Alerts with the same View it had on Stock Ledger, so nobody loses the page.
+
+### GET `/menu` (version 2)
+Returns the pages the user has View on, each with its rights, plus `permissions` — the rights for **every** Mobile
+App feature (including ones that aren't pages, such as `MobileAccess`). Rights are only ever `true` when the
+feature offers them (e.g. Products never reports `create`) and View is on.
 ```json
-{ "version": 1, "items": [ { "id": "documents", "title": "Attach Docs", "icon": "attach_file",
-  "route": "/documents", "section": "Transactions", "order": 110, "canEdit": true } ] }
+{
+  "version": 2,
+  "items": [
+    { "id": "cash-sale", "title": "Cash Sale", "icon": "point_of_sale", "route": "/cash-sale",
+      "section": "Transactions", "order": 80, "feature": "MobileCashSales", "canEdit": false,
+      "rights": { "view": true, "create": true, "edit": false, "delete": false, "print": true, "email": false } }
+  ],
+  "permissions": {
+    "MobileAccess":    { "view": true,  "create": false, "edit": false, "delete": false, "print": false, "email": false },
+    "MobileProducts":  { "view": true,  "create": false, "edit": true,  "delete": false, "print": false, "email": false },
+    "MobileStockAlerts": { "view": false, "create": false, "edit": false, "delete": false, "print": false, "email": false }
+  }
+}
 ```
+- Gate by **feature key** from `permissions`, not by matching titles or ids.
+- `canEdit` is kept for app builds that read menu v1. A v1 server has no `permissions`; treat each listed item as
+  View + Create + Print, Edit from `canEdit`.
+- **Refresh the menu** after sign-in and when the app returns to the foreground (at most once a minute), so a
+  change on the permission page reaches the phone without signing out. If the page on screen is no longer
+  allowed, go Home.
+- If `/menu` fails (offline), keep the rights you already have; if you have none yet, show everything and let the
+  server refuse.
+- A role without Products or Customers gets `403` on those lists — show an empty page, not a sign-in error.
+
 A missing permission on an endpoint → `403 FORBIDDEN`.
 
 ---
@@ -275,8 +310,8 @@ onResponse(res):
 | Method | Path | Purpose / params |
 |---|---|---|
 | GET | `/inventory/stock-ledger` | `?itemId&warehouseId&page&pageSize` |
-| GET | `/inventory/low-stock` | `?threshold&warehouseId&page&pageSize` |
-| GET | `/inventory/dead-stock` | `?days&warehouseId&page&pageSize` |
+| GET | `/inventory/low-stock` | `?threshold&warehouseId&page&pageSize` — `MobileStockAlerts` |
+| GET | `/inventory/dead-stock` | `?days&warehouseId&page&pageSize` — `MobileStockAlerts` |
 | GET | `/inventory/stock-count/sheet` | Count sheet. `?warehouseId&search&page&pageSize` |
 | POST | `/inventory/stock-count` | Submit a count — §10 |
 
@@ -699,7 +734,8 @@ Date params are `YYYY-MM-DD`; `from`/`to` default to the current month.
 - [ ] Send a stable `deviceId` + friendly `deviceName` on login; show `session.message` when non-null.
 - [ ] Interceptor (§3b): `403 MOBILE_ACCESS_DISABLED` and `401 SESSION_TERMINATED` → hard sign-out, no refresh;
       other `401` → refresh once.
-- [ ] Build navigation from `GET /menu`.
+- [ ] Build navigation from `GET /menu` v2 and hide every button whose right is off (§2 table); refresh the
+      menu on sign-in and on return to the foreground.
 - [ ] Every list (products, customers, suppliers, statements picker, quotations, stock count, low/dead stock):
       server `search`, infinite scroll on `hasMore`; customers/suppliers/statements get a "hide zero balances"
       switch (`balance=nonzero`) and a sort by balance.
@@ -719,6 +755,10 @@ Date params are `YYYY-MM-DD`; `from`/`to` default to the current month.
 3. *Pictures:* a product with pictures shows thumbnails in the list and the full picture in the viewer.
 4. *Attach Docs:* look up a number with files → list shows them; open an image and a PDF; attach a scan →
    list updates; delete it (with Delete permission) → list updates; without Delete the button is hidden.
+5. *Mobile permissions:* give a role only Mobile Access, Dashboard, Customers and Statements → the app shows
+   Home KPIs, the Customers tab and Statements, with no Products tab, no Scan button and no Cash Sale / Quotation /
+   Count; turn on Quotations View only → "Saved quotations" appears without "Quotation" (new) or the PDF buttons;
+   untick Stock Alerts while the app is open, switch away and back → the Low stock tile disappears.
 
 ---
 
@@ -726,6 +766,7 @@ Date params are `YYYY-MM-DD`; `from`/`to` default to the current month.
 
 | Version | Change | App action |
 |---|---|---|
+| **1.6.54** (Nov 2026) | **Mobile permissions:** the role permission page has a **Mobile App** tab; `GET /menu` is **version 2** with `feature` + `rights` per page and a `permissions` map for every Mobile App feature; new menu pages `stock-alerts`, `finance-reports`, `quotations`; new feature **`MobileStockAlerts`** gates `/inventory/low-stock` and `/inventory/dead-stock` (carried over from Stock Ledger on upgrade) (§2) | Gate pages and buttons by feature rights; refresh the menu on resume |
 | **1.6.52** (Nov 2026) | **Sign-out fixes:** admins no longer refused on refresh (`MOBILE_ACCESS_DISABLED` every ~30 min); a refresh whose reply was lost is accepted again for 2 min; a refresh after a login elsewhere returns `SESSION_TERMINATED` naming the device; new token issued before the old is revoked; rate limits are per phone, and 429 uses the error envelope (`RATE_LIMITED`) (§1, §3) | Treat 429/5xx as retry, not sign-out |
 | **1.6.52** (Nov 2026) | Lists: `hasMore` on every paged list; `pageSize` up to 200; customers/suppliers `balance=nonzero`, `sort=balance`, search by phone/VAT/TRN/id; suppliers gain `outstanding`; quotations `search` (§4, §5) | Infinite scroll + server search everywhere; zero-balance filter |
 | **1.6.52** (Nov 2026) | Attach Docs: lookup returns the existing `attachments` + `canAttach`/`canDelete`; new open-file and **delete** endpoints; new **Delete** access on `MobileDocuments`; attachment `url` now opens through the API; added `isImage`, `isPdf`, `downloadUrl`; `uploadedAt` marked UTC (§8) | Show the files after lookup; open with Bearer; delete with confirmation |

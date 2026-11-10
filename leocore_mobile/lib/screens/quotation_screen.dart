@@ -30,7 +30,7 @@ class QuotationScreen extends StatelessWidget {
               onBack: app.leaveDoc,
               actions: [
                 GestureDetector(
-                  onTap: app.openQuoteHistory,
+                  onTap: app.mQuotes ? app.openQuoteHistory : null,
                   child: Container(
                     width: 42,
                     height: 42,

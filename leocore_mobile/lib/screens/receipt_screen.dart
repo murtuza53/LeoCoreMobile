@@ -127,7 +127,7 @@ class ReceiptScreen extends StatelessWidget {
                     ],
                   ),
                 ),
-              if (isQuote) ...[
+              if (isQuote && app.mQuotePrint) ...[
                 PrimaryButton(
                   context.tr('Download PDF'),
                   icon: Icons.download_outlined,

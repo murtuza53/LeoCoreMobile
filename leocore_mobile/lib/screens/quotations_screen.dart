@@ -100,7 +100,9 @@ class _QuoteRow extends StatelessWidget {
           SizedBox(
             width: 44,
             height: 44,
-            child: busy
+            child: !app.mQuotePrint
+                ? null
+                : busy
                 ? Padding(padding: const EdgeInsets.all(12), child: CircularProgressIndicator(strokeWidth: 2, color: lc.prim))
                 : IconButton(
                     tooltip: context.tr('Download PDF'),
@@ -204,6 +206,8 @@ Future<void> _showDetail(BuildContext context, QuotationSummary q) {
               ),
               Consumer<AppState>(
                 builder: (_, s, __) {
+                  // Share / Download PDF — MobileQuotations Print.
+                  if (!s.mQuotePrint) return SizedBox(height: 16 + MediaQuery.paddingOf(ctx).bottom);
                   final busy = s.quotePdfId == q.id;
                   return Padding(
                     padding: EdgeInsets.fromLTRB(16, 8, 16, 16 + MediaQuery.paddingOf(ctx).bottom),

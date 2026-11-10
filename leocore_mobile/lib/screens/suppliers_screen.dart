@@ -59,7 +59,7 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
             emptyText: app.demoMode ? 'Suppliers are available on live sign-in' : (app.supplierQuery.isEmpty ? 'No suppliers' : 'No matching suppliers'),
             itemBuilder: (_, s) {
               return LcCard(
-                onTap: () => app.openSupplierStatement(s.id),
+                onTap: app.mStatements ? () => app.openSupplierStatement(s.id) : null,
                 padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
                 child: Row(
                   children: [
