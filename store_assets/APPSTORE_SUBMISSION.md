@@ -1,7 +1,7 @@
 # LeoCore ERP — App Store Submission Pack
 
 Bundle ID: `sek.leocore.erp` · Team: `QH862RRRJ6` · Latest shipped: `2.10.0` build `12`
-In flight: nothing (2.10.0 reached 100% on 2026-11-02)
+In flight: `2.11.0` build `13`
 Target: iPhone only · Min iOS 15.0
 
 ---
@@ -50,7 +50,7 @@ erp,inventory,barcode,stock,invoice,pos,sales,quotation,supplier,warehouse,scann
 ## 4. Promotional Text (≤170)
 
 > Promotional text is **blank on every new version** and must be re-entered.
-> Current: **`promo_text_2.10.0.txt`** (148/170 chars). Shown below is the 2.6.0 text.
+> Current: **`promo_text_2.11.0.txt`** (159/170 chars). Shown below is the 2.6.0 text.
 
 ```
 Run your business from your pocket — scan barcodes, raise invoices and quotations,
@@ -98,7 +98,7 @@ by your company's administrator. It is not a standalone product.
 
 ## 6. What's New in This Version
 
-> Current iOS release notes: **`whats_new_ios_2.10.0.txt`**.
+> Current iOS release notes: **`whats_new_ios_2.11.0.txt`**.
 >
 > **Keep an iOS-only copy of every release note.** `whats_new_<ver>.txt` is Murtuza's
 > Android text and routinely contains bullets iOS never gets, so it cannot be used
@@ -113,6 +113,12 @@ by your company's administrator. It is not a standalone product.
 > - 2.10.0 "Fixed sharing, PDF opening and barcode scanning on some phones" — that is
 >   the CameraX unpin (see the log for 2026-10-27); iOS registers plugins via pods and
 >   was never affected.
+> - 2.11.0 "Product photos: thumbnails and a full-screen viewer with share and
+>   download" — **iOS has had the thumbnails and the viewer since 2.9.0.** 2.11.0 only
+>   extracted the inline `_FullScreenGallery` into the shared `photo_viewer.dart` and
+>   added share + save buttons, so the iOS bullet claims only those. Re-announcing a
+>   shipped feature as new is the same trap as the Android-only bullets; check the
+>   diff, not the headline.
 >
 > iOS also skipped 2.8.0 entirely, so `whats_new_ios_2.9.0.txt` is the 2.8.0 and 2.9.0
 > bullets merged and neither Android file is complete on its own.

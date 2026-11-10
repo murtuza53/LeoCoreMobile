@@ -16,7 +16,7 @@ More > Attach Docs, two modes.
 
 "One document" - enter DEMO-INV-00051 or DEMO-INV-00142 (Sales Invoices on the demo server; other numbers correctly report "not found"). Then attach from Files, Photos or the gallery, scan paper with the camera, or use "Add page" to shoot several pages and "Combine to PDF" to merge them into one upload.
 
-"Match by name" (new in 2.9.0) - pick several files at once; each FILENAME is read as the document number and looked up. Please test with files named after a demo document, e.g. DEMO-INV-00051.pdf. Other names list as "not found" - correct behaviour, not an error. Any row's number can be edited and re-checked.
+"Match by name" - pick several files at once; each FILENAME is read as the document number and looked up. Please test with files named after a demo document, e.g. DEMO-INV-00051.pdf. Other names list as "not found" - correct behaviour, not an error.
 
 TO SEE POPULATED REPORTS
 Reports and Business Health default to today, and the demo company has no sales today. Please select "Last 30 days" on Reports, or set Business Health to a previous month.
@@ -28,7 +28,7 @@ ACCOUNTS
 The app has no registration screen and no account creation or deletion, by design. Accounts are created and revoked by the customer's own ERP administrator in the LeoCore back office, exactly as desktop accounts are. Guideline 5.1.1(v) therefore does not apply: this is an employee credential issued and revoked by the employer, not a consumer account.
 
 PERMISSIONS
-The camera is requested to read barcodes, take a product photo, and photograph paper documents for attaching. The photo library is requested only when you choose an existing image to attach, via the standard iOS picker. Face ID is an optional unlock, switchable in Settings. No location, contacts, microphone or App Tracking Transparency, and no tracking.
+The camera is requested to read barcodes, take a product photo, and photograph paper documents for attaching. The photo library is requested when you choose an existing image to attach, via the standard iOS picker, and to save a product photo with "Save Image" on the share sheet. Face ID is an optional unlock, switchable in Settings. No location, contacts, microphone or App Tracking Transparency, and no tracking.
 
 EXTERNAL SERVICES
 The customer's own LeoCore ERP server is the only backend and the only destination for business data, over HTTPS via a REST API. Google Fonts supplies one typeface on first launch (a font file request only). Apple frameworks provide barcode recognition, document scanning, Face ID unlock and the rating prompt. No analytics, advertising, crash reporting, tracking, payment processor or AI service.

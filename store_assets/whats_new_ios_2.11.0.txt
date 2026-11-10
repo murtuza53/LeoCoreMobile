@@ -1,0 +1,10 @@
+• Stay signed in — the app no longer signs you out unexpectedly, and your
+  session is renewed each time you open it
+• Saved quotations: browse quotations you have already raised, open one to see
+  its items, then view or share the PDF
+• Attach Docs: see the files already attached to a document, and open, share,
+  save or delete any of them
+• Product photos: share or save any photo straight from the full-screen viewer
+• Home screen cards are now all the same height, and the header shows today's
+  date
+• Fixes and stability improvements

@@ -11,6 +11,8 @@
 	<string>LeoCore ERP uses the camera to scan product barcodes, to take product photos, and to scan paper documents such as delivery notes so you can attach them to an invoice or other record.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>LeoCore ERP lets you choose images from your library — a product photo to attach to an item, or a scanned page to attach to an invoice or other record.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>LeoCore ERP saves a product photo to your library when you choose "Save Image" after tapping Save on a photo.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>LeoCore ERP uses Face ID to unlock the app and keep your business data private.</string>
 
