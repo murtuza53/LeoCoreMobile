@@ -1,0 +1,9 @@
+• Stays signed in: fixes logouts after a few minutes (incl. admins) and after
+  updating
+• Check for updates: new button in More to update directly
+• Faster lists: products, customers, suppliers, quotations and statements load
+  as you scroll and search the whole company
+• Hide zero balances / sort by balance for customers and suppliers
+• Live stock count: count by warehouse, type or scan, and submit to adjust
+  stock in the ERP
+• Fixes and stability improvements

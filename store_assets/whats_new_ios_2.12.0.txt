@@ -1,0 +1,10 @@
+• Stays signed in — fixes the app signing out after a few minutes, including
+  for admin users
+• Check for updates: a new button in More shows your version and opens the
+  App Store when a newer one is available
+• Faster lists: products, customers, suppliers, quotations and statements load
+  as you scroll, and search covers the whole company
+• Hide zero balances and sort by balance on customers and suppliers
+• Stock count is now live: pick a warehouse, type or scan counted quantities,
+  and submit to adjust stock in the ERP
+• Fixes and stability improvements
