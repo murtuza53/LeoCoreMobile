@@ -6,6 +6,7 @@ import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme/tokens.dart';
 import '../widgets/common.dart';
+import '../widgets/paged_list_view.dart';
 
 const agingLabels = ['0–30d', '31–60d', '61–90d', '90+d'];
 
@@ -53,7 +54,8 @@ class _CustomersScreenState extends State<CustomersScreen> {
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
     final lc = context.lc;
-    final rows = app.customerSearchRows;
+    final list = app.customerList;
+    list.ensureLoaded();
 
     if (!_searchFocus.hasFocus && _search.text != app.customerQuery) {
       _search.value = TextEditingValue(text: app.customerQuery, selection: TextSelection.collapsed(offset: app.customerQuery.length));
@@ -83,21 +85,22 @@ class _CustomersScreenState extends State<CustomersScreen> {
                 ],
               ),
               const SizedBox(height: 12),
-              SearchField(hint: context.tr('Search customers by name or area'), controller: _search, onChanged: app.setCustomerQuery),
+              SearchField(hint: context.tr('Search name, phone, VAT number or ID'), controller: _search, onChanged: app.setCustomerQuery),
+              const SizedBox(height: 10),
+              PartyFilterChips(
+                hideZero: app.customerFilter.hideZero,
+                byBalance: app.customerFilter.byBalance,
+                onHideZero: () => app.toggleHideZero(app.customerFilter, list),
+                onByBalance: () => app.toggleByBalance(app.customerFilter, list),
+              ),
             ],
           ),
         ),
         Expanded(
-          child: app.customers.isEmpty && app.dataLoading
-              ? Center(child: CircularProgressIndicator(color: lc.prim, strokeWidth: 2.4))
-              : rows.isEmpty
-              ? Center(child: Text(app.customerQuery.isEmpty ? context.tr('No customers') : context.tr('No matching customers'), style: TextStyle(fontSize: 14, color: lc.mut)))
-              : ListView.separated(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 140),
-            itemCount: rows.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 8),
-            itemBuilder: (_, i) {
-              final c = rows[i];
+          child: PagedListView<Customer>(
+            list: list,
+            emptyText: app.customerQuery.isEmpty ? 'No customers' : 'No matching customers',
+            itemBuilder: (_, c) {
               final bucket = agingBucket(c);
               final (fg, bg) = c.out == 0 ? (lc.ok, lc.okbg) : bucketColors(lc, bucket);
               final chip = c.out == 0 ? context.tr('Clear') : agingLabels[bucket];

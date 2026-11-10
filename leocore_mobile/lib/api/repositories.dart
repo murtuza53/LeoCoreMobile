@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../models/documents.dart';
 import '../models/models.dart';
 import '../models/reports.dart';
+import '../state/paged_list.dart';
 import 'api_client.dart';
 
 // ── JSON helpers ─────────────────────────────────────────────────────────
@@ -260,6 +261,22 @@ class QuotationDetail {
   }
 }
 
+/// A row of the stock-count sheet.
+class CountSheetRow {
+  final int itemId;
+  final String code;
+  final String name;
+  final String barcode;
+  final int expected;
+  const CountSheetRow({
+    required this.itemId,
+    required this.code,
+    required this.name,
+    required this.barcode,
+    required this.expected,
+  });
+}
+
 class LeoRepository {
   LeoRepository(this._client);
   final ApiClient _client;
@@ -274,6 +291,18 @@ class LeoRepository {
     return list.whereType<Map>().map((m) => mapProduct(m, fromList: true)).toList();
   }
 
+  /// One page of products. `search` matches id, code, name, barcode, brand
+  /// or category on the server.
+  Future<PageResult<Product>> productsPage({String? search, int? categoryId, int page = 1, int pageSize = 50}) async {
+    final r = await _client.getPage('/products', query: {
+      'page': page,
+      'pageSize': pageSize,
+      if (search != null && search.isNotEmpty) 'search': search,
+      if (categoryId != null) 'categoryId': categoryId,
+    });
+    return PageResult(r.items.whereType<Map>().map((m) => mapProduct(m, fromList: true)).toList(), r.hasMore);
+  }
+
   Future<Product> product(int id) async {
     final j = await _client.getJson('/products/$id');
     return mapProduct(j);
@@ -284,9 +313,13 @@ class LeoRepository {
     return mapProduct(j);
   }
 
-  Future<List<String>> categories() async {
+  Future<List<({int id, String name})>> categories() async {
     final list = await _client.getList('/categories');
-    return list.whereType<Map>().map((m) => _s(m, ['name'])).where((s) => s.isNotEmpty).toList();
+    return list
+        .whereType<Map>()
+        .map((m) => (id: _i(m, ['id']), name: _s(m, ['name'])))
+        .where((c) => c.name.isNotEmpty)
+        .toList();
   }
 
   // ── Customers / suppliers ──────────────────────────────────────────────
@@ -306,6 +339,27 @@ class LeoRepository {
       if (search != null && search.isNotEmpty) 'search': search,
     });
     return list.whereType<Map>().map(mapParty).toList();
+  }
+
+  /// One page of customers or suppliers ([party] = 'customers' | 'suppliers').
+  /// `search` matches name, email, phone, VAT/TRN or id; [hideZero] keeps
+  /// only parties with an outstanding balance; [byBalance] sorts largest first.
+  Future<PageResult<Customer>> partiesPage(
+    String party, {
+    String? search,
+    bool hideZero = false,
+    bool byBalance = false,
+    int page = 1,
+    int pageSize = 50,
+  }) async {
+    final r = await _client.getPage('/$party', query: {
+      'page': page,
+      'pageSize': pageSize,
+      if (search != null && search.isNotEmpty) 'search': search,
+      if (hideZero) 'balance': 'nonzero',
+      if (byBalance) 'sort': 'balance',
+    });
+    return PageResult(r.items.whereType<Map>().map(mapParty).toList(), r.hasMore);
   }
 
   // ── Statement / ledger / KPIs ──────────────────────────────────────────
@@ -376,10 +430,15 @@ class LeoRepository {
     return SalesDocResult.fromJson(j);
   }
 
-  /// Saved quotations, newest first.
-  Future<List<QuotationSummary>> quotations({int page = 1, int pageSize = 30}) async {
-    final list = await _client.getList('/sales/quotations', query: {'page': page, 'pageSize': pageSize});
-    return list.whereType<Map>().map(QuotationSummary.fromJson).toList();
+  /// Saved quotations, newest first. `search` matches number, customer or
+  /// reference.
+  Future<PageResult<QuotationSummary>> quotations({String? search, int page = 1, int pageSize = 30}) async {
+    final r = await _client.getPage('/sales/quotations', query: {
+      'page': page,
+      'pageSize': pageSize,
+      if (search != null && search.isNotEmpty) 'search': search,
+    });
+    return PageResult(r.items.whereType<Map>().map(QuotationSummary.fromJson).toList(), r.hasMore);
   }
 
   Future<QuotationDetail> quotation(int id) async =>
@@ -556,36 +615,42 @@ class LeoRepository {
   }
 
   // ── Live stock count (sheet + submit) ──────────────────────────────────
-  Future<List<({int itemId, String code, String name, int expected})>> stockCountSheet({
-    int? warehouseId,
+  /// One page of the count sheet: stock items with the system quantity in
+  /// [warehouseId]. `search` matches code, name or barcode.
+  Future<PageResult<CountSheetRow>> stockCountSheet({
+    required int warehouseId,
     String? search,
     int page = 1,
-    int pageSize = 100,
+    int pageSize = 50,
   }) async {
-    final list = await _client.getList('/inventory/stock-count/sheet', query: {
+    final r = await _client.getPage('/inventory/stock-count/sheet', query: {
       'page': page,
       'pageSize': pageSize,
-      if (warehouseId != null) 'warehouseId': warehouseId,
+      'warehouseId': warehouseId,
       if (search != null && search.isNotEmpty) 'search': search,
     });
-    return list
-        .whereType<Map>()
-        .map((m) => (
-              itemId: _i(m, ['itemId', 'id']),
-              code: _s(m, ['code']),
-              name: _s(m, ['name']),
-              expected: _i(m, ['expected', 'onHand', 'systemQty']),
-            ))
-        .toList();
+    return PageResult(
+      r.items
+          .whereType<Map>()
+          .map((m) => CountSheetRow(
+                itemId: _i(m, ['itemId', 'id']),
+                code: _s(m, ['code']),
+                name: _s(m, ['name']),
+                barcode: _s(m, ['barcode']),
+                expected: _i(m, ['systemQty', 'expected', 'onHand']),
+              ))
+          .toList(),
+      r.hasMore,
+    );
   }
 
-  Future<void> submitStockCount({
+  Future<({String number, int adjustedLines})> submitStockCount({
     required int warehouseId,
     String? notes,
     required List<({int itemId, int countedQty})> lines,
     required String idempotencyKey,
-  }) {
-    return _client.postJson(
+  }) async {
+    final j = await _client.postJson(
       '/inventory/stock-count',
       idempotencyKey: idempotencyKey,
       body: {
@@ -594,6 +659,7 @@ class LeoRepository {
         'lines': [for (final l in lines) {'itemId': l.itemId, 'countedQty': l.countedQty}],
       },
     );
+    return (number: _s(j, ['number', 'documentNumber']), adjustedLines: _i(j, ['adjustedLines']));
   }
 
   static List<ProductImage> mapProductImages(dynamic raw) {

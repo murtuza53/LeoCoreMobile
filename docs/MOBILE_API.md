@@ -1,6 +1,6 @@
 # LeoCore Mobile API — Reference (v1)
 
-For the mobile app team. **Current as of LeoCore ERP 1.6.52 (9 Nov 2026).** This one file is the complete
+For the mobile app team. **Current as of LeoCore ERP 1.6.52 (10 Nov 2026).** This one file is the complete
 reference: it replaces the separate notes (`MOBILE_ACCESS_API.md`, `MOBILE_API_UPDATE_2026-08.md`,
 `MOBILE_API_UPDATE_2026-09.md`, `MOBILE_API_DOCUMENT_UPLOAD.md`), whose content is merged in below.
 
@@ -70,6 +70,23 @@ Login can fail with `401 UNAUTHENTICATED`, `401 LOCKED_OUT` or `403 MOBILE_ACCES
 ```
 **200** → `{ "accessToken", "refreshToken", "expiresIn", "scope" }` (both tokens are new — store them).
 A refresh keeps the **same** session alive; only a new **login** signs other devices out.
+
+| Refresh result | Meaning | App action |
+|---|---|---|
+| `200` | New pair | Save **both** tokens before using them |
+| `401 SESSION_TERMINATED` | The account signed in on another device (message names it) | Hard sign-out, show message |
+| `401 UNAUTHENTICATED` | Token unknown, expired, or logged out | Go to login |
+| `403 MOBILE_ACCESS_DISABLED` / `FORBIDDEN` | Access revoked | Hard sign-out, show message |
+| `429 RATE_LIMITED`, `5xx`, no network | **Not** a verdict on the token | Keep the session; retry later |
+
+- **Lost reply protection (1.6.52):** a refresh token that was rotated in the last **2 minutes** is accepted once
+  more while its session is live — so if the phone never received the reply (dropped connection, app killed),
+  retrying with the old token still works instead of signing the user out.
+- **Admins (1.6.52 fix):** the built-in `admin` user and the Admin/SuperAdmin roles skip the mobile permission
+  and seat checks on login, refresh **and** every call. (Before 1.6.52 refresh did not, so admins were signed out
+  with `MOBILE_ACCESS_DISABLED` at their first token renewal — about every 30 minutes.)
+- Refresh only when a call returns `401 UNAUTHENTICATED` (or on app open/resume); share **one** in-flight refresh
+  between parallel calls.
 
 ### POST `/auth/logout`
 ```json
@@ -148,6 +165,7 @@ All errors share this envelope:
 | 403 | `MOBILE_ACCESS_DISABLED` | The user's mobile access is off (§3a). Clear tokens, show message, go to login. **No refresh.** |
 | 404 | `NOT_FOUND` | The record doesn't exist (or was deleted). |
 | 409 | `STORAGE_NOT_CONFIGURED` | File storage is not set up on the server (attachments). |
+| 429 | `RATE_LIMITED` | Too many calls from this phone (300/min for data, 20/min per IP for login/refresh). Wait (`Retry-After: 60`) and retry — **never** sign out. |
 
 ### 3a. Per-employee mobile access — `MOBILE_ACCESS_DISABLED`
 
@@ -185,8 +203,11 @@ onResponse(res):
 
 ## 4. Conventions
 
-- **Pagination:** list endpoints accept `?page=1&pageSize=25` (and usually `?search=`); responses are
-  `{ page, pageSize, total, items:[…] }`.
+- **Pagination:** list endpoints accept `?page=1&pageSize=50` (max **200**) and return
+  `{ page, pageSize, total, hasMore, items:[…] }`. **Load the next page while `hasMore` is true** (infinite
+  scroll) — never assume one page is the whole list.
+- **Search is on the server.** Send what the user types as `?search=` (debounce ~300 ms, reset to page 1) and
+  show the server's result — don't filter only the rows already on screen, which misses everything not yet loaded.
 - **Money/quantities:** decimals in the company base currency (BHD, 3 dp by default). VAT handling
   follows `pricesIncludeVat` on write requests.
 - **Dates:** ISO-8601 (`2026-08-15` or a full timestamp). Timestamps ending in `Z` are UTC — show them in local time.
@@ -231,11 +252,24 @@ onResponse(res):
 ### Parties
 | Method | Path | Purpose / params |
 |---|---|---|
-| GET | `/customers` | List. `?page&pageSize&search` |
+| GET | `/customers` | List. `?page&pageSize&search&balance&sort` — see below |
 | GET | `/customers/{id}/statement` | Customer statement |
 | GET | `/customers/{id}/outstanding` | Open invoices / balance |
-| GET | `/suppliers` | List. `?page&pageSize&search` |
+| GET | `/suppliers` | List. `?page&pageSize&search&balance&sort` — see below |
 | GET | `/suppliers/{id}/statement` | Supplier statement |
+
+**Customer / supplier lists** (also feed the Statements picker):
+- `search` — name, email, phone, VAT/TRN number or id.
+- `balance=nonzero` — only parties with an outstanding balance ("hide zero balances" switch).
+- `sort=name` (default) or `sort=balance` (largest outstanding first).
+- Each item: `{ id, name, email, phone, country, currency, outstanding, creditLimit (customers) }`. `outstanding`
+  (BHD, 3 dp) is what the customer owes us / what we owe the supplier — the same figure as the statement.
+  **Suppliers have `outstanding` from 1.6.52.**
+```json
+{ "page": 1, "pageSize": 50, "total": 119, "hasMore": true, "currency": "BHD",
+  "items": [ { "id": 12, "name": "ROOPAM TEXTILE", "email": null, "phone": "17000000", "country": "Bahrain",
+               "currency": "BHD", "creditLimit": 0, "outstanding": 8843.930 } ] }
+```
 
 ### Inventory
 | Method | Path | Purpose / params |
@@ -267,7 +301,7 @@ onResponse(res):
 | POST | `/sales/cash-invoice/draft` | Price a cart before posting — §10 |
 | POST | `/sales/cash-invoice` | Post a cash sale — §10 |
 | GET | `/sales/cash-invoice/{id}/receipt?format=` | Receipt (`format=pdf` for PDF) |
-| GET | `/sales/quotations` | `?from&to&customerId&page&pageSize` |
+| GET | `/sales/quotations` | `?from&to&customerId&search&page&pageSize` — `search` matches number, customer or reference |
 | POST | `/sales/quotations` | Create quotation — §10 |
 | GET | `/sales/quotations/{id}` | One quotation |
 | GET | `/sales/quotations/{id}/pdf` | Quotation PDF |
@@ -666,6 +700,11 @@ Date params are `YYYY-MM-DD`; `from`/`to` default to the current month.
 - [ ] Interceptor (§3b): `403 MOBILE_ACCESS_DISABLED` and `401 SESSION_TERMINATED` → hard sign-out, no refresh;
       other `401` → refresh once.
 - [ ] Build navigation from `GET /menu`.
+- [ ] Every list (products, customers, suppliers, statements picker, quotations, stock count, low/dead stock):
+      server `search`, infinite scroll on `hasMore`; customers/suppliers/statements get a "hide zero balances"
+      switch (`balance=nonzero`) and a sort by balance.
+- [ ] Treat `429 RATE_LIMITED`, `5xx` and timeouts as "try again", never as sign-out.
+- [ ] Report rows (names with bars): show the full name (wrap to 2 lines, or name on its own line above the bar).
 - [ ] Send `Idempotency-Key` on the five writes in §4 and reuse it on retry.
 - [ ] Join every root-relative link to the API origin (§4).
 - [ ] Product lists show `thumbUrl`; viewer uses `url`; stock badge from `onHand`.
@@ -687,6 +726,8 @@ Date params are `YYYY-MM-DD`; `from`/`to` default to the current month.
 
 | Version | Change | App action |
 |---|---|---|
+| **1.6.52** (Nov 2026) | **Sign-out fixes:** admins no longer refused on refresh (`MOBILE_ACCESS_DISABLED` every ~30 min); a refresh whose reply was lost is accepted again for 2 min; a refresh after a login elsewhere returns `SESSION_TERMINATED` naming the device; new token issued before the old is revoked; rate limits are per phone, and 429 uses the error envelope (`RATE_LIMITED`) (§1, §3) | Treat 429/5xx as retry, not sign-out |
+| **1.6.52** (Nov 2026) | Lists: `hasMore` on every paged list; `pageSize` up to 200; customers/suppliers `balance=nonzero`, `sort=balance`, search by phone/VAT/TRN/id; suppliers gain `outstanding`; quotations `search` (§4, §5) | Infinite scroll + server search everywhere; zero-balance filter |
 | **1.6.52** (Nov 2026) | Attach Docs: lookup returns the existing `attachments` + `canAttach`/`canDelete`; new open-file and **delete** endpoints; new **Delete** access on `MobileDocuments`; attachment `url` now opens through the API; added `isImage`, `isPdf`, `downloadUrl`; `uploadedAt` marked UTC (§8) | Show the files after lookup; open with Bearer; delete with confirmation |
 | **1.6.52** (Nov 2026) | Picture links are **root-relative**; new `thumbUrl` on every picture (§6) | Join links to your API origin; `thumbUrl` in lists, `url` full screen |
 | **1.6.51** (Nov 2026) | Line `unitPrice` in responses is always **excl. VAT** (§4) | Don't treat `unitPrice` as inclusive; show money from the totals |

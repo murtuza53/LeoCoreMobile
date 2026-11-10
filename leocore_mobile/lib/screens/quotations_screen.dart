@@ -7,6 +7,7 @@ import '../state/app_state.dart';
 import '../theme/tokens.dart';
 import '../utils/money.dart';
 import '../widgets/common.dart';
+import '../widgets/paged_list_view.dart';
 
 final _dateFmt = DateFormat('dd MMM yyyy');
 String _fmt(DateTime? d) => d == null ? '' : _dateFmt.format(d);
@@ -30,8 +31,7 @@ class QuotationsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
-    final lc = context.lc;
-    final rows = app.quoteHistoryRows;
+    final list = app.quoteList;
 
     return Column(
       children: [
@@ -43,53 +43,16 @@ class QuotationsScreen extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
           child: SearchField(
-            hint: context.tr('Search by number or customer'),
+            hint: context.tr('Search number, customer or reference'),
             onChanged: app.setQuoteHistoryQuery,
           ),
         ),
         Expanded(
-          child: RefreshIndicator(
-            color: lc.prim,
-            onRefresh: app.loadQuoteHistory,
-            child: rows.isEmpty
-                ? ListView(children: [
-                    SizedBox(
-                      height: 320,
-                      child: Center(
-                        child: app.quoteHistoryLoading
-                            ? CircularProgressIndicator(color: lc.prim)
-                            : Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 32),
-                                child: Text(
-                                  app.quoteHistoryError ??
-                                      (app.quoteHistoryQuery.isEmpty
-                                          ? context.tr('No quotations yet')
-                                          : context.tr('No matching quotations')),
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(fontSize: 14, color: lc.mut),
-                                ),
-                              ),
-                      ),
-                    ),
-                  ])
-                : ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
-                    itemCount: rows.length + (app.quoteHistoryHasMore ? 1 : 0),
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    itemBuilder: (_, i) {
-                      if (i == rows.length) {
-                        return Center(
-                          child: app.quoteHistoryLoading
-                              ? Padding(padding: const EdgeInsets.all(12), child: CircularProgressIndicator(color: lc.prim))
-                              : TextButton(
-                                  onPressed: () => app.loadQuoteHistory(more: true),
-                                  child: Text(context.tr('Load more'), style: TextStyle(fontWeight: FontWeight.w700, color: lc.tprim)),
-                                ),
-                        );
-                      }
-                      return _QuoteRow(rows[i]);
-                    },
-                  ),
+          child: PagedListView<QuotationSummary>(
+            list: list,
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
+            emptyText: app.quoteHistoryQuery.isEmpty ? 'No quotations yet' : 'No matching quotations',
+            itemBuilder: (_, q) => _QuoteRow(q),
           ),
         ),
       ],

@@ -34,6 +34,7 @@ import '../models/documents.dart';
 import '../models/models.dart';
 import '../models/reports.dart';
 import '../utils/money.dart';
+import 'paged_list.dart';
 
 enum Screen {
   login,
@@ -144,6 +145,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   ApiUser? me;
   Set<String> _menuKeys = {};
   List<String> _liveCategories = [];
+  Map<String, int> _categoryIds = {};
 
   /// Filter chips: live categories in live mode, the demo set otherwise.
   List<String> get categoryChips =>
@@ -218,7 +220,16 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   // ── stock count (demo-only; no server endpoint yet) ────────────────
   bool countStarted = false;
   bool countSubmitted = false;
-  Map<int, int> counts = {1: 118, 3: 96, 5: 19, 6: 8};
+  /// Counted quantity per item — only items the user actually counted. An
+  /// item that isn't here is left alone on submit (never zeroed).
+  Map<int, int> counts = {};
+  final Map<int, CountSheetRow> _countRows = {};
+  int _countWarehouse = 0;
+  String countQuery = '';
+  bool submittingCount = false;
+  String? countDocNumber;
+  int countAdjusted = 0;
+  String? _countIdemKey;
 
   // ── low / dead stock ───────────────────────────────────────────────
   String stockTab = 'low';
@@ -316,36 +327,157 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   DateTime? statementAsOn; // null = today / latest
   String get statementAsOnLabel => DateFormat('dd MMM yyyy').format(statementAsOn ?? DateTime.now());
 
-  List<Product> get filteredProducts {
-    final q = query.trim().toLowerCase();
-    return products.where((p) {
-      final catOk = cat == 'All' || p.cat == cat;
-      final qOk = q.isEmpty ||
-          p.name.toLowerCase().contains(q) ||
-          p.code.toLowerCase().contains(q) ||
-          p.barcode.contains(q);
-      return catOk && qOk;
-    }).toList();
+  // ══════════════════════════════════════════════════════════════════
+  //  Server-paged lists (infinite scroll + server search)
+  // ══════════════════════════════════════════════════════════════════
+  late final PagedList<Product> productList = PagedList<Product>((page, size, q) async {
+    if (demoMode) {
+      final ql = q.toLowerCase();
+      return PageResult(
+        MockData.products.where((p) {
+          final catOk = cat == 'All' || p.cat == cat;
+          final qOk = ql.isEmpty ||
+              p.name.toLowerCase().contains(ql) ||
+              p.code.toLowerCase().contains(ql) ||
+              p.barcode.contains(ql);
+          return catOk && qOk;
+        }).toList(),
+        false,
+      );
+    }
+    final r = await _repo.productsPage(
+      search: q,
+      categoryId: cat == 'All' ? null : _categoryIds[cat],
+      page: page,
+      pageSize: size,
+    );
+    _products = _merge(_products, r.items, (p) => p.id);
+    return r;
+  }, onChanged: notifyListeners, idOf: (p) => p.id);
+
+  final PartyFilter customerFilter = PartyFilter();
+  final PartyFilter supplierFilter = PartyFilter();
+  final PartyFilter statementFilter = PartyFilter();
+
+  late final PagedList<Customer> customerList = _customerPages(customerFilter);
+  late final PagedList<Customer> statementList = _customerPages(statementFilter);
+
+  PagedList<Customer> _customerPages(PartyFilter f) => PagedList<Customer>((page, size, q) async {
+        if (demoMode) return PageResult(_demoParties(MockData.customers, q, f), false);
+        final r = await _repo.partiesPage('customers',
+            search: q, hideZero: f.hideZero, byBalance: f.byBalance, page: page, pageSize: size);
+        _customers = _merge(_customers, r.items, (c) => c.id);
+        return r;
+      }, onChanged: notifyListeners, idOf: (c) => c.id);
+
+  late final PagedList<Customer> supplierList = PagedList<Customer>((page, size, q) async {
+    if (demoMode) return const PageResult(<Customer>[], false);
+    final f = supplierFilter;
+    final r = await _repo.partiesPage('suppliers',
+        search: q, hideZero: f.hideZero, byBalance: f.byBalance, page: page, pageSize: size);
+    _suppliers = _merge(_suppliers, r.items, (c) => c.id);
+    return r;
+  }, onChanged: notifyListeners, idOf: (c) => c.id);
+
+  late final PagedList<QuotationSummary> quoteList = PagedList<QuotationSummary>((page, size, q) async {
+    if (demoMode) throw ApiException('DEMO', t('Saved quotations are available after live sign-in'));
+    return _repo.quotations(search: q, page: page, pageSize: size);
+  }, onChanged: notifyListeners, pageSize: 30, idOf: (x) => x.id);
+
+  late final PagedList<CountSheetRow> countList = PagedList<CountSheetRow>((page, size, q) async {
+    final PageResult<CountSheetRow> r;
+    if (demoMode) {
+      final ql = q.toLowerCase();
+      r = PageResult(
+        [
+          for (final e in MockData.expected.entries)
+            if (ql.isEmpty ||
+                MockData.byId(e.key).name.toLowerCase().contains(ql) ||
+                MockData.byId(e.key).code.toLowerCase().contains(ql))
+              CountSheetRow(
+                itemId: e.key,
+                code: MockData.byId(e.key).code,
+                name: MockData.byId(e.key).name,
+                barcode: MockData.byId(e.key).barcode,
+                expected: e.value,
+              ),
+        ],
+        false,
+      );
+    } else {
+      r = await _repo.stockCountSheet(warehouseId: _countWarehouse, search: q, page: page, pageSize: size);
+    }
+    for (final row in r.items) {
+      _countRows[row.itemId] = row;
+    }
+    return r;
+  }, onChanged: notifyListeners, idOf: (x) => x.itemId);
+
+  /// Adds freshly loaded rows to the cache that [productById], [customer] and
+  /// [supplier] read from (an updated row replaces the cached one).
+  static List<T> _merge<T>(List<T>? cache, List<T> fresh, Object Function(T) id) {
+    final out = [...?cache];
+    final index = {for (var i = 0; i < out.length; i++) id(out[i]): i};
+    for (final x in fresh) {
+      final at = index[id(x)];
+      if (at == null) {
+        index[id(x)] = out.length;
+        out.add(x);
+      } else {
+        out[at] = x;
+      }
+    }
+    return out;
   }
+
+  static List<Customer> _demoParties(List<Customer> all, String q, PartyFilter f) {
+    final ql = q.toLowerCase();
+    final rows = all
+        .where((c) =>
+            (!f.hideZero || c.out != 0) &&
+            (ql.isEmpty ||
+                c.name.toLowerCase().contains(ql) ||
+                c.area.toLowerCase().contains(ql) ||
+                c.phone.toLowerCase().contains(ql)))
+        .toList();
+    if (f.byBalance) rows.sort((a, b) => b.out.compareTo(a.out));
+    return rows;
+  }
+
+  void _resetLists() {
+    productList.reset();
+    customerList.reset();
+    statementList.reset();
+    supplierList.reset();
+    quoteList.reset();
+    countList.reset();
+    query = '';
+    cat = 'All';
+    customerQuery = '';
+    supplierQuery = '';
+    statementQuery = '';
+    _suppliers = null;
+  }
+
+  void toggleHideZero(PartyFilter f, PagedList<Customer> list) {
+    f.hideZero = !f.hideZero;
+    list.refresh();
+  }
+
+  void toggleByBalance(PartyFilter f, PagedList<Customer> list) {
+    f.byBalance = !f.byBalance;
+    list.refresh();
+  }
+
 
   List<Product> get lowRows => products.where((p) => p.stock > kUnknownStock && p.stock <= 25).toList();
 
   // ── customers search ───────────────────────────────────────────────
   String customerQuery = '';
-  List<Customer> get customerSearchRows {
-    final q = customerQuery.trim().toLowerCase();
-    if (q.isEmpty) return customers;
-    return customers
-        .where((c) =>
-            c.name.toLowerCase().contains(q) ||
-            c.area.toLowerCase().contains(q) ||
-            c.phone.toLowerCase().contains(q))
-        .toList();
-  }
 
   void setCustomerQuery(String v) {
     customerQuery = v;
-    notifyListeners();
+    customerList.setSearch(v);
   }
 
   /// Suppliers (live); empty until loaded.
@@ -402,10 +534,17 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       : (kpis?.items != null ? '${kpis!.items} items tracked' : '');
 
   // ── stock count / cart (demo dataset) ──────────────────────────────
-  List<Product> get countProducts => MockData.expected.keys.map(MockData.byId).toList();
-  int countExpected(int id) => MockData.expected[id] ?? 0;
-  int countValue(int id) => counts[id] ?? 0;
-  int get countVar => countProducts.where((p) => countValue(p.id) != countExpected(p.id)).length;
+  int countExpected(int id) => _countRows[id]?.expected ?? 0;
+  int? countValue(int id) => counts[id];
+  int get countedLines => counts.length;
+  int get countVar => counts.entries.where((e) => e.value != countExpected(e.key)).length;
+  String get countWarehouseName {
+    if (demoMode) return 'Main WH · Tubli';
+    for (final w in _warehouses) {
+      if (w.id == _countWarehouse) return w.name;
+    }
+    return wh;
+  }
 
   /// Unit price of a line: the user's manual price, else the list price.
   double linePrice(CartLine l) => l.price ?? productById(l.pid).price;
@@ -554,6 +693,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void _dropToLogin(String message) {
+    _resetLists();
     demoMode = true;
     _products = null;
     _customers = null;
@@ -566,6 +706,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> _loadAll() async {
+    _resetLists();
     dataLoading = true;
     dataError = null;
     notifyListeners();
@@ -575,14 +716,16 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
         _repo.customers(pageSize: 200),
         _repo.kpis().catchError((_) => const KpiData()),
         _repo.menuKeys().catchError((_) => <String>[]),
-        _repo.categories().catchError((_) => <String>[]),
+        _repo.categories().catchError((_) => <({int id, String name})>[]),
         _repo.warehouses().catchError((_) => <({int id, String code, String name})>[]),
       ]);
       _products = results[0] as List<Product>;
       _customers = results[1] as List<Customer>;
       kpis = results[2] as KpiData;
       _menuKeys = (results[3] as List<String>).toSet();
-      _liveCategories = results[4] as List<String>;
+      final cats = results[4] as List<({int id, String name})>;
+      _liveCategories = [for (final c in cats) c.name];
+      _categoryIds = {for (final c in cats) c.name: c.id};
       _warehouses = results[5] as List<({int id, String code, String name})>;
       if (_warehouses.isNotEmpty) {
         warehouseId = _warehouses.first.id;
@@ -854,39 +997,30 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     kpis = null;
     me = null;
     _menuKeys = {};
+    _resetLists();
     nav(Screen.login);
   }
 
   // products
   void setQuery(String v) {
     query = v;
-    notifyListeners();
+    productList.setSearch(v);
   }
 
   void pickCat(String c) {
+    if (cat == c) return;
     cat = c;
-    notifyListeners();
+    productList.refresh();
   }
 
   void clearSearch() {
     query = '';
     cat = 'All';
-    notifyListeners();
+    productList.search = '';
+    productList.refresh();
   }
 
-  Future<void> doRefresh() async {
-    refreshing = true;
-    notifyListeners();
-    if (!demoMode) {
-      try {
-        _products = await _repo.products(search: query, pageSize: 200);
-      } catch (_) {}
-    } else {
-      await Future.delayed(const Duration(milliseconds: 1100));
-    }
-    refreshing = false;
-    notifyListeners();
-  }
+  Future<void> doRefresh() => productList.refresh();
 
   // product detail
   void openProduct(int id) {
@@ -1776,9 +1910,21 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     nav(Screen.invoice);
   }
 
+  /// Scanned during a count: +1 for that item, and show it in the list (its
+  /// expected quantity comes with the row).
   void countScanned() {
+    final p = scanned;
     countSubmitted = false;
     scanFound = false;
+    if (p != null && countStarted) {
+      counts[p.id] = (counts[p.id] ?? 0) + 1;
+      _countIdemKey = null;
+      if (!_countRows.containsKey(p.id)) {
+        countQuery = p.code.isNotEmpty ? p.code : p.name;
+        countList.search = countQuery;
+        countList.refresh();
+      }
+    }
     nav(Screen.count);
   }
 
@@ -1813,29 +1959,121 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void startCount() {
+    if (!demoMode) {
+      final w = warehouseId > 0 ? warehouseId : (_warehouses.isNotEmpty ? _warehouses.first.id : 0);
+      if (w <= 0) {
+        showToast(t('Select a warehouse first'));
+        return;
+      }
+      _countWarehouse = w;
+    }
+    counts = demoMode ? {1: 118, 3: 96, 5: 19, 6: 8} : {};
+    _countRows.clear();
+    countQuery = '';
+    countDocNumber = null;
+    countAdjusted = 0;
+    _countIdemKey = null;
+    countList.reset();
     countStarted = true;
     countSubmitted = false;
     notifyListeners();
+    countList.ensureLoaded();
+  }
+
+  void setCountQuery(String v) {
+    countQuery = v;
+    countList.setSearch(v);
   }
 
   void incCount(int id) {
-    counts[id] = countValue(id) + 1;
+    counts[id] = (counts[id] ?? 0) + 1;
+    _countIdemKey = null;
     notifyListeners();
   }
 
   void decCount(int id) {
-    counts[id] = (countValue(id) - 1).clamp(0, 1 << 31);
+    final v = counts[id];
+    if (v == null) return;
+    counts[id] = v > 0 ? v - 1 : 0;
+    _countIdemKey = null;
     notifyListeners();
   }
 
-  void submitCount() {
-    countSubmitted = true;
-    showToast(t('Count session submitted'));
+  /// Typed quantity; null clears the item (it won't be submitted).
+  void setCount(int id, int? qty) {
+    if (qty == null) {
+      counts.remove(id);
+    } else {
+      counts[id] = qty < 0 ? 0 : qty;
+    }
+    _countIdemKey = null;
+    notifyListeners();
+  }
+
+  /// Posts the count to the ERP. Only counted items are sent; the server
+  /// adjusts stock in the count's warehouse for every difference.
+  Future<void> submitCount() async {
+    if (submittingCount) return;
+    if (counts.isEmpty) {
+      showToast(t('Count at least one item first'));
+      return;
+    }
+    final ctx = navigatorKey.currentContext;
+    if (ctx == null) return;
+    final ok = await showDialog<bool>(
+      context: ctx,
+      builder: (dctx) => AlertDialog(
+        title: Text(t('Submit stock count?'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+        content: Text(
+          '${t('Items counted')}: $countedLines\n'
+          '${t('With a difference')}: $countVar\n'
+          '${t('Warehouse')}: $countWarehouseName\n\n'
+          '${t('Stock is adjusted in the ERP for every difference. Items you did not count are left unchanged.')}',
+          style: const TextStyle(fontSize: 13.5, height: 1.5),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dctx, false), child: Text(t('Cancel'))),
+          TextButton(
+            onPressed: () => Navigator.pop(dctx, true),
+            child: Text(t('Submit'), style: const TextStyle(fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    if (demoMode) {
+      countSubmitted = true;
+      notifyListeners();
+      return;
+    }
+    submittingCount = true;
+    notifyListeners();
+    // Same key on retry, so a timeout can't post the count twice.
+    _countIdemKey ??= _newIdemKey();
+    try {
+      final r = await _repo.submitStockCount(
+        warehouseId: _countWarehouse,
+        lines: [for (final e in counts.entries) (itemId: e.key, countedQty: e.value)],
+        idempotencyKey: _countIdemKey!,
+      );
+      countDocNumber = r.number;
+      countAdjusted = r.adjustedLines;
+      countSubmitted = true;
+      _countIdemKey = null;
+    } on ApiException catch (e) {
+      showToast(e.message);
+    } catch (_) {
+      showToast(t('Could not submit the count'));
+    } finally {
+      submittingCount = false;
+      notifyListeners();
+    }
   }
 
   void closeCountDone() {
     countStarted = false;
     countSubmitted = false;
+    counts = {};
     nav(Screen.home);
   }
 
@@ -2070,68 +2308,25 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   // ── saved quotations ───────────────────────────────────────────────
-  static const _quoteHistoryPageSize = 30;
-  List<QuotationSummary> quoteHistory = [];
-  bool quoteHistoryLoading = false;
-  bool quoteHistoryHasMore = false;
-  String? quoteHistoryError;
   String quoteHistoryQuery = '';
-  int _quoteHistoryPage = 0;
   Screen _quoteHistoryReturn = Screen.more;
 
   /// Quotation whose PDF is being fetched (download or share), for row spinners.
   int? quotePdfId;
 
-  /// Loaded quotations filtered by number or customer name.
-  List<QuotationSummary> get quoteHistoryRows {
-    final q = quoteHistoryQuery.trim().toLowerCase();
-    if (q.isEmpty) return quoteHistory;
-    return quoteHistory
-        .where((x) => x.number.toLowerCase().contains(q) || x.customer.toLowerCase().contains(q))
-        .toList();
-  }
-
   void openQuoteHistory() {
     _quoteHistoryReturn = screen == Screen.quotation ? Screen.quotation : Screen.more;
     quoteHistoryQuery = '';
+    quoteList.reset(); // newest first, including one just saved
     nav(Screen.quotations);
-    loadQuoteHistory();
+    quoteList.ensureLoaded();
   }
 
   void closeQuoteHistory() => nav(_quoteHistoryReturn);
 
   void setQuoteHistoryQuery(String v) {
     quoteHistoryQuery = v;
-    notifyListeners();
-  }
-
-  /// Loads the first page, or the next one with [more].
-  Future<void> loadQuoteHistory({bool more = false}) async {
-    if (quoteHistoryLoading) return;
-    if (demoMode) {
-      quoteHistory = [];
-      quoteHistoryHasMore = false;
-      quoteHistoryError = t('Saved quotations are available after live sign-in');
-      notifyListeners();
-      return;
-    }
-    quoteHistoryLoading = true;
-    quoteHistoryError = null;
-    notifyListeners();
-    try {
-      final page = more ? _quoteHistoryPage + 1 : 1;
-      final rows = await _repo.quotations(page: page, pageSize: _quoteHistoryPageSize);
-      quoteHistory = more ? [...quoteHistory, ...rows] : rows;
-      _quoteHistoryPage = page;
-      quoteHistoryHasMore = rows.length >= _quoteHistoryPageSize;
-    } on ApiException catch (e) {
-      quoteHistoryError = e.message;
-    } catch (_) {
-      quoteHistoryError = t('Could not load quotations');
-    } finally {
-      quoteHistoryLoading = false;
-      notifyListeners();
-    }
+    quoteList.setSearch(v);
   }
 
   Future<QuotationDetail?> loadQuotationDetail(int id) async {
@@ -2913,33 +3108,14 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   String supplierQuery = '';
   int supplierId = 0;
 
-  List<Customer> get supplierRows {
-    final q = supplierQuery.trim().toLowerCase();
-    if (q.isEmpty) return suppliers;
-    return suppliers.where((s) => s.name.toLowerCase().contains(q) || s.area.toLowerCase().contains(q)).toList();
-  }
-
   void goSuppliers() {
-    supplierQuery = '';
     nav(Screen.suppliers);
-    if (!demoMode && _suppliers == null) _loadSuppliers();
+    supplierList.ensureLoaded();
   }
 
   void setSupplierQuery(String v) {
     supplierQuery = v;
-    notifyListeners();
-  }
-
-  Future<void> _loadSuppliers() async {
-    suppliersLoading = true;
-    notifyListeners();
-    try {
-      _suppliers = await _repo.suppliers(pageSize: 200);
-    } catch (_) {
-      _suppliers = [];
-    }
-    suppliersLoading = false;
-    notifyListeners();
+    supplierList.setSearch(v);
   }
 
   Customer? get supplier => suppliers.where((s) => s.id == supplierId).firstOrNull;
@@ -3010,22 +3186,15 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   String get statementPartyName =>
       statementParty == 'supplier' ? (supplier?.name ?? 'Supplier') : customer.name;
 
-  /// Filtered customer list for the statement picker (type-to-search).
-  List<Customer> get statementPickerRows {
-    final q = statementQuery.trim().toLowerCase();
-    if (q.isEmpty) return customers;
-    return customers.where((c) => c.name.toLowerCase().contains(q) || c.area.toLowerCase().contains(q)).toList();
-  }
-
   void openStatementPicker() {
-    statementQuery = '';
     statementReturn = Screen.statementPicker;
     nav(Screen.statementPicker);
+    statementList.ensureLoaded();
   }
 
   void setStatementQuery(String v) {
     statementQuery = v;
-    notifyListeners();
+    statementList.setSearch(v);
   }
 
   /// Chosen from the picker → load that customer's statement.
@@ -3123,4 +3292,10 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     _toastTimer?.cancel();
     super.dispose();
   }
+}
+
+/// "Hide zero balances" / "Sort by balance" for a customer or supplier list.
+class PartyFilter {
+  bool hideZero = false;
+  bool byBalance = false;
 }

@@ -5,6 +5,7 @@ import '../models/models.dart';
 import '../state/app_state.dart';
 import '../theme/tokens.dart';
 import '../widgets/common.dart';
+import '../widgets/paged_list_view.dart';
 import '../widgets/photo_viewer.dart';
 
 class ProductsScreen extends StatefulWidget {
@@ -32,7 +33,8 @@ class _ProductsScreenState extends State<ProductsScreen> {
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
     final lc = context.lc;
-    final rows = app.filteredProducts;
+    final list = app.productList;
+    list.ensureLoaded();
 
     // Keep controller in sync when state clears the query (e.g. Reset).
     if (_search.text != app.query) {
@@ -57,7 +59,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
               const SizedBox(height: 12),
               Row(
                 children: [
-                  Expanded(child: SearchField(hint: context.tr('Search name, code or barcode'), controller: _search, onChanged: app.setQuery)),
+                  Expanded(child: SearchField(hint: context.tr('Search name, code, barcode, brand or category'), controller: _search, onChanged: app.setQuery)),
                   const SizedBox(width: 10),
                   GestureDetector(
                     onTap: app.openFilter,
@@ -100,20 +102,19 @@ class _ProductsScreenState extends State<ProductsScreen> {
           ),
         ),
         Expanded(
-          child: (app.refreshing || (app.dataLoading && rows.isEmpty))
-              ? ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 140),
-                  itemCount: 4,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (_, __) => _Skeleton(),
-                )
-              : rows.isEmpty
-                  ? _EmptyProducts(onClear: app.clearSearch)
-                  : ListView.separated(
+          child: list.loaded && list.items.isEmpty && list.error == null && !list.loading
+              ? _EmptyProducts(onClear: app.clearSearch)
+              : (list.items.isEmpty && !list.loaded && list.error == null)
+                  ? ListView.separated(
                       padding: const EdgeInsets.fromLTRB(16, 4, 16, 140),
-                      itemCount: rows.length,
+                      itemCount: 4,
                       separatorBuilder: (_, __) => const SizedBox(height: 8),
-                      itemBuilder: (_, i) => ProductRow(product: rows[i], onTap: () => app.openProduct(rows[i].id)),
+                      itemBuilder: (_, __) => _Skeleton(),
+                    )
+                  : PagedListView<Product>(
+                      list: list,
+                      emptyText: 'No products found',
+                      itemBuilder: (_, p) => ProductRow(product: p, onTap: () => app.openProduct(p.id)),
                     ),
         ),
       ],

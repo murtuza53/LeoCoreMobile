@@ -105,6 +105,30 @@ class ApiClient {
     return const [];
   }
 
+  /// One page of a paged list: `{ page, pageSize, total, hasMore, items }`.
+  /// Falls back to `page * pageSize < total` (older servers) and then to
+  /// "a full page came back" when the envelope has neither.
+  Future<({List<dynamic> items, bool hasMore})> getPage(String path, {required Map<String, dynamic> query}) async {
+    final res = await _send('GET', path, query: query);
+    final data = res.data;
+    if (data is List) return (items: data, hasMore: false);
+    if (data is! Map) return (items: const <dynamic>[], hasMore: false);
+    var items = const <dynamic>[];
+    for (final k in ['items', 'data', 'results', 'value']) {
+      if (data[k] is List) {
+        items = data[k] as List;
+        break;
+      }
+    }
+    final hm = data['hasMore'];
+    if (hm is bool) return (items: items, hasMore: hm);
+    final total = data['total'];
+    final page = data['page'] ?? query['page'];
+    final size = data['pageSize'] ?? query['pageSize'];
+    if (total is num && page is num && size is num) return (items: items, hasMore: page * size < total);
+    return (items: items, hasMore: size is num && items.length >= size);
+  }
+
   Future<Map<String, dynamic>> postJson(
     String path, {
     Object? body,

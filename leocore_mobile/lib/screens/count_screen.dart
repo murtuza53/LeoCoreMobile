@@ -3,7 +3,9 @@ import 'package:provider/provider.dart';
 
 import '../state/app_state.dart';
 import '../theme/tokens.dart';
+import '../api/repositories.dart';
 import '../widgets/common.dart';
+import '../widgets/paged_list_view.dart';
 
 class CountScreen extends StatelessWidget {
   const CountScreen({super.key});
@@ -19,14 +21,14 @@ class CountScreen extends StatelessWidget {
           children: [
             ScreenHeader(
               title: context.tr('Stock count'),
-              subtitle: 'Main WH · Tubli',
+              subtitle: app.countWarehouseName,
               onBack: () => app.nav(Screen.home),
               actions: [
                 if (app.countStarted)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 4),
                     decoration: BoxDecoration(color: lc.okbg, borderRadius: BorderRadius.circular(99)),
-                    child: Text('● Session CNT-0042', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: lc.ok)),
+                    child: Text('● ${context.tr('Counting')}', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: lc.ok)),
                   ),
               ],
             ),
@@ -48,7 +50,7 @@ class CountScreen extends StatelessWidget {
                 children: [
                   IconChip(Icons.qr_code_scanner, size: 52, fg: lc.gold, border: Border.all(color: lc.gold, width: 1.5), onTap: app.openScan),
                   const SizedBox(width: 10),
-                  Expanded(child: PrimaryButton(context.tr('Submit count'), onTap: app.submitCount)),
+                  Expanded(child: PrimaryButton('${context.tr('Submit count')} (${app.countedLines})', onTap: app.submitCount, busy: app.submittingCount)),
                 ],
               ),
             ),
@@ -92,12 +94,30 @@ class _StartPane extends StatelessWidget {
   }
 }
 
-class _CountList extends StatelessWidget {
+class _CountList extends StatefulWidget {
+  @override
+  State<_CountList> createState() => _CountListState();
+}
+
+class _CountListState extends State<_CountList> {
+  final _search = TextEditingController();
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
     final lc = context.lc;
-    final products = app.countProducts;
+    final list = app.countList;
+    list.ensureLoaded();
+    // A scan can set the search (to show the scanned item).
+    if (_search.text != app.countQuery) {
+      _search.value = TextEditingValue(text: app.countQuery, selection: TextSelection.collapsed(offset: app.countQuery.length));
+    }
 
     Widget statCard(String label, String value, {Color? color}) => Expanded(
           child: Container(
@@ -119,74 +139,125 @@ class _CountList extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
           child: Row(children: [
-            statCard(context.tr('Lines'), '${products.length} ${context.tr('lines')}'),
+            statCard(context.tr('Counted'), '${app.countedLines} ${context.tr('items')}'),
             const SizedBox(width: 8),
-            statCard(context.tr('Variances'), '${app.countVar} ${context.tr('variance')}', color: lc.bad),
+            statCard(context.tr('Variances'), '${app.countVar}', color: app.countVar > 0 ? lc.bad : null),
           ]),
         ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: SearchField(hint: context.tr('Search name, code or barcode'), controller: _search, onChanged: app.setCountQuery),
+        ),
         Expanded(
-          child: ListView.separated(
+          child: PagedListView<CountSheetRow>(
+            list: list,
             padding: const EdgeInsets.fromLTRB(16, 2, 16, 130),
-            itemCount: products.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 8),
-            itemBuilder: (_, i) {
-              final p = products[i];
-              final exp = app.countExpected(p.id);
-              final cnt = app.countValue(p.id);
-              final v = cnt - exp;
-              final ok = v == 0;
-              return LcCard(
-                padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600)),
-                              Text(p.code, style: TextStyle(fontSize: 11.5, color: lc.mut)),
-                            ],
-                          ),
-                        ),
-                        Pill('Δ ${v > 0 ? '+' : ''}$v', bg: ok ? lc.okbg : lc.badbg, fg: ok ? lc.ok : lc.bad, size: 11),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(context.tr('Expected'), style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: lc.mut)),
-                              Text('$exp', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-                            ],
-                          ),
-                        ),
-                        _StepBtn('−', border: lc.line, fg: lc.mut, onTap: () => app.decCount(p.id)),
-                        const SizedBox(width: 10),
-                        Container(
-                          width: 56,
-                          height: 44,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(color: lc.soft, borderRadius: BorderRadius.circular(11)),
-                          child: Text('$cnt', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-                        ),
-                        const SizedBox(width: 10),
-                        _StepBtn('+', border: lc.prim, fg: lc.tprim, onTap: () => app.incCount(p.id)),
-                      ],
-                    ),
-                  ],
-                ),
-              );
-            },
+            emptyText: 'No matching items',
+            itemBuilder: (_, r) => _CountRow(r),
           ),
         ),
       ],
     );
+  }
+}
+
+class _CountRow extends StatelessWidget {
+  final CountSheetRow r;
+  const _CountRow(this.r);
+
+  @override
+  Widget build(BuildContext context) {
+    final app = context.watch<AppState>();
+    final lc = context.lc;
+    final exp = r.expected;
+    final cnt = app.countValue(r.itemId);
+    final v = cnt == null ? 0 : cnt - exp;
+    final ok = v == 0;
+    return LcCard(
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(r.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, height: 1.25)),
+                    Text(r.code, style: TextStyle(fontSize: 11.5, color: lc.mut)),
+                  ],
+                ),
+              ),
+              if (cnt != null) Pill('Δ ${v > 0 ? '+' : ''}$v', bg: ok ? lc.okbg : lc.badbg, fg: ok ? lc.ok : lc.bad, size: 11),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(context.tr('Expected'), style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: lc.mut)),
+                    Text('$exp', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                  ],
+                ),
+              ),
+              _StepBtn('−', border: lc.line, fg: lc.mut, onTap: () => app.decCount(r.itemId)),
+              const SizedBox(width: 10),
+              GestureDetector(
+                onTap: () => _typeQty(context, app),
+                child: Container(
+                  width: 64,
+                  height: 44,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: lc.soft,
+                    borderRadius: BorderRadius.circular(11),
+                    border: Border.all(color: cnt == null ? lc.line : lc.prim),
+                  ),
+                  child: Text(cnt == null ? '—' : '$cnt', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: cnt == null ? lc.mut : null)),
+                ),
+              ),
+              const SizedBox(width: 10),
+              _StepBtn('+', border: lc.prim, fg: lc.tprim, onTap: () => app.incCount(r.itemId)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Type the counted quantity; "Not counted" leaves the item out of the count.
+  Future<void> _typeQty(BuildContext context, AppState app) async {
+    final cur = app.countValue(r.itemId);
+    final c = TextEditingController(text: cur?.toString() ?? '');
+    final res = await showDialog<({int? qty})>(
+      context: context,
+      builder: (dctx) => AlertDialog(
+        title: Text(r.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+        content: TextField(
+          controller: c,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(labelText: context.tr('Counted quantity'), helperText: '${context.tr('Expected')}: ${r.expected}'),
+          onSubmitted: (v) => Navigator.pop(dctx, (qty: int.tryParse(v.trim()))),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dctx, (qty: null)), child: Text(context.tr('Not counted'))),
+          TextButton(onPressed: () => Navigator.pop(dctx), child: Text(context.tr('Cancel'))),
+          TextButton(
+            onPressed: () => Navigator.pop(dctx, (qty: int.tryParse(c.text.trim()))),
+            child: Text(context.tr('Save'), style: const TextStyle(fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+    if (res == null) return; // cancelled
+    // Save with something that isn't a whole number keeps the old value.
+    if (res.qty == null && c.text.trim().isNotEmpty && int.tryParse(c.text.trim()) == null) return;
+    app.setCount(r.itemId, res.qty);
   }
 }
 
@@ -236,8 +307,14 @@ class _CountDoneDialog extends StatelessWidget {
               const SizedBox(height: 12),
               Text(context.tr('Count submitted'), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
               const SizedBox(height: 8),
-              Text('Session CNT-0042 · 4 ${context.tr('lines')} · ${app.countVar} ${context.tr('variance sent for approval.')}',
-                  textAlign: TextAlign.center, style: TextStyle(fontSize: 13, height: 1.5, color: lc.mut)),
+              Text(
+                  [
+                    if (app.countDocNumber != null && app.countDocNumber!.isNotEmpty) app.countDocNumber!,
+                    '${app.countedLines} ${context.tr('items counted')}',
+                    '${app.demoMode ? app.countVar : app.countAdjusted} ${context.tr('stock adjusted')}',
+                  ].join(' · '),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 13, height: 1.5, color: lc.mut)),
               const SizedBox(height: 16),
               IntrinsicWidth(child: PrimaryButton(context.tr('Done'), height: 46, onTap: app.closeCountDone)),
             ],
