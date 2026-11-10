@@ -1,7 +1,7 @@
 # LeoCore ERP — App Store Submission Pack
 
 Bundle ID: `sek.leocore.erp` · Team: `QH862RRRJ6` · Latest shipped: `2.10.0` build `12`
-In flight: nothing (phased release ends 2026-11-02)
+In flight: nothing (2.10.0 reached 100% on 2026-11-02)
 Target: iPhone only · Min iOS 15.0
 
 ---
@@ -549,6 +549,9 @@ reviewer notes have now carried unchanged across three submissions, so leaving
 an approved 3992/4000-char block alone is worth more than squeezing in new
 feature guidance — add a note only when a feature needs seeded data to look like
 it works (the Attach Docs lesson from 2.7.0).
+
+**2026-11-02** — 2.10.0 phased release `COMPLETE`, day 7. At 100% of users.
+Confirmed 2026-11-10.
 
 ## What phased release actually throttles
 
