@@ -559,6 +559,44 @@ it works (the Attach Docs lesson from 2.7.0).
 **2026-11-02** — 2.10.0 phased release `COMPLETE`, day 7. At 100% of users.
 Confirmed 2026-11-10.
 
+**2026-11-10** — 2.11.0 build 13 uploaded and submitted, `WAITING_FOR_REVIEW`
+(submission `71e46fb3`, 01:38 UTC). Android shipped 2.11.0/vc13 on 2026-11-09.
+
+**The first LeoCore release that needed real iOS work**, and not in the place it
+looked. `MainActivity.kt` gained `saveToPictures` (writes to `Pictures/LeoCore`),
+which looks like something to port and is not: all five `leocore/downloads` calls
+are safe on iOS — three sit in explicit `Platform.isAndroid` blocks,
+`saveAttachment` returns early to the share sheet, and `_sharePdf` is gated
+*indirectly* by the null URI `_savePdf` always returns on iOS. Audit every call
+site, not just the ones with an obvious platform check.
+
+The gap was one missing Info.plist key. On iOS `savePicture` falls back to the
+share sheet, where **Save Image** is `UIActivityTypeSaveToCameraRoll` — an
+in-process write to the photo library — and the app declared only
+`NSPhotoLibraryUsageDescription`. Apple documents
+**`NSPhotoLibraryAddUsageDescription`** as the key required for add-only access,
+so it was added and confirmed in the shipped IPA (read the IPA, not the source).
+Not reproduced as a crash on a device: the key went in because shipping without
+it relies on undocumented fallback, for the cost of one line.
+
+Two consequences:
+
+- The review notes said the photo library was requested "only" when you pick an
+  image to attach. That stopped being true, so the PERMISSIONS line now discloses
+  the save. Paid for by dropping Match-by-name guidance that is two releases old
+  — 3992 -> 3991 of 4000.
+- **Review notes do not carry over when you change them.** They carried untouched
+  across 2.9.0/2.10.0, which can mislead: edit `apple_review_notes.txt` and you
+  must `PATCH /v1/appStoreReviewDetails/{id}` yourself.
+
+Checked for empty-screen traps (the Print Labels lesson, 2.7.0): the demo server
+has **50 saved quotations**, and `DEMO-INV-00051` / `DEMO-INV-00142` already carry
+1 and 6 attachments, so both new screens show real content and no new reviewer
+guidance was needed. That API login signs the app out — one session per user.
+
+`flutter analyze` clean, no dependency change (`pubspec.lock` untouched), and the
+IPA stamped build 13 from pubspec `2.11.0+13`.
+
 ## What phased release actually throttles
 
 Days 1-7 release to 1 / 2 / 5 / 10 / 20 / 50 / 100 percent of users — but **only
