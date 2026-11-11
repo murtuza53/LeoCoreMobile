@@ -1,6 +1,6 @@
 # LeoCore Mobile API — Reference (v1)
 
-For the mobile app team. **Current as of LeoCore ERP 1.6.54 (10 Nov 2026).** This one file is the complete
+For the mobile app team. **Current as of LeoCore ERP 1.6.53 (11 Nov 2026).** This one file is the complete
 reference: it replaces the separate notes (`MOBILE_ACCESS_API.md`, `MOBILE_API_UPDATE_2026-08.md`,
 `MOBILE_API_UPDATE_2026-09.md`, `MOBILE_API_DOCUMENT_UPLOAD.md`), whose content is merged in below.
 
@@ -146,7 +146,7 @@ call (`403 FORBIDDEN`), so hiding is about not offering what would be refused.
 | `MobileReceipts` | Receipts | `receipts` | customer outstanding invoices | **Create** = record a receipt (no screen yet) |
 | `MobileDocuments` | Document Attachments | `documents` | Attach Docs, open files | **Edit** = attach; **Delete** = delete an attachment (also per document as `canAttach` / `canDelete`, §8) |
 
-**1.6.54:** `MobileStockAlerts` is new. Low / dead stock used to need `MobileStockLedger`; on upgrade every role
+**1.6.53:** `MobileStockAlerts` is new. Low / dead stock used to need `MobileStockLedger`; on upgrade every role
 gets Stock Alerts with the same View it had on Stock Ledger, so nobody loses the page.
 
 ### GET `/menu` (version 2)
@@ -793,8 +793,8 @@ Date params are `YYYY-MM-DD`; `from`/`to` default to the current month.
 
 | Version | Change | App action |
 |---|---|---|
-| **1.6.54** (Nov 2026) | **Limited roles & big lists:** app rules for roles with few pages (menu first, saved rights, no "show everything", `403` lists not re-requested, sales chart only with Reports; item search needs Products); customer / supplier `outstanding` reused for 60 s so paging and search are fast with thousands of parties (§2, §5) | Load the menu first and only permitted data; stop re-requesting refused lists; keep the full-access Home/More unchanged; chart only with Reports |
-| **1.6.54** (Nov 2026) | **Mobile permissions:** the role permission page has a **Mobile App** tab; `GET /menu` is **version 2** with `feature` + `rights` per page and a `permissions` map for every Mobile App feature; new menu pages `stock-alerts`, `finance-reports`, `quotations`; new feature **`MobileStockAlerts`** gates `/inventory/low-stock` and `/inventory/dead-stock` (carried over from Stock Ledger on upgrade) (§2) | Gate pages and buttons by feature rights; refresh the menu on resume |
+| **1.6.53** (Nov 2026) | **Limited roles & big lists:** app rules for roles with few pages (menu first, saved rights, no "show everything", `403` lists not re-requested, sales chart only with Reports; item search needs Products); customer / supplier `outstanding` reused for 60 s so paging and search are fast with thousands of parties (§2, §5) | Load the menu first and only permitted data; stop re-requesting refused lists; keep the full-access Home/More unchanged; chart only with Reports |
+| **1.6.53** (Nov 2026) | **Mobile permissions:** the role permission page has a **Mobile App** tab; `GET /menu` is **version 2** with `feature` + `rights` per page and a `permissions` map for every Mobile App feature; new menu pages `stock-alerts`, `finance-reports`, `quotations`; new feature **`MobileStockAlerts`** gates `/inventory/low-stock` and `/inventory/dead-stock` (carried over from Stock Ledger on upgrade) (§2) | Gate pages and buttons by feature rights; refresh the menu on resume |
 | **1.6.52** (Nov 2026) | **Sign-out fixes:** admins no longer refused on refresh (`MOBILE_ACCESS_DISABLED` every ~30 min); a refresh whose reply was lost is accepted again for 2 min; a refresh after a login elsewhere returns `SESSION_TERMINATED` naming the device; new token issued before the old is revoked; rate limits are per phone, and 429 uses the error envelope (`RATE_LIMITED`) (§1, §3) | Treat 429/5xx as retry, not sign-out |
 | **1.6.52** (Nov 2026) | Lists: `hasMore` on every paged list; `pageSize` up to 200; customers/suppliers `balance=nonzero`, `sort=balance`, search by phone/VAT/TRN/id; suppliers gain `outstanding`; quotations `search` (§4, §5) | Infinite scroll + server search everywhere; zero-balance filter |
 | **1.6.52** (Nov 2026) | Attach Docs: lookup returns the existing `attachments` + `canAttach`/`canDelete`; new open-file and **delete** endpoints; new **Delete** access on `MobileDocuments`; attachment `url` now opens through the API; added `isImage`, `isPdf`, `downloadUrl`; `uploadedAt` marked UTC (§8) | Show the files after lookup; open with Bearer; delete with confirmation |
