@@ -12,12 +12,9 @@ class MoreScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
 
-    // The role's pages (AppState.pages — same list as the Home grid), minus
-    // Products / Customers, which have their own bottom-bar tabs.
+    // The role's pages (AppState.morePages — same table as the Home grid).
     final items = <(IconData, String, String, VoidCallback)>[
-      for (final pg in app.pages)
-        if (pg.screen != Screen.products && pg.screen != Screen.customers)
-          (pg.icon, context.tr(pg.title), context.tr(pg.subtitle), pg.onTap),
+      for (final pg in app.morePages) (pg.icon, context.tr(pg.more!), context.tr(pg.subtitle), pg.moreTap!),
       (Icons.settings_outlined, context.tr('Settings'), context.tr('Language, theme, devices, role'), () => app.nav(Screen.settings)),
     ];
     if (app.appVersion.isEmpty) app.loadAppVersion();

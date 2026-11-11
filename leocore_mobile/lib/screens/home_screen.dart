@@ -114,8 +114,10 @@ class HomeScreen extends StatelessWidget {
                 Expanded(child: _Kpi(label: context.tr('Low stock'), value: app.kpiLowStock, unit: context.tr('items'), valueColor: lc.warn, chip: app.kpiLowChip, chipFg: lc.warn, chipBg: lc.warnbg, onTap: app.mStockAlerts ? app.goLow : null)),
               ])),
               const SizedBox(height: 14),
-              _SalesTrendCard(),
-              const SizedBox(height: 14),
+              if (app.demoMode || app.mReports) ...[
+                _SalesTrendCard(),
+                const SizedBox(height: 14),
+              ],
               ],
               if (app.permsReady) ...[
                 Row(
@@ -358,7 +360,7 @@ class _WorkspaceGrid extends StatelessWidget {
 
     // Same pages as the More screen (AppState.pages = the role's permissions).
     final tiles = <(IconData, String, VoidCallback?)>[
-      for (final pg in app.pages) (pg.icon, context.tr(pg.title), pg.onTap),
+      for (final pg in app.homePages) (pg.icon, context.tr(pg.homeTitle), pg.homeAction),
       (Icons.settings_outlined, context.tr('Settings'), () => app.nav(Screen.settings)),
     ];
 

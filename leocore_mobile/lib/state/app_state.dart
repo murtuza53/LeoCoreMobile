@@ -639,24 +639,47 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   /// load or when they can't be read.
   bool get permsReady => demoMode || _perms.known;
 
-  /// The pages this user may open, in menu order — ONE list for the Home
-  /// workspace grid and the More screen, so they can't disagree. Titles are
-  /// translation keys.
-  List<({IconData icon, String title, String subtitle, VoidCallback onTap, Screen screen})> get pages => [
-        if (mProducts) (icon: Icons.inventory_2_outlined, title: 'Products', subtitle: 'Search, prices, stock, photos', onTap: () => nav(Screen.products), screen: Screen.products),
-        if (mCustomers) (icon: Icons.people_outline, title: 'Customers', subtitle: 'Directory & balances', onTap: () => nav(Screen.customers), screen: Screen.customers),
-        if (mSuppliers) (icon: Icons.local_shipping_outlined, title: 'Suppliers', subtitle: 'Directory & account statements', onTap: goSuppliers, screen: Screen.suppliers),
-        if (mStatements) (icon: Icons.description_outlined, title: 'Statements', subtitle: 'Customer & supplier statements', onTap: openStatementPicker, screen: Screen.statementPicker),
-        if (mSale) (icon: Icons.receipt_long_outlined, title: 'Cash Sale', subtitle: 'Scan items, save as draft', onTap: () => newSale(), screen: Screen.invoice),
-        if (mQuoteNew) (icon: Icons.request_quote_outlined, title: 'Quotation', subtitle: 'Save & send as PDF', onTap: () => newQuotation(), screen: Screen.quotation),
-        if (mQuotes) (icon: Icons.history, title: 'Saved quotations', subtitle: 'View past quotations, download PDF', onTap: openQuoteHistory, screen: Screen.quotations),
-        if (mCount) (icon: Icons.checklist_rounded, title: 'Stock Count', subtitle: 'Expected vs counted, variance', onTap: goCount, screen: Screen.count),
-        if (mStockAlerts) (icon: Icons.warning_amber_rounded, title: 'Stock alerts', subtitle: 'Low stock & dead stock', onTap: goLow, screen: Screen.low),
-        if (mReports) (icon: Icons.show_chart, title: 'Reports', subtitle: 'Sales & purchases, top lists', onTap: goReports, screen: Screen.reports),
-        if (mAnalytics || mFinance) (icon: Icons.insights_outlined, title: 'Business health', subtitle: 'Aging, cash, margin, trends', onTap: openManagerReports, screen: Screen.managerReports),
-        if (mLabels) (icon: Icons.qr_code_2_outlined, title: 'Print Labels', subtitle: 'Barcode & shelf labels', onTap: openLabels, screen: Screen.labels),
-        if (mDocuments) (icon: Icons.attach_file, title: 'Attach Docs', subtitle: 'Scan or upload files to a document', onTap: openAttachDocs, screen: Screen.documents),
+  /// The pages this user may open — ONE table for the Home workspace grid and
+  /// the More list, so both follow the same permissions. Each page keeps the
+  /// Home tile and More row it always had (names, actions, order); see
+  /// [homePages] / [morePages]. Titles are translation keys.
+  List<AppPage> get pages => [
+        // More order (as before 1.6.54), with the Home-only pages slotted in.
+        if (mProducts) AppPage(Screen.products, Icons.inventory_2_outlined, home: 'Products', homeTap: () => nav(Screen.products), homeRank: 1),
+        if (mCustomers) AppPage(Screen.customers, Icons.people_outline, home: 'Customers', homeTap: () => nav(Screen.customers), homeRank: 2),
+        if (mSale) AppPage(Screen.invoice, Icons.receipt_long_outlined, more: 'Cash sales invoice', subtitle: 'Scan items, save as draft', moreTap: () => newSale(),
+            // Home's tile reopens the sale in progress; More starts a new one.
+            home: 'Cash Sale', homeTap: () => nav(Screen.invoice), homeRank: 4),
+        if (mQuoteNew) AppPage(Screen.quotation, Icons.request_quote_outlined, more: 'Quotation', subtitle: 'Save & send as PDF', moreTap: () => newQuotation()),
+        if (mQuotes) AppPage(Screen.quotations, Icons.history, more: 'Saved quotations', subtitle: 'View past quotations, download PDF', moreTap: openQuoteHistory),
+        if (mCount) AppPage(Screen.count, Icons.checklist_rounded, more: 'Stock count', subtitle: 'Expected vs counted, variance', moreTap: goCount, home: 'Stock Count', homeTap: goCount, homeRank: 5),
+        if (mStockAlerts) AppPage(Screen.low, Icons.warning_amber_rounded, more: 'Stock alerts', subtitle: 'Low stock & dead stock', moreTap: goLow, home: 'Low Stock', homeTap: goLow, homeRank: 6),
+        if (mReports) AppPage(Screen.reports, Icons.show_chart, more: 'Reports', subtitle: 'Sales & purchases, top lists', moreTap: goReports, home: 'Reports', homeTap: goReports, homeRank: 7),
+        if (mAnalytics || mFinance) AppPage(Screen.managerReports, Icons.insights_outlined, more: 'Business health', subtitle: 'Aging, cash, margin, trends', moreTap: openManagerReports),
+        if (mLabels) AppPage(Screen.labels, Icons.qr_code_2_outlined, more: 'Print Labels', subtitle: 'Barcode & shelf labels', moreTap: openLabels),
+        if (mDocuments) AppPage(Screen.documents, Icons.attach_file, more: 'Attach Docs', subtitle: 'Scan or upload files to a document', moreTap: openAttachDocs),
+        if (mSuppliers) AppPage(Screen.suppliers, Icons.local_shipping_outlined, more: 'Suppliers', subtitle: 'Directory & account statements', moreTap: goSuppliers, home: 'Suppliers', homeTap: goSuppliers, homeRank: 3),
+        if (mStatements) AppPage(Screen.statementPicker, Icons.description_outlined, home: 'Statements', homeTap: openStatementPicker, homeRank: 8),
       ];
+
+  /// Home workspace tiles: the pages that have a Home tile, in Home order. A
+  /// role with none of those (e.g. document scanning only) gets its pages
+  /// here instead, so Home is never just "Settings".
+  List<AppPage> get homePages {
+    final all = pages;
+    final home = all.where((p) => p.home != null).toList()..sort((a, b) => a.homeRank.compareTo(b.homeRank));
+    return home.isNotEmpty ? home : all;
+  }
+
+  /// More list rows (Products / Customers / Statements live on Home and the tabs).
+  List<AppPage> get morePages => pages.where((p) => p.more != null).toList();
+
+  /// Tests: act as a signed-in user with these rights.
+  @visibleForTesting
+  void debugUsePermissions(MobilePermissions p) {
+    demoMode = false;
+    _perms = p;
+  }
 
   /// Warehouses were loaded (only for roles with stock pages) — the Home
   /// header shows the warehouse picker only then.
@@ -863,8 +886,8 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
         warehouseId = _warehouses.first.id;
         wh = _warehouses.first.name;
       }
-      // Real 7-day trend for the Home chart (dashboard only).
-      if (mDashboard) {
+      // Real 7-day trend for the Home chart — /reports/sales needs Reports.
+      if (mDashboard && mReports) {
         final now = DateTime.now();
         final fmt = DateFormat('yyyy-MM-dd');
         try {
@@ -884,7 +907,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       // starts on that page instead of an empty Home.
       if (screen == Screen.home && !mDashboard) {
         final ps = pages;
-        if (ps.length == 1) ps.first.onTap();
+        if (ps.length == 1) ps.first.open();
       }
     } on ApiException catch (e) {
       dataError = e.message;
@@ -3444,4 +3467,30 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
 class PartyFilter {
   bool hideZero = false;
   bool byBalance = false;
+}
+
+
+/// One page of the app as Home and More show it (see AppState.pages).
+class AppPage {
+  final Screen screen;
+  final IconData icon;
+
+  /// More row: title, subtitle, action. Null [more] = not listed in More.
+  final String? more;
+  final String subtitle;
+  final VoidCallback? moreTap;
+
+  /// Home tile: title, action, position. Null [home] = no Home tile of its own.
+  final String? home;
+  final VoidCallback? homeTap;
+  final int homeRank;
+
+  const AppPage(this.screen, this.icon,
+      {this.more, this.subtitle = '', this.moreTap, this.home, this.homeTap, this.homeRank = 99});
+
+  String get homeTitle => home ?? more!;
+  VoidCallback get homeAction => homeTap ?? moreTap!;
+
+  /// Opens the page (the More action where there is one).
+  void open() => (moreTap ?? homeTap!)();
 }

@@ -532,9 +532,6 @@ const Map<String, String> kArabic = {
   'Upload matched': 'رفع المطابق',
   'Upload failed': 'فشل الرفع',
   // Mobile permissions (pages follow the role)
-  'Search, prices, stock, photos': 'البحث والأسعار والمخزون والصور',
-  'Directory & balances': 'الدليل والأرصدة',
-  'Customer & supplier statements': 'كشوف حسابات العملاء والموردين',
   'Retry': 'إعادة المحاولة',
   "You don't have access to this page.": 'ليس لديك صلاحية لهذه الصفحة.',
   "You don't have access to this list.": 'ليس لديك صلاحية لهذه القائمة.',
