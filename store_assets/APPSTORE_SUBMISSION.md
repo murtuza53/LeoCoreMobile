@@ -610,6 +610,48 @@ guidance was needed. That API login signs the app out — one session per user.
 `flutter analyze` clean, no dependency change (`pubspec.lock` untouched), and the
 IPA stamped build 13 from pubspec `2.11.0+13`.
 
+**2026-11-10** — 2.11.0 **APPROVED** in about 16 hours (submitted 01:38 UTC,
+released 17:19 UTC). `READY_FOR_SALE`, phased release `ACTIVE`. No questions on
+the new photo-library disclosure.
+
+**2026-11-11** — 2.13.0 build 16 uploaded and submitted, `WAITING_FOR_REVIEW`
+(submission `5e1c0a87`, 20:45 UTC). **iOS skips 2.12.0** — Android shipped
+2.12.0/vc15 and 2.13.0/vc16 a day apart. Submitting ends 2.11.0's ramp at day 3
+(~5% of auto-update users), a deliberate trade: 2.13.0 carries a session fix
+worth more than the remaining five days of a rollout that had been clean for
+two days.
+
+Heaviest native batch so far and still nothing to port:
+
+- A new `leocore/scanner` channel runs Google's ML Kit document scanner, with an
+  ML Kit dependency added to `build.gradle.kts`. `_scanPages()` calls it only
+  under `Platform.isAndroid` and falls back to `CunningDocumentScanner` on iOS —
+  and on `PlatformException` / `MissingPluginException` too.
+- "Check for updates" (More) is the feature that is easy to get wrong: Play's
+  in-app update on Android, and on iOS an iTunes lookup that opens the returned
+  `trackViewUrl` — Apple's own URL, so the never-`souqekamil.com` rule holds.
+  The Play-only `_openStorePage()` is unreachable from the iOS branch.
+- One new dependency, `image: ^4.2.0` (pure Dart), for the scan cleanup.
+
+**RBAC — the real risk, and why it was safe.** 2.12.0 made every page and button
+follow the role's Mobile App rights. Read naively, `rights()` returns
+`Rights.none` while permissions are unknown and `home_screen.dart` only renders
+the grid when `permsReady`, which would mean a blank app. It does not happen:
+`MobilePermissions.fromMenu` falls back to mapping the **v1** menu shape when the
+server sends no `permissions` key, so `known` still becomes true.
+
+That fallback is the live path, not a corner case — **the demo server is still on
+menu v1** (`/menu` returns `{"version":1,"items":[...]}`). Verified against it:
+all 12 items `mic` receives map through with `view`, `stockAlerts` is derived
+from `stockLedger` and `quotations` from `cashSales`, and **Business Health
+survives because it is gated on `mAnalytics => mReports`**, not on the unmapped
+`MobileFinanceReports`. Every feature in section 9b still reaches the reviewer,
+so the Print Labels and Attach Docs screenshots remain honest.
+
+Not smoke-tested on the Simulator this cycle: the RBAC conclusion is from code
+plus live server data, and the mitigation is that the same shared Dart has been
+live on Play since 2026-11-10.
+
 ## What phased release actually throttles
 
 Days 1-7 release to 1 / 2 / 5 / 10 / 20 / 50 / 100 percent of users — but **only
