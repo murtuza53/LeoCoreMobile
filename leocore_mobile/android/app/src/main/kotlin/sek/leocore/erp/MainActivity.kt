@@ -7,7 +7,13 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import androidx.activity.result.ActivityResult
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.FileProvider
+import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
+import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
+import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -16,8 +22,61 @@ import java.io.File
 /** FlutterFragmentActivity is required by local_auth's BiometricPrompt. */
 class MainActivity : FlutterFragmentActivity() {
 
+    private var scanResult: MethodChannel.Result? = null
+
+    /** Receives the Google document scanner's pages (JPEG file paths). */
+    private val scanLauncher = registerForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) { res: ActivityResult ->
+        val pending = scanResult ?: return@registerForActivityResult
+        scanResult = null
+        if (res.resultCode != RESULT_OK) {
+            pending.success(null) // cancelled
+            return@registerForActivityResult
+        }
+        val scan = GmsDocumentScanningResult.fromActivityResultIntent(res.data)
+        pending.success(scan?.pages?.mapNotNull { it.imageUri.path } ?: emptyList<String>())
+    }
+
+    /**
+     * Opens Google's document scanner in BASE mode: edge detection, perspective
+     * (skew) correction, crop and rotate, but no automatic filter. The app then
+     * cleans the pages itself so paper colours (e.g. a yellow slip) survive.
+     */
+    private fun startScan(pages: Int, gallery: Boolean, result: MethodChannel.Result) {
+        if (scanResult != null) {
+            result.error("scanner", "A scan is already open", null)
+            return
+        }
+        val options = GmsDocumentScannerOptions.Builder()
+            .setGalleryImportAllowed(gallery)
+            .setPageLimit(pages)
+            .setResultFormats(GmsDocumentScannerOptions.RESULT_FORMAT_JPEG)
+            .setScannerMode(GmsDocumentScannerOptions.SCANNER_MODE_BASE)
+            .build()
+        GmsDocumentScanning.getClient(options).getStartScanIntent(this)
+            .addOnSuccessListener { sender ->
+                scanResult = result
+                try {
+                    scanLauncher.launch(IntentSenderRequest.Builder(sender).build())
+                } catch (e: Exception) {
+                    scanResult = null
+                    result.error("scanner", e.message ?: e.toString(), null)
+                }
+            }
+            .addOnFailureListener { e -> result.error("scanner", e.message ?: e.toString(), null) }
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "leocore/scanner")
+            .setMethodCallHandler { call, result ->
+                if (call.method == "scan") {
+                    startScan(call.argument<Int>("pages") ?: 20, call.argument<Boolean>("gallery") ?: true, result)
+                } else {
+                    result.notImplemented()
+                }
+            }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "leocore/downloads")
             .setMethodCallHandler { call, result ->
                 try {

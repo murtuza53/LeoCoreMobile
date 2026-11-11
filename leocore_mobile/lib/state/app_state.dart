@@ -6,7 +6,7 @@ import 'dart:math' show Random;
 import 'package:dio/dio.dart' show Dio, Options, ResponseType;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show MethodChannel, PlatformException;
+import 'package:flutter/services.dart' show MethodChannel, MissingPluginException, PlatformException;
 import 'package:image_picker/image_picker.dart';
 import 'package:in_app_review/in_app_review.dart';
 import 'package:in_app_update/in_app_update.dart';
@@ -25,6 +25,7 @@ import '../api/repositories.dart';
 import '../api/secure_store.dart';
 import 'package:cunning_document_scanner/cunning_document_scanner.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:pdf/pdf.dart' show PdfPageFormat;
 import 'package:pdf/widgets.dart' as pw;
 import 'package:permission_handler/permission_handler.dart';
 
@@ -35,6 +36,7 @@ import '../models/permissions.dart';
 import '../models/models.dart';
 import '../models/reports.dart';
 import '../utils/money.dart';
+import '../utils/scan_enhance.dart';
 import 'paged_list.dart';
 
 enum Screen {
@@ -780,6 +782,8 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     final savedLang = await _store.lang;
     if (savedLang == 'en' || savedLang == 'ar') lang = savedLang!;
     biometrics = await _store.bioEnabled;
+    // Not awaited: only needed when scanning, never delays start-up.
+    _store.scanTone.then((v) => scanTone = scanToneFrom(v), onError: (_) {});
     biometricAvailable = await _bio.available();
     notifyListeners();
 
@@ -2809,13 +2813,50 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   /// granted already (the screen checks first via [ensureCameraPermission]).
   Future<void> attachScanDocument() async {
     try {
-      final pages = await CunningDocumentScanner.getPictures(noOfPages: 20, isGalleryImportAllowed: true);
+      final pages = await _scanPages();
       if (pages == null || pages.isEmpty) return;
-      final pdfPath = await _imagesToPdf(pages, 'scan');
+      final List<String> cleaned;
+      if (scanTone == ScanTone.original) {
+        cleaned = pages;
+      } else {
+        showToast(t('Enhancing pages…'));
+        final dir = await getTemporaryDirectory();
+        cleaned = await enhanceScans(pages, scanTone, dir.path);
+      }
+      final pdfPath = await _imagesToPdf(cleaned, 'scan');
       if (pdfPath != null) _addFile(pdfPath);
     } catch (_) {
       showToast(t('Scanning failed'));
     }
+  }
+
+  /// How scanned pages are cleaned up (remembered on the device).
+  ScanTone scanTone = ScanTone.colour;
+
+  void setScanTone(ScanTone v) {
+    if (scanTone == v) return;
+    scanTone = v;
+    _store.setScanTone(v.name);
+    notifyListeners();
+  }
+
+  static const _scanChannel = MethodChannel('leocore/scanner');
+
+  /// Android: Google's scanner in crop-only mode (no auto filter, so paper
+  /// colour survives for our own clean-up). iOS, or if that isn't available:
+  /// the plugin scanner.
+  Future<List<String>?> _scanPages() async {
+    if (Platform.isAndroid) {
+      try {
+        final r = await _scanChannel.invokeMethod<List<dynamic>>('scan', {'pages': 20, 'gallery': true});
+        return r?.map((e) => e.toString()).toList();
+      } on PlatformException {
+        // fall through to the plugin
+      } on MissingPluginException {
+        // fall through to the plugin
+      }
+    }
+    return CunningDocumentScanner.getPictures(noOfPages: 20, isGalleryImportAllowed: true);
   }
 
   // ── capture pages → one PDF (take multiple photos, edit, then combine) ──
@@ -3008,10 +3049,25 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   Future<String?> _imagesToPdf(List<String> imagePaths, String prefix) async {
     try {
       final doc = pw.Document();
+      // A4, no margins: each page fills the full width, top-aligned. A page
+      // taller than A4's proportions is fitted to the height instead, so
+      // nothing is cut off.
+      const a4 = PdfPageFormat.a4;
       for (final p in imagePaths) {
         final bytes = await File(p).readAsBytes();
         final img = pw.MemoryImage(bytes);
-        doc.addPage(pw.Page(build: (ctx) => pw.Center(child: pw.Image(img, fit: pw.BoxFit.contain))));
+        final w = (img.width ?? 1).toDouble(), h = (img.height ?? 1).toDouble();
+        final tall = h / w > a4.height / a4.width;
+        doc.addPage(pw.Page(
+          pageFormat: a4.copyWith(marginLeft: 0, marginRight: 0, marginTop: 0, marginBottom: 0),
+          margin: pw.EdgeInsets.zero,
+          build: (ctx) => pw.Align(
+            alignment: tall ? pw.Alignment.topCenter : pw.Alignment.topLeft,
+            child: tall
+                ? pw.Image(img, height: a4.height, fit: pw.BoxFit.fitHeight)
+                : pw.Image(img, width: a4.width, fit: pw.BoxFit.fitWidth),
+          ),
+        ));
       }
       final dir = await getTemporaryDirectory();
       final stamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());

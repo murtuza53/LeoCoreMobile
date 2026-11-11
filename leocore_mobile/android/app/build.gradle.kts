@@ -92,3 +92,9 @@ configurations.all {
         force("com.google.mlkit:barcode-scanning:17.3.0")
     }
 }
+
+dependencies {
+    // Google document scanner, used directly in "base" mode (edges + crop only,
+    // no auto filter) so the app can do its own colour-preserving cleanup.
+    implementation("com.google.android.gms:play-services-mlkit-document-scanner:16.0.0")
+}

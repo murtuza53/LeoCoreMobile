@@ -501,6 +501,17 @@ const Map<String, String> kArabic = {
   'Gallery': 'المعرض',
   'Scan applies auto edge, skew and colour correction, and makes a multi-page PDF.':
       'المسح يطبّق تصحيحاً تلقائياً للحواف والميل والألوان، وينشئ ملف PDF متعدد الصفحات.',
+  'Scan straightens the page, removes shadows and keeps the paper colour.':
+      'المسح يقوّم الصفحة ويزيل الظلال ويحافظ على لون الورق.',
+  'Scan straightens the page, removes shadows and makes the paper white.':
+      'المسح يقوّم الصفحة ويزيل الظلال ويجعل الورق أبيض.',
+  'Scan straightens and crops the page only, with no colour changes.':
+      'المسح يقوّم الصفحة ويقصّها فقط، دون تغيير الألوان.',
+  'Scan colour': 'لون المسح',
+  'Colour': 'ملوّن',
+  'Clean white': 'أبيض نقي',
+  'Original': 'الأصلي',
+  'Enhancing pages…': 'جارٍ تحسين الصفحات…',
   'To upload': 'للرفع',
   'Combine to PDF': 'دمج في PDF',
   'Attach': 'إرفاق',

@@ -8,6 +8,7 @@ import '../models/documents.dart';
 import '../state/app_state.dart';
 import '../theme/tokens.dart';
 import '../widgets/common.dart';
+import '../utils/scan_enhance.dart';
 
 /// Attach Docs (LeoCore 1.6.x) — two modes:
 ///  • Single: look up one document by number, attach photos / scans / files.
@@ -141,10 +142,15 @@ class _AttachDocsScreenState extends State<AttachDocsScreen> {
             const SizedBox(width: 8),
             _Source(Icons.folder_open_outlined, context.tr('Files'), app.attachPickFiles),
           ]),
+          const SizedBox(height: 10),
+          _ScanToneRow(),
           Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Text(context.tr('Scan applies auto edge, skew and colour correction, and makes a multi-page PDF.'),
-                style: TextStyle(fontSize: 11, color: lc.mut)),
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(context.tr(switch (app.scanTone) {
+              ScanTone.colour => 'Scan straightens the page, removes shadows and keeps the paper colour.',
+              ScanTone.white => 'Scan straightens the page, removes shadows and makes the paper white.',
+              ScanTone.original => 'Scan straightens and crops the page only, with no colour changes.',
+            }), style: TextStyle(fontSize: 11, color: lc.mut)),
           ),
           const SizedBox(height: 16),
           _PagesBuilder(),
@@ -682,5 +688,45 @@ class _AttachmentRow extends StatelessWidget {
         ),
       ]),
     );
+  }
+}
+
+/// Scan clean-up choice: Colour / Clean white / Original.
+class _ScanToneRow extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final app = context.watch<AppState>();
+    final lc = context.lc;
+    Widget chip(ScanTone t, String label) {
+      final on = app.scanTone == t;
+      return Expanded(
+        child: GestureDetector(
+          onTap: () => app.setScanTone(t),
+          child: Container(
+            height: 32,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: on ? lc.prim : lc.card,
+              border: Border.all(color: on ? lc.prim : lc.line),
+              borderRadius: BorderRadius.circular(99),
+            ),
+            child: Text(context.tr(label),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: on ? Colors.white : lc.ink)),
+          ),
+        ),
+      );
+    }
+
+    return Row(children: [
+      Text(context.tr('Scan colour'), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: lc.mut)),
+      const SizedBox(width: 8),
+      chip(ScanTone.colour, 'Colour'),
+      const SizedBox(width: 6),
+      chip(ScanTone.white, 'Clean white'),
+      const SizedBox(width: 6),
+      chip(ScanTone.original, 'Original'),
+    ]);
   }
 }

@@ -19,6 +19,7 @@ class SecureStore {
   static const _kBio = 'biometric_unlock';
   static const _kReview = 'review_asked';
   static const _kLang = 'app_lang';
+  static const _kScanTone = 'scan_tone';
   static const _kPerms = 'mobile_permissions';
 
   Future<String?> get serverUrl => _storage.read(key: _kServer);
@@ -58,6 +59,10 @@ class SecureStore {
   /// UI language ('en' | 'ar'); null until the user picks one.
   Future<String?> get lang => _storage.read(key: _kLang);
   Future<void> setLang(String v) => _storage.write(key: _kLang, value: v);
+
+  /// Document scan clean-up: 'colour' | 'white' | 'original'.
+  Future<String?> get scanTone => _storage.read(key: _kScanTone);
+  Future<void> setScanTone(String v) => _storage.write(key: _kScanTone, value: v);
 
   /// Whether the user has enabled fingerprint unlock (defaults to on).
   Future<bool> get bioEnabled async => (await _storage.read(key: _kBio)) != '0';
