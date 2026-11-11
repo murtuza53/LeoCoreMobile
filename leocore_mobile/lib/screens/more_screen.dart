@@ -12,17 +12,12 @@ class MoreScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
 
+    // The role's pages (AppState.pages — same list as the Home grid), minus
+    // Products / Customers, which have their own bottom-bar tabs.
     final items = <(IconData, String, String, VoidCallback)>[
-      if (app.mSale) (Icons.receipt_long_outlined, context.tr('Cash sales invoice'), context.tr('Scan items, save as draft'), () => app.newSale()),
-      if (app.mQuoteNew) (Icons.request_quote_outlined, context.tr('Quotation'), context.tr('Save & send as PDF'), () => app.newQuotation()),
-      if (app.mQuotes) (Icons.history, context.tr('Saved quotations'), context.tr('View past quotations, download PDF'), app.openQuoteHistory),
-      if (app.mCount) (Icons.checklist_rounded, context.tr('Stock count'), context.tr('Expected vs counted, variance'), app.goCount),
-      if (app.mStockAlerts) (Icons.warning_amber_rounded, context.tr('Stock alerts'), context.tr('Low stock & dead stock'), app.goLow),
-      if (app.mReports) (Icons.show_chart, context.tr('Reports'), context.tr('Sales & purchases, top lists'), app.goReports),
-      if (app.mAnalytics || app.mFinance) (Icons.insights_outlined, context.tr('Business health'), context.tr('Aging, cash, margin, trends'), app.openManagerReports),
-      if (app.mLabels) (Icons.qr_code_2_outlined, context.tr('Print Labels'), context.tr('Barcode & shelf labels'), app.openLabels),
-      if (app.mDocuments) (Icons.attach_file, context.tr('Attach Docs'), context.tr('Scan or upload files to a document'), app.openAttachDocs),
-      if (app.mSuppliers) (Icons.local_shipping_outlined, context.tr('Suppliers'), context.tr('Directory & account statements'), app.goSuppliers),
+      for (final pg in app.pages)
+        if (pg.screen != Screen.products && pg.screen != Screen.customers)
+          (pg.icon, context.tr(pg.title), context.tr(pg.subtitle), pg.onTap),
       (Icons.settings_outlined, context.tr('Settings'), context.tr('Language, theme, devices, role'), () => app.nav(Screen.settings)),
     ];
     if (app.appVersion.isEmpty) app.loadAppVersion();

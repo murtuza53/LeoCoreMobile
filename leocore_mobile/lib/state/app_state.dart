@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:convert' show jsonDecode;
+import 'dart:convert' show jsonDecode, jsonEncode;
 import 'dart:io' show File, Platform;
 import 'dart:math' show Random;
 
@@ -115,10 +115,41 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     if (at != null && DateTime.now().difference(at) < const Duration(minutes: 1)) return;
     _permsAt = DateTime.now();
     try {
-      _perms = await _repo.permissions();
+      await _setPermissions(await _repo.permissions());
       if (!_screenAllowed(screen)) screen = Screen.home;
       notifyListeners();
     } catch (_) {/* offline — keep what we had */}
+  }
+
+  Future<void> _setPermissions(MobilePermissions p) async {
+    _perms = p;
+    _permsAt = DateTime.now();
+    try {
+      await _store.setPermissions(jsonEncode(p.toJson()));
+    } catch (_) {/* the cache is a convenience */}
+  }
+
+  /// Reads the user's rights first — every other load depends on them. A role
+  /// without Mobile Access (403) gets an empty set; offline uses the copy saved
+  /// on this phone at the last sign-in. Leaves [_perms] unknown only when
+  /// neither is available.
+  Future<void> _loadPermissions() async {
+    try {
+      await _setPermissions(await _repo.permissions());
+      return;
+    } on ApiException catch (e) {
+      if (e.isForbidden) {
+        await _setPermissions(MobilePermissions.fromMenu(const {'permissions': {}}));
+        return;
+      }
+    } catch (_) {/* offline — try the saved copy */}
+    try {
+      final raw = await _store.permissions;
+      if (raw != null && raw.isNotEmpty) {
+        final j = jsonDecode(raw);
+        if (j is Map) _perms = MobilePermissions.fromMenu(j);
+      }
+    } catch (_) {/* corrupt copy — ignore */}
   }
 
   /// Rotates the tokens. Returns false only when the server rejected the
@@ -600,8 +631,36 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   // ══════════════════════════════════════════════════════════════════
   /// Rights for a Mobile App feature (see models/permissions.dart). Demo mode
   /// has no server, so it uses the demo role picked in Settings.
-  Rights rights(String feature) => _perms.of(feature);
-  bool _can(String feature, bool Function(Rights r) right) => right(_perms.of(feature));
+  Rights rights(String feature) => permsReady ? _perms.of(feature) : Rights.none;
+  bool _can(String feature, bool Function(Rights r) right) => permsReady && right(_perms.of(feature));
+
+  /// Live sessions show a page only once the user's rights are known (from the
+  /// server, or the copy saved on the phone) — never "everything" while they
+  /// load or when they can't be read.
+  bool get permsReady => demoMode || _perms.known;
+
+  /// The pages this user may open, in menu order — ONE list for the Home
+  /// workspace grid and the More screen, so they can't disagree. Titles are
+  /// translation keys.
+  List<({IconData icon, String title, String subtitle, VoidCallback onTap, Screen screen})> get pages => [
+        if (mProducts) (icon: Icons.inventory_2_outlined, title: 'Products', subtitle: 'Search, prices, stock, photos', onTap: () => nav(Screen.products), screen: Screen.products),
+        if (mCustomers) (icon: Icons.people_outline, title: 'Customers', subtitle: 'Directory & balances', onTap: () => nav(Screen.customers), screen: Screen.customers),
+        if (mSuppliers) (icon: Icons.local_shipping_outlined, title: 'Suppliers', subtitle: 'Directory & account statements', onTap: goSuppliers, screen: Screen.suppliers),
+        if (mStatements) (icon: Icons.description_outlined, title: 'Statements', subtitle: 'Customer & supplier statements', onTap: openStatementPicker, screen: Screen.statementPicker),
+        if (mSale) (icon: Icons.receipt_long_outlined, title: 'Cash Sale', subtitle: 'Scan items, save as draft', onTap: () => newSale(), screen: Screen.invoice),
+        if (mQuoteNew) (icon: Icons.request_quote_outlined, title: 'Quotation', subtitle: 'Save & send as PDF', onTap: () => newQuotation(), screen: Screen.quotation),
+        if (mQuotes) (icon: Icons.history, title: 'Saved quotations', subtitle: 'View past quotations, download PDF', onTap: openQuoteHistory, screen: Screen.quotations),
+        if (mCount) (icon: Icons.checklist_rounded, title: 'Stock Count', subtitle: 'Expected vs counted, variance', onTap: goCount, screen: Screen.count),
+        if (mStockAlerts) (icon: Icons.warning_amber_rounded, title: 'Stock alerts', subtitle: 'Low stock & dead stock', onTap: goLow, screen: Screen.low),
+        if (mReports) (icon: Icons.show_chart, title: 'Reports', subtitle: 'Sales & purchases, top lists', onTap: goReports, screen: Screen.reports),
+        if (mAnalytics || mFinance) (icon: Icons.insights_outlined, title: 'Business health', subtitle: 'Aging, cash, margin, trends', onTap: openManagerReports, screen: Screen.managerReports),
+        if (mLabels) (icon: Icons.qr_code_2_outlined, title: 'Print Labels', subtitle: 'Barcode & shelf labels', onTap: openLabels, screen: Screen.labels),
+        if (mDocuments) (icon: Icons.attach_file, title: 'Attach Docs', subtitle: 'Scan or upload files to a document', onTap: openAttachDocs, screen: Screen.documents),
+      ];
+
+  /// Warehouses were loaded (only for roles with stock pages) — the Home
+  /// header shows the warehouse picker only then.
+  bool get hasWarehouses => demoMode || _warehouses.isNotEmpty;
 
   // Pages (View)
   bool get mDashboard => demoMode ? true : _can(Feat.dashboard, (r) => r.view);
@@ -767,48 +826,74 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     dataError = null;
     notifyListeners();
     try {
-      final results = await Future.wait([
-        _repo.products(pageSize: 200).catchError((Object e) => e is ApiException && e.isForbidden ? <Product>[] : throw e),
-        _repo.customers(pageSize: 200).catchError((Object e) => e is ApiException && e.isForbidden ? <Customer>[] : throw e),
-        _repo.kpis().catchError((_) => const KpiData()),
-        _repo.permissions().catchError((_) => MobilePermissions.unknown),
-        _repo.categories().catchError((_) => <({int id, String name})>[]),
-        _repo.warehouses().catchError((_) => <({int id, String code, String name})>[]),
+      // 1) What may this user do? Nothing else is fetched until this is known,
+      //    so a role with only Attach Docs makes no product/customer/KPI calls.
+      await _loadPermissions();
+      if (!_perms.known) {
+        dataError = 'Could not load your permissions. Check the connection and tap Retry.';
+        return;
+      }
+      notifyListeners();
+
+      // 2) Only the data the permitted pages use.
+      final needItems = mProducts || mSale || mQuoteNew || mCount || mLabels;
+      final needCustomers = mCustomers || mSale || mQuoteNew;
+      final needWarehouses = needItems || mStockAlerts;
+      final results = await Future.wait<Object>([
+        needItems
+            ? _repo.products(pageSize: 200).catchError((Object e) => e is ApiException && e.isForbidden ? <Product>[] : throw e)
+            : Future.value(<Product>[]),
+        needCustomers
+            ? _repo.customers(pageSize: 200).catchError((Object e) => e is ApiException && e.isForbidden ? <Customer>[] : throw e)
+            : Future.value(<Customer>[]),
+        mDashboard ? _repo.kpis().catchError((_) => const KpiData()) : Future.value(const KpiData()),
+        needItems ? _repo.categories().catchError((_) => <({int id, String name})>[]) : Future.value(<({int id, String name})>[]),
+        needWarehouses
+            ? _repo.warehouses().catchError((_) => <({int id, String code, String name})>[])
+            : Future.value(<({int id, String code, String name})>[]),
       ]);
       _products = results[0] as List<Product>;
       _customers = results[1] as List<Customer>;
       kpis = results[2] as KpiData;
-      _perms = results[3] as MobilePermissions;
-      _permsAt = DateTime.now();
-      final cats = results[4] as List<({int id, String name})>;
+      final cats = results[3] as List<({int id, String name})>;
       _liveCategories = [for (final c in cats) c.name];
       _categoryIds = {for (final c in cats) c.name: c.id};
-      _warehouses = results[5] as List<({int id, String code, String name})>;
+      _warehouses = results[4] as List<({int id, String code, String name})>;
       if (_warehouses.isNotEmpty) {
         warehouseId = _warehouses.first.id;
         wh = _warehouses.first.name;
       }
-      // Real 7-day trend for the Home chart.
-      final now = DateTime.now();
-      final fmt = DateFormat('yyyy-MM-dd');
-      try {
-        final r = await _repo.salesReport(
-          from: fmt.format(DateTime(now.year, now.month, now.day).subtract(const Duration(days: 6))),
-          to: fmt.format(now),
-        );
-        homeTrend = r.trend;
-      } catch (_) {
-        homeTrend = [];
+      // Real 7-day trend for the Home chart (dashboard only).
+      if (mDashboard) {
+        final now = DateTime.now();
+        final fmt = DateFormat('yyyy-MM-dd');
+        try {
+          final r = await _repo.salesReport(
+            from: fmt.format(DateTime(now.year, now.month, now.day).subtract(const Duration(days: 6))),
+            to: fmt.format(now),
+          );
+          homeTrend = r.trend;
+        } catch (_) {
+          homeTrend = [];
+        }
       }
       if (_products!.isNotEmpty) pid = _products!.first.id;
       if (_customers!.isNotEmpty) cid = _customers!.first.id;
+
+      // A role with one page and no dashboard (e.g. document scanning only)
+      // starts on that page instead of an empty Home.
+      if (screen == Screen.home && !mDashboard) {
+        final ps = pages;
+        if (ps.length == 1) ps.first.onTap();
+      }
     } on ApiException catch (e) {
       dataError = e.message;
     } catch (_) {
       dataError = 'Could not load data from the server.';
+    } finally {
+      dataLoading = false;
+      notifyListeners();
     }
-    dataLoading = false;
-    notifyListeners();
   }
 
   Future<void> retryLoad() => _loadAll();
@@ -817,6 +902,10 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   //  Actions
   // ══════════════════════════════════════════════════════════════════
   void nav(Screen s) {
+    if (!_screenAllowed(s)) {
+      showToast("You don't have access to this page.");
+      return;
+    }
     screen = s;
     notifyListeners();
   }

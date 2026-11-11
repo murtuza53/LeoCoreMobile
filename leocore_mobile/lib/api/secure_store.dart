@@ -19,6 +19,7 @@ class SecureStore {
   static const _kBio = 'biometric_unlock';
   static const _kReview = 'review_asked';
   static const _kLang = 'app_lang';
+  static const _kPerms = 'mobile_permissions';
 
   Future<String?> get serverUrl => _storage.read(key: _kServer);
   Future<void> setServerUrl(String v) => _storage.write(key: _kServer, value: v);
@@ -70,6 +71,12 @@ class SecureStore {
   Future<String?> get refreshToken => _storage.read(key: _kRefresh);
   Future<String?> get scope => _storage.read(key: _kScope);
 
+  /// The signed-in user's last downloaded Mobile App permissions (JSON), so
+  /// an app opened offline shows the user's own pages instead of all or none.
+  /// Cleared with the tokens on sign-out.
+  Future<String?> get permissions => _storage.read(key: _kPerms);
+  Future<void> setPermissions(String json) => _storage.write(key: _kPerms, value: json);
+
   Future<void> saveTokens({
     required String access,
     required String refresh,
@@ -84,6 +91,7 @@ class SecureStore {
     await _storage.delete(key: _kAccess);
     await _storage.delete(key: _kRefresh);
     await _storage.delete(key: _kScope);
+    await _storage.delete(key: _kPerms);
   }
 
   /// Stable per-install device id sent with login (used for refresh-token

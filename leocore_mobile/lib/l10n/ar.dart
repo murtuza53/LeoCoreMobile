@@ -531,4 +531,13 @@ const Map<String, String> kArabic = {
   'Check': 'تحقق',
   'Upload matched': 'رفع المطابق',
   'Upload failed': 'فشل الرفع',
+  // Mobile permissions (pages follow the role)
+  'Search, prices, stock, photos': 'البحث والأسعار والمخزون والصور',
+  'Directory & balances': 'الدليل والأرصدة',
+  'Customer & supplier statements': 'كشوف حسابات العملاء والموردين',
+  'Retry': 'إعادة المحاولة',
+  "You don't have access to this page.": 'ليس لديك صلاحية لهذه الصفحة.',
+  "You don't have access to this list.": 'ليس لديك صلاحية لهذه القائمة.',
+  'Could not load your permissions. Check the connection and tap Retry.': 'تعذر تحميل صلاحياتك. تحقق من الاتصال واضغط إعادة المحاولة.',
+  'No mobile pages are enabled for your role yet. Ask your administrator to turn them on in User Roles → Permissions → Mobile App.': 'لا توجد صفحات مفعّلة لدورك في تطبيق الجوال بعد. اطلب من المسؤول تفعيلها من أدوار المستخدمين ← الصلاحيات ← تطبيق الجوال.',
 };

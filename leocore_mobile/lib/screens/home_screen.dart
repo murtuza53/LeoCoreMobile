@@ -25,7 +25,7 @@ class HomeScreen extends StatelessWidget {
             children: [
               Expanded(
                 child: GestureDetector(
-                  onTap: app.openWhSheet,
+                  onTap: app.hasWarehouses ? app.openWhSheet : null,
                   behavior: HitTestBehavior.opaque,
                   child: Row(
                     children: [
@@ -37,10 +37,13 @@ class HomeScreen extends StatelessWidget {
                           children: [
                             Row(children: [
                               Flexible(child: Text(app.companyLabel, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700))),
-                              const SizedBox(width: 5),
-                              Icon(Icons.keyboard_arrow_down, size: 14, color: lc.mut),
+                              if (app.hasWarehouses) ...[
+                                const SizedBox(width: 5),
+                                Icon(Icons.keyboard_arrow_down, size: 14, color: lc.mut),
+                              ],
                             ]),
-                            Text(app.wh, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: lc.mut)),
+                            if (app.hasWarehouses)
+                              Text(app.wh, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: lc.mut)),
                           ],
                         ),
                       ),
@@ -88,6 +91,15 @@ class HomeScreen extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 14),
+              if (!app.permsReady && app.dataLoading)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 48),
+                  child: Center(child: CircularProgressIndicator(color: lc.prim, strokeWidth: 2.4)),
+                ),
+              if (app.dataError != null && !app.dataLoading) ...[
+                _LoadError(message: app.dataError!, onRetry: app.retryLoad),
+                const SizedBox(height: 14),
+              ],
               // KPI grid 2×2 — MobileDashboard
               if (app.mDashboard) ...[
               IntrinsicHeight(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -105,15 +117,27 @@ class HomeScreen extends StatelessWidget {
               _SalesTrendCard(),
               const SizedBox(height: 14),
               ],
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  SectionLabel(context.tr('Workspace')),
-                  Pill(app.role.label, bg: lc.goldbg, fg: lc.tprim, size: 11),
+              if (app.permsReady) ...[
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    SectionLabel(context.tr('Workspace')),
+                    if (app.demoMode) Pill(app.role.label, bg: lc.goldbg, fg: lc.tprim, size: 11),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                if (app.pages.isEmpty && !app.mDashboard) ...[
+                  LcCard(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(
+                      context.tr('No mobile pages are enabled for your role yet. Ask your administrator to turn them on in User Roles → Permissions → Mobile App.'),
+                      style: TextStyle(fontSize: 13.5, height: 1.5, color: lc.mut),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
                 ],
-              ),
-              const SizedBox(height: 10),
-              _WorkspaceGrid(),
+                _WorkspaceGrid(),
+              ],
             ],
           ),
         ),
@@ -332,15 +356,9 @@ class _WorkspaceGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
 
+    // Same pages as the More screen (AppState.pages = the role's permissions).
     final tiles = <(IconData, String, VoidCallback?)>[
-      if (app.mProducts) (Icons.inventory_2_outlined, context.tr('Products'), () => app.nav(Screen.products)),
-      if (app.mCustomers) (Icons.people_outline, context.tr('Customers'), () => app.nav(Screen.customers)),
-      if (app.mSuppliers) (Icons.local_shipping_outlined, context.tr('Suppliers'), app.goSuppliers),
-      if (app.mSale) (Icons.receipt_long_outlined, context.tr('Cash Sale'), () => app.nav(Screen.invoice)),
-      if (app.mCount) (Icons.checklist_rounded, context.tr('Stock Count'), app.goCount),
-      if (app.mStockAlerts) (Icons.warning_amber_rounded, context.tr('Low Stock'), app.goLow),
-      if (app.mReports) (Icons.show_chart, context.tr('Reports'), app.goReports),
-      if (app.mStatements) (Icons.description_outlined, context.tr('Statements'), app.openStatementPicker),
+      for (final pg in app.pages) (pg.icon, context.tr(pg.title), pg.onTap),
       (Icons.settings_outlined, context.tr('Settings'), () => app.nav(Screen.settings)),
     ];
 
@@ -371,6 +389,29 @@ class _WorkspaceTile extends StatelessWidget {
           Icon(icon, size: 24, color: lc.icon),
           const SizedBox(height: 8),
           Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+}
+
+class _LoadError extends StatelessWidget {
+  final String message;
+  final Future<void> Function() onRetry;
+  const _LoadError({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    final lc = context.lc;
+    return LcCard(
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        children: [
+          Icon(Icons.cloud_off_outlined, color: lc.bad, size: 22),
+          const SizedBox(width: 10),
+          Expanded(child: Text(context.tr(message), style: TextStyle(fontSize: 13, height: 1.4, color: lc.ink))),
+          const SizedBox(width: 8),
+          TextButton(onPressed: onRetry, child: Text(context.tr('Retry'))),
         ],
       ),
     );

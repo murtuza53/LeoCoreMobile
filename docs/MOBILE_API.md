@@ -174,9 +174,17 @@ feature offers them (e.g. Products never reports `create`) and View is on.
 - **Refresh the menu** after sign-in and when the app returns to the foreground (at most once a minute), so a
   change on the permission page reaches the phone without signing out. If the page on screen is no longer
   allowed, go Home.
-- If `/menu` fails (offline), keep the rights you already have; if you have none yet, show everything and let the
-  server refuse.
-- A role without Products or Customers gets `403` on those lists — show an empty page, not a sign-in error.
+- **Read the menu first, then load only what the pages need.** At sign-in, call `/menu` before anything else and
+  fetch products / customers / KPIs / warehouses only when a permitted page uses them. A role with only Attach
+  Docs must make no product, customer or KPI calls.
+- **Never show a page before its rights are known.** Save the last `permissions` on the phone (cleared on
+  sign-out) and use that copy when `/menu` can't be reached. If there is no copy either, show an error with
+  Retry — never "everything" (that showed every page empty to limited roles). `403` on `/menu` (no Mobile
+  Access) = no pages.
+- Home and More list **the same pages** (those with View), each from the one permission set. A role with no
+  Dashboard and exactly one page (e.g. document scanning) can open straight on that page.
+- A `403` on a list is final: show "You don't have access", and **do not request it again** on the next
+  rebuild/refresh of the screen (only pull-to-refresh retries). Re-requesting on every build loops and flickers.
 
 A missing permission on an endpoint → `403 FORBIDDEN`.
 
@@ -300,6 +308,9 @@ onResponse(res):
 - Each item: `{ id, name, email, phone, country, currency, outstanding, creditLimit (customers) }`. `outstanding`
   (BHD, 3 dp) is what the customer owes us / what we owe the supplier — the same figure as the statement.
   **Suppliers have `outstanding` from 1.6.52.**
+  `outstanding` comes from the AR/AP aging and is reused for up to **60 seconds** per company (the same figures the
+  web Customers / Suppliers lists show), so paging and search stay fast with thousands of parties; a receipt just
+  posted can take up to a minute to show in the list. The statement itself is always live.
 ```json
 { "page": 1, "pageSize": 50, "total": 119, "hasMore": true, "currency": "BHD",
   "items": [ { "id": 12, "name": "ROOPAM TEXTILE", "email": null, "phone": "17000000", "country": "Bahrain",
@@ -736,6 +747,9 @@ Date params are `YYYY-MM-DD`; `from`/`to` default to the current month.
       other `401` → refresh once.
 - [ ] Build navigation from `GET /menu` v2 and hide every button whose right is off (§2 table); refresh the
       menu on sign-in and on return to the foreground.
+- [ ] Load `/menu` first; load other data only for permitted pages; keep a saved copy of the rights for
+      offline; never fall back to "show everything" (§2).
+- [ ] A refused (`403`) list shows "no access" once and is not re-requested by rebuilds.
 - [ ] Every list (products, customers, suppliers, statements picker, quotations, stock count, low/dead stock):
       server `search`, infinite scroll on `hasMore`; customers/suppliers/statements get a "hide zero balances"
       switch (`balance=nonzero`) and a sort by balance.
@@ -759,6 +773,10 @@ Date params are `YYYY-MM-DD`; `from`/`to` default to the current month.
    Home KPIs, the Customers tab and Statements, with no Products tab, no Scan button and no Cash Sale / Quotation /
    Count; turn on Quotations View only → "Saved quotations" appears without "Quotation" (new) or the PDF buttons;
    untick Stock Alerts while the app is open, switch away and back → the Low stock tile disappears.
+6. *Limited role (document scanning):* a role with only Mobile Access + Attach Docs → after sign-in the app opens
+   on Attach Docs; More lists Attach Docs and Settings only; no Products/Customers tabs, no Scan button, no KPI
+   cards; the server log shows no `/products`, `/customers` or `/dashboard/kpis` calls from that user. Sign in
+   offline afterwards → the same pages appear (saved rights).
 
 ---
 
@@ -766,6 +784,7 @@ Date params are `YYYY-MM-DD`; `from`/`to` default to the current month.
 
 | Version | Change | App action |
 |---|---|---|
+| **1.6.54** (Nov 2026) | **Limited roles & big lists:** app rules for roles with few pages (menu first, saved rights, no "show everything", `403` lists not re-requested); customer / supplier `outstanding` reused for 60 s so paging and search are fast with thousands of parties (§2, §5) | Load the menu first and only permitted data; stop re-requesting refused lists |
 | **1.6.54** (Nov 2026) | **Mobile permissions:** the role permission page has a **Mobile App** tab; `GET /menu` is **version 2** with `feature` + `rights` per page and a `permissions` map for every Mobile App feature; new menu pages `stock-alerts`, `finance-reports`, `quotations`; new feature **`MobileStockAlerts`** gates `/inventory/low-stock` and `/inventory/dead-stock` (carried over from Stock Ledger on upgrade) (§2) | Gate pages and buttons by feature rights; refresh the menu on resume |
 | **1.6.52** (Nov 2026) | **Sign-out fixes:** admins no longer refused on refresh (`MOBILE_ACCESS_DISABLED` every ~30 min); a refresh whose reply was lost is accepted again for 2 min; a refresh after a login elsewhere returns `SESSION_TERMINATED` naming the device; new token issued before the old is revoked; rate limits are per phone, and 429 uses the error envelope (`RATE_LIMITED`) (§1, §3) | Treat 429/5xx as retry, not sign-out |
 | **1.6.52** (Nov 2026) | Lists: `hasMore` on every paged list; `pageSize` up to 200; customers/suppliers `balance=nonzero`, `sort=balance`, search by phone/VAT/TRN/id; suppliers gain `outstanding`; quotations `search` (§4, §5) | Infinite scroll + server search everywhere; zero-balance filter |

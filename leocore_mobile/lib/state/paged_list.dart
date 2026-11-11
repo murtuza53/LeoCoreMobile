@@ -33,12 +33,18 @@ class PagedList<T> {
   String search = '';
   String? error;
 
+  /// The server refused the list (403): the role lacks the page. Shown as a
+  /// plain "no access" message, and never retried on its own.
+  bool forbidden = false;
+
   int _page = 0;
   int _gen = 0;
   Timer? _debounce;
 
   /// Loads page 1 (current search). Safe to call from build: it starts on the
-  /// next event-loop turn.
+  /// next event-loop turn. Runs once — a failed load is NOT retried by the
+  /// next build (that looped: 403 → rebuild → request → 403, flickering);
+  /// pull-to-refresh / [refresh] tries again.
   void ensureLoaded() {
     if (loaded || loading) return;
     loading = true; // block repeat calls from the same frame
@@ -51,6 +57,7 @@ class PagedList<T> {
     loading = true;
     loadingMore = false;
     error = null;
+    forbidden = false;
     onChanged();
     try {
       final r = await _fetch(1, pageSize, search.trim());
@@ -61,10 +68,13 @@ class PagedList<T> {
       loaded = true;
     } on ApiException catch (e) {
       if (gen != _gen) return;
-      error = e.message;
+      forbidden = e.isForbidden;
+      error = e.isForbidden ? "You don't have access to this list." : e.message;
+      loaded = true;
     } catch (_) {
       if (gen != _gen) return;
       error = 'Could not load the list. Pull down to try again.';
+      loaded = true;
     }
     loading = false;
     onChanged();
@@ -115,6 +125,7 @@ class PagedList<T> {
     loaded = false;
     search = '';
     error = null;
+    forbidden = false;
     _page = 0;
   }
 }

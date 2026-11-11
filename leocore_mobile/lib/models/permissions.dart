@@ -24,6 +24,9 @@ class Rights {
     bool b(String k) => j[k] == true;
     return Rights(view: b('view'), create: b('create'), edit: b('edit'), delete: b('delete'), print: b('print'), email: b('email'));
   }
+
+  Map<String, bool> toJson() =>
+      {'view': view, 'create': create, 'edit': edit, 'delete': delete, 'print': print, 'email': email};
 }
 
 /// Mobile App feature keys (server FeatureCatalog, "Mobile App" group).
@@ -57,6 +60,13 @@ class MobilePermissions {
   static const unknown = MobilePermissions._(false, {});
 
   Rights of(String feature) => known ? (_byFeature[feature] ?? Rights.none) : Rights.all;
+
+  /// Same shape as menu v2's `permissions`, so [MobilePermissions.fromMenu]
+  /// reads it back (the on-device copy in SecureStore).
+  Map<String, Object> toJson() => {
+        'version': 2,
+        'permissions': {for (final e in _byFeature.entries) e.key: e.value.toJson()},
+      };
 
   /// Menu v2 carries `permissions` (every Mobile App feature). A v1 server
   /// only lists the pages the user can view, with `canEdit`; that is mapped
