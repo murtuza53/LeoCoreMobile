@@ -272,7 +272,7 @@ onResponse(res):
 ### App / catalog
 | Method | Path | Purpose / params |
 |---|---|---|
-| GET | `/menu` | Menu items the user may see (§2) |
+| GET | `/menu` | Pages the user may see, with rights per page and a `permissions` map (version 2, §2) |
 | GET | `/products` | List. `?page&pageSize&search&categoryId&brandId` — `search` matches id, code, name, barcode, brand or category (§6) |
 | GET | `/products/{id}` | One product (§6) |
 | PATCH | `/products/{id}` | Edit product (scope `read write`) — §10 |
