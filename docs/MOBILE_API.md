@@ -181,8 +181,17 @@ feature offers them (e.g. Products never reports `create`) and View is on.
   sign-out) and use that copy when `/menu` can't be reached. If there is no copy either, show an error with
   Retry — never "everything" (that showed every page empty to limited roles). `403` on `/menu` (no Mobile
   Access) = no pages.
-- Home and More list **the same pages** (those with View), each from the one permission set. A role with no
-  Dashboard and exactly one page (e.g. document scanning) can open straight on that page.
+- Home and More show only pages with View, from the one permission set. With full access they are unchanged:
+  Home tiles Products, Customers, Suppliers, Cash Sale, Stock Count, Low Stock, Reports, Statements, Settings;
+  More rows Cash sales invoice, Quotation, Saved quotations, Stock count, Stock alerts, Reports, Business
+  health, Print Labels, Attach Docs, Suppliers, Settings. A role with none of the Home tiles gets its pages as
+  Home tiles instead (documents only → Attach Docs), and a role with no Dashboard and exactly one page can open
+  straight on that page.
+- The Home **sales chart** reads `/reports/sales`, which needs **Reports**: with Dashboard but no Reports, show
+  the KPI cards without the chart (not "No sales").
+- Item search in Cash Sale / Quotation uses `/products`, which needs **Products** View. A role with Quotations
+  or Cash Sales but without Products can open those screens but can't add items — give such roles Products
+  View for now.
 - A `403` on a list is final: show "You don't have access", and **do not request it again** on the next
   rebuild/refresh of the screen (only pull-to-refresh retries). Re-requesting on every build loops and flickers.
 
@@ -784,7 +793,7 @@ Date params are `YYYY-MM-DD`; `from`/`to` default to the current month.
 
 | Version | Change | App action |
 |---|---|---|
-| **1.6.54** (Nov 2026) | **Limited roles & big lists:** app rules for roles with few pages (menu first, saved rights, no "show everything", `403` lists not re-requested); customer / supplier `outstanding` reused for 60 s so paging and search are fast with thousands of parties (§2, §5) | Load the menu first and only permitted data; stop re-requesting refused lists |
+| **1.6.54** (Nov 2026) | **Limited roles & big lists:** app rules for roles with few pages (menu first, saved rights, no "show everything", `403` lists not re-requested, sales chart only with Reports; item search needs Products); customer / supplier `outstanding` reused for 60 s so paging and search are fast with thousands of parties (§2, §5) | Load the menu first and only permitted data; stop re-requesting refused lists; keep the full-access Home/More unchanged; chart only with Reports |
 | **1.6.54** (Nov 2026) | **Mobile permissions:** the role permission page has a **Mobile App** tab; `GET /menu` is **version 2** with `feature` + `rights` per page and a `permissions` map for every Mobile App feature; new menu pages `stock-alerts`, `finance-reports`, `quotations`; new feature **`MobileStockAlerts`** gates `/inventory/low-stock` and `/inventory/dead-stock` (carried over from Stock Ledger on upgrade) (§2) | Gate pages and buttons by feature rights; refresh the menu on resume |
 | **1.6.52** (Nov 2026) | **Sign-out fixes:** admins no longer refused on refresh (`MOBILE_ACCESS_DISABLED` every ~30 min); a refresh whose reply was lost is accepted again for 2 min; a refresh after a login elsewhere returns `SESSION_TERMINATED` naming the device; new token issued before the old is revoked; rate limits are per phone, and 429 uses the error envelope (`RATE_LIMITED`) (§1, §3) | Treat 429/5xx as retry, not sign-out |
 | **1.6.52** (Nov 2026) | Lists: `hasMore` on every paged list; `pageSize` up to 200; customers/suppliers `balance=nonzero`, `sort=balance`, search by phone/VAT/TRN/id; suppliers gain `outstanding`; quotations `search` (§4, §5) | Infinite scroll + server search everywhere; zero-balance filter |
