@@ -1,0 +1,8 @@
+• Document scan keeps the paper colour — shadows are removed and text is
+  sharper, while a yellow slip stays yellow. Choose Colour, Clean white or
+  Original
+• Scanned PDFs now fill the full A4 page width with no margins
+• Each role sees only the pages and buttons it is allowed to use
+• Stays signed in, Check for updates in More, faster lists with search, and
+  live stock count
+• Fixes and stability improvements
