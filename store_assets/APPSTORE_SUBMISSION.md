@@ -1,7 +1,7 @@
 # LeoCore ERP — App Store Submission Pack
 
 Bundle ID: `sek.leocore.erp` · Team: `QH862RRRJ6` · Latest shipped: `2.10.0` build `12`
-In flight: `2.13.0` build `16` (iOS skips 2.12.0 — Android shipped 2.12.0/vc15)
+In flight: nothing (2.13.0 live, phased release reaches 100% on 2026-11-18)
 Target: iPhone only · Min iOS 15.0
 
 ---
@@ -651,6 +651,23 @@ so the Print Labels and Attach Docs screenshots remain honest.
 Not smoke-tested on the Simulator this cycle: the RBAC conclusion is from code
 plus live server data, and the mitigation is that the same shared Dart has been
 live on Play since 2026-11-10.
+
+**2026-11-12** — 2.13.0 **APPROVED** in about 18 hours (submitted 2026-11-11
+20:45 UTC, released 14:50 UTC). `READY_FOR_SALE`, build 16 `VALID`, submission
+`5e1c0a87` `COMPLETE`, phased release `ACTIVE` day 1 of 7, 100% on 2026-11-18.
+No reviewer questions — four cycles running.
+
+The RBAC conclusion held: the release shipped without the blank-home failure
+that the naive reading of `rights()` predicts. It was still reasoned, not
+observed; a Simulator sign-in remains the way to actually test that path.
+
+2.11.0's phased release went `COMPLETE` at `currentDayNumber: 2`, superseded the
+moment 2.13.0 released — as expected. **Releasing a new version ends the previous
+version's ramp**, so treat an active phased release as a cost of shipping again
+early, not a blocker.
+
+Review turnaround to date: 2.7.0 one day, 2.9.0 ~8h, 2.10.0 ~3.5h, 2.11.0 ~16h,
+2.13.0 ~18h.
 
 ## What phased release actually throttles
 
