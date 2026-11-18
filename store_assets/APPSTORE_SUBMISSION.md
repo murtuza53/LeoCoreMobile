@@ -669,6 +669,44 @@ early, not a blocker.
 Review turnaround to date: 2.7.0 one day, 2.9.0 ~8h, 2.10.0 ~3.5h, 2.11.0 ~16h,
 2.13.0 ~18h.
 
+**2026-11-18** — **China mainland removed from availability.** App Store Connect
+now requires, for China mainland distribution, an AIGC services declaration and
+proof of a completed Security Assessment, both by **2027-01-31**. Both run
+through Chinese regulators and in practice need a Chinese entity and an ICP
+filing. LeoCore is a B2B companion that is useless without a LeoCore ERP server
+at the customer's own company, so the proportionate answer was to stop
+distributing there rather than file. `CHN` is now `available: false`
+(`PROCESSING_TO_NOT_AVAILABLE`); 147 of 175 territories remain, and the diff
+confirmed 174 of 175 unchanged.
+
+The other banner, **Retention Messaging, never applies** — the app has zero
+in-app purchases and zero subscription groups.
+
+### Changing territory availability over the API
+
+The obvious routes both fail, so go straight to the third:
+
+```
+PATCH /v2/appAvailabilities/{appId}    403 — UPDATE not allowed
+POST  /v2/appAvailabilities            409 — one already exists for this app
+PATCH /v1/territoryAvailabilities/{id} 200 — this is the one
+     {"data":{"type":"territoryAvailabilities","id":"<id>",
+              "attributes":{"available":false}}}
+```
+
+Get `{id}` from
+`GET /v2/appAvailabilities/{appId}/territoryAvailabilities?limit=200&include=territory`
+— **`include=territory` is required**, or the rows come back with no territory
+relationship and you cannot tell which is which. The id is base64 of
+`{"s":"<appId>","t":"<CHN>"}`, but read it from the response rather than
+constructing it.
+
+**Also worth a decision:** the app is excluded from **27 territories, exactly the
+EU** (presumably the DSA trader requirements), yet
+`availableInNewTerritories` is **true**, so it auto-joins any territory Apple
+adds. Those settings pull against each other. Left as-is — it was not part of
+what was asked.
+
 ## What phased release actually throttles
 
 Days 1-7 release to 1 / 2 / 5 / 10 / 20 / 50 / 100 percent of users — but **only
