@@ -37,6 +37,7 @@ import '../models/models.dart';
 import '../models/reports.dart';
 import '../utils/money.dart';
 import '../utils/scan_enhance.dart';
+import '../screens/scan_edit_screen.dart';
 import 'paged_list.dart';
 
 enum Screen {
@@ -2815,14 +2816,14 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     try {
       final pages = await _scanPages();
       if (pages == null || pages.isEmpty) return;
-      final List<String> cleaned;
-      if (scanTone == ScanTone.original) {
-        cleaned = pages;
-      } else {
-        showToast(t('Enhancing pages…'));
-        final dir = await getTemporaryDirectory();
-        cleaned = await enhanceScans(pages, scanTone, dir.path);
-      }
+      // Adjust screen: filter + brightness / contrast / colour per page.
+      final nav = navigatorKey.currentState;
+      if (nav == null) return;
+      final cleaned = await nav.push<List<String>>(MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => ScanEditScreen(pages: pages, initialTone: scanTone, onToneChosen: setScanTone),
+      ));
+      if (cleaned == null || cleaned.isEmpty) return; // discarded
       final pdfPath = await _imagesToPdf(cleaned, 'scan');
       if (pdfPath != null) _addFile(pdfPath);
     } catch (_) {

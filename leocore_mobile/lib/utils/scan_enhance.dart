@@ -16,46 +16,183 @@ enum ScanTone {
 
   /// Exactly as captured (only straightened and cropped).
   original,
+
+  /// Cleaned like [colour], then shades of grey.
+  gray,
+
+  /// Cleaned like [white], then crisp black text on white: best for
+  /// text-only pages and small PDFs.
+  bw,
+}
+
+/// Everything the user can change for one scanned page.
+class ScanAdjust {
+  final ScanTone tone;
+
+  /// -50 to 50 (0 = unchanged).
+  final int brightness;
+
+  /// -50 to 50 (0 = unchanged).
+  final int contrast;
+
+  /// -100 to 100 (0 = unchanged, -100 = no colour).
+  final int saturation;
+
+  const ScanAdjust({this.tone = ScanTone.colour, this.brightness = 0, this.contrast = 0, this.saturation = 0});
+
+  ScanAdjust copyWith({ScanTone? tone, int? brightness, int? contrast, int? saturation}) => ScanAdjust(
+        tone: tone ?? this.tone,
+        brightness: brightness ?? this.brightness,
+        contrast: contrast ?? this.contrast,
+        saturation: saturation ?? this.saturation,
+      );
+
+  bool get slidersAtZero => brightness == 0 && contrast == 0 && saturation == 0;
+  bool get isIdentity => tone == ScanTone.original && slidersAtZero;
+
+  List<int> toList() => [tone.index, brightness, contrast, saturation];
+  static ScanAdjust fromList(List<int> l) =>
+      ScanAdjust(tone: ScanTone.values[l[0]], brightness: l[1], contrast: l[2], saturation: l[3]);
+
+  @override
+  bool operator ==(Object other) =>
+      other is ScanAdjust &&
+      other.tone == tone &&
+      other.brightness == brightness &&
+      other.contrast == contrast &&
+      other.saturation == saturation;
+
+  @override
+  int get hashCode => Object.hash(tone, brightness, contrast, saturation);
 }
 
 ScanTone scanToneFrom(String? v) =>
     ScanTone.values.firstWhere((t) => t.name == v, orElse: () => ScanTone.colour);
 
-/// Cleans every page in a background isolate and returns the new JPEG paths.
-/// A page that can't be processed is passed through unchanged.
-Future<List<String>> enhanceScans(List<String> paths, ScanTone tone, String outDir) async {
-  if (tone == ScanTone.original) return paths;
-  final out = <String>[];
-  for (var i = 0; i < paths.length; i++) {
-    final target = '$outDir/scan_${DateTime.now().microsecondsSinceEpoch}_$i.jpg';
-    try {
-      final ok = await compute(_enhanceFile, [paths[i], target, tone.index]);
-      out.add(ok ? target : paths[i]);
-    } catch (_) {
-      out.add(paths[i]);
-    }
+/// Processes one page at full size in a background isolate and returns the
+/// new JPEG path (the original path if nothing changes or it fails).
+Future<String> processScanPage(String path, ScanAdjust adj, String outDir, int index) async {
+  if (adj.isIdentity) return path;
+  final target = '$outDir/scan_${DateTime.now().microsecondsSinceEpoch}_$index.jpg';
+  try {
+    final ok = await compute(_processFile, [path, target, adj.toList()]);
+    return ok ? target : path;
+  } catch (_) {
+    return path;
+  }
+}
+
+/// A small RGB copy of a page for live previews.
+class ScanPreview {
+  final Uint8List rgb;
+  final int width, height;
+  const ScanPreview(this.rgb, this.width, this.height);
+}
+
+/// Decodes [path] and shrinks it to [maxSide] for fast previews.
+Future<ScanPreview?> loadScanPreview(String path, {int maxSide = 1100}) async {
+  try {
+    final r = await compute(_loadSmall, [path, maxSide]);
+    if (r == null) return null;
+    return ScanPreview(r[0] as Uint8List, r[1] as int, r[2] as int);
+  } catch (_) {
+    return null;
+  }
+}
+
+/// Applies [adj] to a preview and returns RGBA pixels (for ui.decodeImageFromPixels).
+Future<Uint8List> renderScanPreview(ScanPreview p, ScanAdjust adj) =>
+    compute(_renderPreview, [p.rgb, p.width, p.height, adj.toList()]);
+
+List<Object>? _loadSmall(List<Object> a) {
+  final im = _decodeSized(a[0] as String, a[1] as int);
+  if (im == null) return null;
+  return [Uint8List.fromList(im.getBytes(order: img.ChannelOrder.rgb)), im.width, im.height];
+}
+
+Uint8List _renderPreview(List<Object> a) {
+  final rgb = Uint8List.fromList(a[0] as Uint8List);
+  final w = a[1] as int, h = a[2] as int;
+  applyAdjust(rgb, w, h, ScanAdjust.fromList((a[3] as List).cast<int>()));
+  final out = Uint8List(w * h * 4);
+  for (var i = 0, j = 0; i < rgb.length; i += 3, j += 4) {
+    out[j] = rgb[i];
+    out[j + 1] = rgb[i + 1];
+    out[j + 2] = rgb[i + 2];
+    out[j + 3] = 255;
   }
   return out;
 }
 
-bool _enhanceFile(List<Object> a) {
-  final src = a[0] as String, dst = a[1] as String;
-  final tone = ScanTone.values[a[2] as int];
-  var im = img.decodeImage(File(src).readAsBytesSync());
-  if (im == null) return false;
+img.Image? _decodeSized(String path, int maxSide) {
+  var im = img.decodeImage(File(path).readAsBytesSync());
+  if (im == null) return null;
   im = img.bakeOrientation(im);
-  const maxSide = 2200;
   if (math.max(im.width, im.height) > maxSide) {
     im = im.width >= im.height
         ? img.copyResize(im, width: maxSide, interpolation: img.Interpolation.average)
         : img.copyResize(im, height: maxSide, interpolation: img.Interpolation.average);
   }
+  return im;
+}
+
+bool _processFile(List<Object> a) {
+  final src = a[0] as String, dst = a[1] as String;
+  final adj = ScanAdjust.fromList((a[2] as List).cast<int>());
+  final im = _decodeSized(src, 2200);
+  if (im == null) return false;
   final w = im.width, h = im.height;
   final rgb = Uint8List.fromList(im.getBytes(order: img.ChannelOrder.rgb));
-  enhanceRgb(rgb, w, h, tone);
+  applyAdjust(rgb, w, h, adj);
   final res = img.Image.fromBytes(width: w, height: h, bytes: rgb.buffer, numChannels: 3, order: img.ChannelOrder.rgb);
   File(dst).writeAsBytesSync(img.encodeJpg(res, quality: 88), flush: true);
   return true;
+}
+
+/// Filter, then brightness / contrast / colour, in place.
+void applyAdjust(Uint8List rgb, int w, int h, ScanAdjust a) {
+  switch (a.tone) {
+    case ScanTone.colour:
+    case ScanTone.gray:
+      enhanceRgb(rgb, w, h, ScanTone.colour);
+    case ScanTone.white:
+    case ScanTone.bw:
+      enhanceRgb(rgb, w, h, ScanTone.white);
+    case ScanTone.original:
+      break;
+  }
+  final gray = a.tone == ScanTone.gray, bw = a.tone == ScanTone.bw;
+  if (!gray && !bw && a.slidersAtZero) return;
+
+  // Brightness + contrast as one lookup table.
+  final k = a.contrast >= 0 ? 1 + a.contrast / 50 * 1.2 : 1 + a.contrast / 100;
+  final off = a.brightness / 50 * 70;
+  final lut = Uint8List(256);
+  for (var i = 0; i < 256; i++) {
+    lut[i] = ((i - 128) * k + 128 + off).round().clamp(0, 255);
+  }
+  final sat = (gray || bw) ? 0.0 : 1 + a.saturation / 100;
+
+  for (var o = 0; o < rgb.length; o += 3) {
+    var r = lut[rgb[o]].toDouble(), g = lut[rgb[o + 1]].toDouble(), b = lut[rgb[o + 2]].toDouble();
+    final l = 0.299 * r + 0.587 * g + 0.114 * b;
+    if (bw) {
+      // Steep curve: nearly binary, but keeps letter edges smooth.
+      final v = ((l - 150) * 6 + 128).round().clamp(0, 255);
+      rgb[o] = v;
+      rgb[o + 1] = v;
+      rgb[o + 2] = v;
+      continue;
+    }
+    if (sat != 1) {
+      r = l + (r - l) * sat;
+      g = l + (g - l) * sat;
+      b = l + (b - l) * sat;
+    }
+    rgb[o] = r.round().clamp(0, 255);
+    rgb[o + 1] = g.round().clamp(0, 255);
+    rgb[o + 2] = b.round().clamp(0, 255);
+  }
 }
 
 /// In-place clean-up of an RGB buffer.
@@ -68,7 +205,7 @@ bool _enhanceFile(List<Object> a) {
 ///    also neutralises the paper colour to white.
 /// 3. A tone curve pushes ink towards black while leaving paper untouched.
 void enhanceRgb(Uint8List rgb, int w, int h, ScanTone tone) {
-  if (tone == ScanTone.original) return;
+  if (tone != ScanTone.colour && tone != ScanTone.white) return;
   final white = tone == ScanTone.white;
   final bs = math.max(16, (math.max(w, h) / 48).round());
   final gw = (w + bs - 1) ~/ bs, gh = (h + bs - 1) ~/ bs;

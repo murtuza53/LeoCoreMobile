@@ -59,4 +59,33 @@ void main() {
     enhanceRgb(b, w, h, ScanTone.original);
     expect(b, copy);
   });
+
+  test('grayscale has no colour; black & white is near-binary', () {
+    final g = _yellowSlip(w, h);
+    applyAdjust(g, w, h, const ScanAdjust(tone: ScanTone.gray));
+    final p = _px(g, w, shaded.$1, shaded.$2);
+    expect(p.$1, p.$3);
+
+    final b = _yellowSlip(w, h);
+    applyAdjust(b, w, h, const ScanAdjust(tone: ScanTone.bw));
+    expect(_px(b, w, shaded.$1, shaded.$2).$1, 255);
+    expect(_px(b, w, 610, 2).$1, 0);
+  });
+
+  test('brightness, contrast and colour sliders move the pixels', () {
+    final base = _yellowSlip(w, h);
+    applyAdjust(base, w, h, const ScanAdjust(tone: ScanTone.original));
+    final dark = _yellowSlip(w, h);
+    applyAdjust(dark, w, h, const ScanAdjust(tone: ScanTone.original, brightness: -30));
+    expect(_px(dark, w, lit.$1, lit.$2).$2, lessThan(_px(base, w, lit.$1, lit.$2).$2));
+
+    final grey = _yellowSlip(w, h);
+    applyAdjust(grey, w, h, const ScanAdjust(tone: ScanTone.original, saturation: -100));
+    final q = _px(grey, w, lit.$1, lit.$2);
+    expect((q.$1 - q.$3).abs(), lessThan(2));
+
+    expect(const ScanAdjust(tone: ScanTone.original).isIdentity, isTrue);
+    expect(ScanAdjust.fromList(const ScanAdjust(tone: ScanTone.bw, contrast: 20).toList()),
+        const ScanAdjust(tone: ScanTone.bw, contrast: 20));
+  });
 }
