@@ -42,6 +42,10 @@ class _ScanEditScreenState extends State<ScanEditScreen> {
   bool _changed = false;
   int _saving = -1; // page being prepared, -1 = idle
 
+  /// Where filter and slider changes go: false = only the page on screen,
+  /// true = every page.
+  bool _allPages = false;
+
   ScanAdjust get _a => _adj[_cur];
 
   @override
@@ -117,7 +121,11 @@ class _ScanEditScreenState extends State<ScanEditScreen> {
 
   void _set(ScanAdjust v) {
     setState(() {
-      _adj[_cur] = v;
+      if (_allPages) {
+        _adj.fillRange(0, _adj.length, v);
+      } else {
+        _adj[_cur] = v;
+      }
       _changed = true;
     });
     _render();
@@ -134,15 +142,20 @@ class _ScanEditScreenState extends State<ScanEditScreen> {
     _render();
   }
 
-  void _applyAll() {
+  /// "This page" / "All pages". Switching to All pages copies the page on
+  /// screen to every page, so they all start from what you see.
+  void _setScope(bool all) {
+    if (all == _allPages) return;
     final v = _a;
+    final differs = _adj.any((a) => a != v);
     setState(() {
-      for (var i = 0; i < _adj.length; i++) {
-        _adj[i] = v;
+      _allPages = all;
+      if (all) {
+        _adj.fillRange(0, _adj.length, v);
+        if (differs) _changed = true;
       }
-      _changed = true;
     });
-    showSnack(context.tr('Applied to all pages'));
+    showSnack(context.tr(all ? 'Changes now apply to all pages' : 'Changes now apply to this page only'));
   }
 
   void showSnack(String m) {
@@ -256,6 +269,15 @@ class _ScanEditScreenState extends State<ScanEditScreen> {
                             right: 4,
                             child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: lc.prim, strokeWidth: 2)),
                           ),
+                        if (!_compare && img != null)
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            child: Center(
+                              child: Pill(context.tr('Hold the page to see the original'), bg: Colors.black54, fg: Colors.white, size: 10.5),
+                            ),
+                          ),
                         if (_compare)
                           Positioned(
                             top: 4,
@@ -290,10 +312,17 @@ class _ScanEditScreenState extends State<ScanEditScreen> {
                             alignment: Alignment.bottomCenter,
                             child: Container(
                               width: double.infinity,
+                              height: 16,
                               color: Colors.black54,
-                              child: Text('${i + 1}',
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.w700)),
+                              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                                Text('${i + 1}', style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.w700)),
+                                const SizedBox(width: 3),
+                                Icon(_toneIcon(_adj[i].tone), size: 10, color: Colors.white),
+                                if (!_adj[i].slidersAtZero) ...[
+                                  const SizedBox(width: 2),
+                                  Container(width: 4, height: 4, decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle)),
+                                ],
+                              ]),
                             ),
                           ),
                         ]),
@@ -350,21 +379,22 @@ class _ScanEditScreenState extends State<ScanEditScreen> {
                   ),
                 ]),
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-                child: Row(children: [
-                  Expanded(
-                    child: Text(context.tr('Hold the page to see the original'), style: TextStyle(fontSize: 11, color: lc.mut)),
-                  ),
-                  if (many)
-                    TextButton.icon(
-                      onPressed: _applyAll,
-                      icon: Icon(Icons.done_all, size: 16, color: lc.tprim),
-                      label: Text(context.tr('Apply to all pages'),
-                          style: TextStyle(fontSize: 12.5, color: lc.tprim, fontWeight: FontWeight.w700)),
+              if (many)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+                  child: Row(children: [
+                    Text(context.tr('Apply to'), style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: lc.mut)),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _ScopeSwitch(
+                        left: context.tr('This page'),
+                        right: context.tr('All pages'),
+                        rightOn: _allPages,
+                        onChanged: _setScope,
+                      ),
                     ),
-                ]),
-              ),
+                  ]),
+                ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
                 child: PrimaryButton(
@@ -475,6 +505,42 @@ class _SliderRow extends StatelessWidget {
           child: Text(value > 0 ? '+$value' : '$value',
               textAlign: TextAlign.end, style: TextStyle(fontSize: 12, color: lc.mut, fontFeatures: const [ui.FontFeature.tabularFigures()])),
         ),
+      ]),
+    );
+  }
+}
+
+/// Two-option switch: "This page" | "All pages".
+class _ScopeSwitch extends StatelessWidget {
+  final String left, right;
+  final bool rightOn;
+  final ValueChanged<bool> onChanged;
+  const _ScopeSwitch({required this.left, required this.right, required this.rightOn, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final lc = context.lc;
+    Widget seg(String label, IconData icon, bool on, bool value) => Expanded(
+          child: GestureDetector(
+            onTap: () => onChanged(value),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              height: 34,
+              decoration: BoxDecoration(color: on ? lc.prim : Colors.transparent, borderRadius: BorderRadius.circular(99)),
+              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Icon(icon, size: 15, color: on ? Colors.white : lc.icon),
+                const SizedBox(width: 6),
+                Text(label, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: on ? Colors.white : lc.ink)),
+              ]),
+            ),
+          ),
+        );
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(color: lc.soft, border: Border.all(color: lc.line), borderRadius: BorderRadius.circular(99)),
+      child: Row(children: [
+        seg(left, Icons.description_outlined, !rightOn, false),
+        seg(right, Icons.done_all, rightOn, true),
       ]),
     );
   }
