@@ -32,6 +32,7 @@ class _ScanEditScreenState extends State<ScanEditScreen> {
   late final List<ScanAdjust> _adj = [for (final _ in widget.pages) ScanAdjust(tone: widget.initialTone)];
   final Map<int, ScanPreview> _previews = {};
   final Map<int, ui.Image> _originals = {};
+  final Set<int> _failed = {}; // pages whose preview could not be made
   int _cur = 0;
   ui.Image? _shown;
   ScanAdjust? _shownAdj;
@@ -74,9 +75,9 @@ class _ScanEditScreenState extends State<ScanEditScreen> {
     return p;
   }
 
-  Future<ui.Image> _toImage(Uint8List rgba, int w, int h) {
+  Future<ui.Image> _toImage(({Uint8List rgba, int w, int h}) r) {
     final c = Completer<ui.Image>();
-    ui.decodeImageFromPixels(rgba, w, h, ui.PixelFormat.rgba8888, c.complete);
+    ui.decodeImageFromPixels(r.rgba, r.w, r.h, ui.PixelFormat.rgba8888, c.complete);
     return c.future;
   }
 
@@ -95,15 +96,30 @@ class _ScanEditScreenState extends State<ScanEditScreen> {
         final page = _cur, adj = _a;
         if (page == _shownPage && adj == _shownAdj) continue;
         final p = await _preview(page);
-        if (p == null || !mounted) continue;
-        final img = await _toImage(await renderScanPreview(p, adj), p.width, p.height);
+        if (!mounted) return;
+        if (p == null) {
+          _failed.add(page);
+          continue;
+        }
+        final img = await _toImage(await renderScanPreview(p, adj));
         if (!mounted) {
           img.dispose();
           return;
         }
         if (!_originals.containsKey(page)) {
-          final o = await _toImage(await renderScanPreview(p, const ScanAdjust(tone: ScanTone.original)), p.width, p.height);
+          final o = await _toImage(await renderScanPreview(p, const ScanAdjust(tone: ScanTone.original)));
+          if (!mounted) {
+            o.dispose();
+            img.dispose();
+            return;
+          }
           _originals[page] = o;
+          // Same limit as the previews: current page and its neighbours.
+          _originals.removeWhere((k, v) {
+            final far = (k - page).abs() > 1 && k != _cur;
+            if (far) v.dispose();
+            return far;
+          });
         }
         final old = _shown;
         setState(() {
@@ -202,6 +218,7 @@ class _ScanEditScreenState extends State<ScanEditScreen> {
   Widget build(BuildContext context) {
     final lc = context.lc;
     final many = _pages.length > 1;
+    final plain = _a.tone == ScanTone.original;
     final colourless = _a.tone == ScanTone.gray || _a.tone == ScanTone.bw;
     final img = _compare ? (_originals[_cur] ?? _shown) : _shown;
 
@@ -259,7 +276,9 @@ class _ScanEditScreenState extends State<ScanEditScreen> {
                     child: Stack(
                       children: [
                         Positioned.fill(
-                          child: img == null || _shownPage != _cur
+                          child: _failed.contains(_cur)
+                              ? Image.file(File(_pages[_cur]), fit: BoxFit.contain, cacheWidth: 1100)
+                              : img == null || _shownPage != _cur
                               ? Center(child: CircularProgressIndicator(color: lc.prim, strokeWidth: 2.4))
                               : RawImage(image: img, fit: BoxFit.contain),
                         ),
@@ -337,7 +356,14 @@ class _ScanEditScreenState extends State<ScanEditScreen> {
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
                   children: [
-                    for (final t in const [ScanTone.colour, ScanTone.white, ScanTone.gray, ScanTone.bw, ScanTone.original]) ...[
+                    for (final t in const [
+                      ScanTone.originalPlus,
+                      ScanTone.colour,
+                      ScanTone.white,
+                      ScanTone.gray,
+                      ScanTone.bw,
+                      ScanTone.original,
+                    ]) ...[
                       _FilterChip(
                         label: context.tr(_toneLabel(t)),
                         icon: _toneIcon(t),
@@ -346,6 +372,38 @@ class _ScanEditScreenState extends State<ScanEditScreen> {
                       ),
                       const SizedBox(width: 8),
                     ],
+                  ],
+                ),
+              ),
+              // ── fixes (the plain Original is never touched) ──
+              SizedBox(
+                height: 44,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.fromLTRB(16, 4, 12, 4),
+                  children: [
+                    Center(
+                      child: Text(context.tr('Fix'), style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: lc.mut)),
+                    ),
+                    const SizedBox(width: 10),
+                    _FixChip(
+                      label: context.tr('Shadows'),
+                      // The cleaning filters always remove shadows.
+                      on: !plain && (_a.tone != ScanTone.originalPlus || _a.shadows),
+                      onTap: _a.tone == ScanTone.originalPlus ? () => _set(_a.copyWith(shadows: !_a.shadows)) : null,
+                    ),
+                    const SizedBox(width: 8),
+                    _FixChip(
+                      label: context.tr('Edges'),
+                      on: !plain && _a.edges,
+                      onTap: plain ? null : () => _set(_a.copyWith(edges: !_a.edges)),
+                    ),
+                    const SizedBox(width: 8),
+                    _FixChip(
+                      label: context.tr('Straighten'),
+                      on: !plain && _a.straighten,
+                      onTap: plain ? null : () => _set(_a.copyWith(straighten: !_a.straighten)),
+                    ),
                   ],
                 ),
               ),
@@ -419,6 +477,7 @@ class _ScanEditScreenState extends State<ScanEditScreen> {
         ScanTone.gray => 'Grayscale',
         ScanTone.bw => 'Black & white',
         ScanTone.original => 'Original',
+        ScanTone.originalPlus => 'Original+',
       };
 
   static IconData _toneIcon(ScanTone t) => switch (t) {
@@ -427,6 +486,7 @@ class _ScanEditScreenState extends State<ScanEditScreen> {
         ScanTone.gray => Icons.filter_b_and_w,
         ScanTone.bw => Icons.text_snippet_outlined,
         ScanTone.original => Icons.image_outlined,
+        ScanTone.originalPlus => Icons.add_photo_alternate_outlined,
       };
 }
 
@@ -454,6 +514,38 @@ class _FilterChip extends StatelessWidget {
           const SizedBox(width: 6),
           Text(label, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: on ? Colors.white : lc.ink)),
         ]),
+      ),
+    );
+  }
+}
+
+/// On/off repair; dimmed when the filter decides it ([onTap] null).
+class _FixChip extends StatelessWidget {
+  final String label;
+  final bool on;
+  final VoidCallback? onTap;
+  const _FixChip({required this.label, required this.on, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final lc = context.lc;
+    return GestureDetector(
+      onTap: onTap,
+      child: Opacity(
+        opacity: onTap == null ? 0.5 : 1,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 11),
+          decoration: BoxDecoration(
+            color: lc.card,
+            border: Border.all(color: on ? lc.prim : lc.line),
+            borderRadius: BorderRadius.circular(99),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(on ? Icons.check_circle : Icons.circle_outlined, size: 15, color: on ? lc.prim : lc.mut),
+            const SizedBox(width: 6),
+            Text(label, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: lc.ink)),
+          ]),
+        ),
       ),
     );
   }
@@ -530,7 +622,7 @@ class _ScopeSwitch extends StatelessWidget {
               child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                 Icon(icon, size: 15, color: on ? Colors.white : lc.icon),
                 const SizedBox(width: 6),
-                Text(label, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: on ? Colors.white : lc.ink)),
+                Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: on ? Colors.white : lc.ink))),
               ]),
             ),
           ),

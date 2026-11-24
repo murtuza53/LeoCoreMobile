@@ -1,6 +1,7 @@
 • New Adjust pages screen after scanning, with a live preview
-• One-tap filters: Auto colour, Clean white, Grayscale, Black & white, Original
-• Adjust brightness, contrast and colour
-• Apply changes to this page only or to all pages
-• Press and hold a page to compare it with the original
-• Fixes and stability improvements
+• Original+ filter: keeps original colours and photos, evens out soft shadows
+• Fix buttons: Shadows, Edges and Straighten
+• More filters: Auto colour, Clean white, Grayscale, Black & white, Original
+• Adjust brightness, contrast and colour for this page or all pages
+• Hold a page to compare it with the original
+• Uses less memory on long scans

@@ -5,6 +5,8 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show compute;
 import 'package:image/image.dart' as img;
 
+import 'scan_fix.dart';
+
 /// How a scanned page is cleaned up.
 enum ScanTone {
   /// Shadows and uneven light removed, text darkened, paper colour kept
@@ -23,6 +25,10 @@ enum ScanTone {
   /// Cleaned like [white], then crisp black text on white: best for
   /// text-only pages and small PDFs.
   bw,
+
+  /// The original colours and photos, with soft shadows evened out and no
+  /// text darkening.
+  originalPlus,
 }
 
 /// Everything the user can change for one scanned page.
@@ -38,21 +44,53 @@ class ScanAdjust {
   /// -100 to 100 (0 = unchanged, -100 = no colour).
   final int saturation;
 
-  const ScanAdjust({this.tone = ScanTone.colour, this.brightness = 0, this.contrast = 0, this.saturation = 0});
+  /// Repairs. [ScanTone.original] ignores all of them; [shadows] only matters
+  /// for [ScanTone.originalPlus] (the cleaning filters always remove shadows).
+  final bool shadows, edges, straighten;
 
-  ScanAdjust copyWith({ScanTone? tone, int? brightness, int? contrast, int? saturation}) => ScanAdjust(
+  const ScanAdjust({
+    this.tone = ScanTone.colour,
+    this.brightness = 0,
+    this.contrast = 0,
+    this.saturation = 0,
+    this.shadows = true,
+    this.edges = true,
+    this.straighten = true,
+  });
+
+  ScanAdjust copyWith({
+    ScanTone? tone,
+    int? brightness,
+    int? contrast,
+    int? saturation,
+    bool? shadows,
+    bool? edges,
+    bool? straighten,
+  }) =>
+      ScanAdjust(
         tone: tone ?? this.tone,
         brightness: brightness ?? this.brightness,
         contrast: contrast ?? this.contrast,
         saturation: saturation ?? this.saturation,
+        shadows: shadows ?? this.shadows,
+        edges: edges ?? this.edges,
+        straighten: straighten ?? this.straighten,
       );
 
   bool get slidersAtZero => brightness == 0 && contrast == 0 && saturation == 0;
   bool get isIdentity => tone == ScanTone.original && slidersAtZero;
 
-  List<int> toList() => [tone.index, brightness, contrast, saturation];
-  static ScanAdjust fromList(List<int> l) =>
-      ScanAdjust(tone: ScanTone.values[l[0]], brightness: l[1], contrast: l[2], saturation: l[3]);
+  List<int> toList() =>
+      [tone.index, brightness, contrast, saturation, shadows ? 1 : 0, edges ? 1 : 0, straighten ? 1 : 0];
+  static ScanAdjust fromList(List<int> l) => ScanAdjust(
+        tone: ScanTone.values[l[0]],
+        brightness: l[1],
+        contrast: l[2],
+        saturation: l[3],
+        shadows: l[4] == 1,
+        edges: l[5] == 1,
+        straighten: l[6] == 1,
+      );
 
   @override
   bool operator ==(Object other) =>
@@ -60,10 +98,13 @@ class ScanAdjust {
       other.tone == tone &&
       other.brightness == brightness &&
       other.contrast == contrast &&
-      other.saturation == saturation;
+      other.saturation == saturation &&
+      other.shadows == shadows &&
+      other.edges == edges &&
+      other.straighten == straighten;
 
   @override
-  int get hashCode => Object.hash(tone, brightness, contrast, saturation);
+  int get hashCode => Object.hash(tone, brightness, contrast, saturation, shadows, edges, straighten);
 }
 
 ScanTone scanToneFrom(String? v) =>
@@ -101,7 +142,8 @@ Future<ScanPreview?> loadScanPreview(String path, {int maxSide = 1100}) async {
 }
 
 /// Applies [adj] to a preview and returns RGBA pixels (for ui.decodeImageFromPixels).
-Future<Uint8List> renderScanPreview(ScanPreview p, ScanAdjust adj) =>
+/// The size can differ from the preview's: straightening grows the canvas.
+Future<({Uint8List rgba, int w, int h})> renderScanPreview(ScanPreview p, ScanAdjust adj) =>
     compute(_renderPreview, [p.rgb, p.width, p.height, adj.toList()]);
 
 List<Object>? _loadSmall(List<Object> a) {
@@ -110,10 +152,9 @@ List<Object>? _loadSmall(List<Object> a) {
   return [Uint8List.fromList(im.getBytes(order: img.ChannelOrder.rgb)), im.width, im.height];
 }
 
-Uint8List _renderPreview(List<Object> a) {
-  final rgb = Uint8List.fromList(a[0] as Uint8List);
-  final w = a[1] as int, h = a[2] as int;
-  applyAdjust(rgb, w, h, ScanAdjust.fromList((a[3] as List).cast<int>()));
+({Uint8List rgba, int w, int h}) _renderPreview(List<Object> a) {
+  final (:rgb, :w, :h) = processPage(
+      Uint8List.fromList(a[0] as Uint8List), a[1] as int, a[2] as int, ScanAdjust.fromList((a[3] as List).cast<int>()));
   final out = Uint8List(w * h * 4);
   for (var i = 0, j = 0; i < rgb.length; i += 3, j += 4) {
     out[j] = rgb[i];
@@ -121,7 +162,7 @@ Uint8List _renderPreview(List<Object> a) {
     out[j + 2] = rgb[i + 2];
     out[j + 3] = 255;
   }
-  return out;
+  return (rgba: out, w: w, h: h);
 }
 
 img.Image? _decodeSized(String path, int maxSide) {
@@ -141,12 +182,23 @@ bool _processFile(List<Object> a) {
   final adj = ScanAdjust.fromList((a[2] as List).cast<int>());
   final im = _decodeSized(src, 2200);
   if (im == null) return false;
-  final w = im.width, h = im.height;
-  final rgb = Uint8List.fromList(im.getBytes(order: img.ChannelOrder.rgb));
-  applyAdjust(rgb, w, h, adj);
+  final (:rgb, :w, :h) =
+      processPage(Uint8List.fromList(im.getBytes(order: img.ChannelOrder.rgb)), im.width, im.height, adj);
   final res = img.Image.fromBytes(width: w, height: h, bytes: rgb.buffer, numChannels: 3, order: img.ChannelOrder.rgb);
   File(dst).writeAsBytesSync(img.encodeJpg(res, quality: 88), flush: true);
   return true;
+}
+
+/// Repairs, then filter and sliders. May change [rgb] in place; the returned
+/// page can be larger when it was straightened.
+({Uint8List rgb, int w, int h}) processPage(Uint8List rgb, int w, int h, ScanAdjust a) {
+  var page = (rgb: rgb, w: w, h: h);
+  if (a.tone != ScanTone.original) {
+    if (a.edges) fixDarkEdges(rgb, w, h);
+    if (a.straighten) page = rotatePage(rgb, w, h, detectTilt(rgb, w, h));
+  }
+  applyAdjust(page.rgb, page.w, page.h, a);
+  return page;
 }
 
 /// Filter, then brightness / contrast / colour, in place.
@@ -158,6 +210,8 @@ void applyAdjust(Uint8List rgb, int w, int h, ScanAdjust a) {
     case ScanTone.white:
     case ScanTone.bw:
       enhanceRgb(rgb, w, h, ScanTone.white);
+    case ScanTone.originalPlus:
+      if (a.shadows) evenLight(rgb, w, h);
     case ScanTone.original:
       break;
   }
