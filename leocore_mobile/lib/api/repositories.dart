@@ -267,8 +267,9 @@ class QuotationDetail {
 /// A warehouse the user can pick (branch = the branch it belongs to; '' on older servers).
 typedef WarehouseOpt = ({int id, String code, String name, String branch});
 
-/// An UNPROCESSED stock count sheet on the server (Draft, or a web post that Failed). The phone can open, edit and
-/// delete it; only the web app processes (posts) it. [id] 0 = a new sheet not saved yet.
+/// A stock count sheet on the server that is not processed yet: Draft (still counting), Unprocessed (counting done,
+/// waiting for the web app) or Failed (a processing run failed). The phone can open, edit and delete it; only the web
+/// app processes it (as of its count date). [id] 0 = a new sheet not saved yet.
 class CountSheet {
   final int id;
   final String number;
@@ -300,6 +301,7 @@ class CountSheet {
   });
 
   bool get failed => status == 'Failed';
+  bool get ready => status == 'Unprocessed';
 
   CountSheet copyWith({int? id, String? number, DateTime? date, int? warehouseId, String? warehouseName, String? branchName, String? notes, String? status, int? lines}) =>
       CountSheet(
@@ -720,16 +722,22 @@ class LeoRepository {
   // ── Live stock count (sheet + submit) ──────────────────────────────────
   /// One page of the count sheet: stock items with the system quantity in
   /// [warehouseId]. `search` (each word, anywhere) matches name, code, barcode or supplier code.
+  /// [date] / [sheetId]: expected quantities are the stock at the end of the sheet's count date (what the web
+  /// processes against), leaving out that sheet's own adjustments.
   Future<PageResult<CountSheetRow>> stockCountSheet({
     required int warehouseId,
     String? search,
     int page = 1,
     int pageSize = 50,
+    DateTime? date,
+    int sheetId = 0,
   }) async {
     final r = await _client.getPage('/inventory/stock-count/sheet', query: {
       'page': page,
       'pageSize': pageSize,
       'warehouseId': warehouseId,
+      if (date != null) 'date': '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}',
+      if (sheetId > 0) 'sheetId': sheetId,
       if (search != null && search.isNotEmpty) 'search': search,
     });
     return PageResult(
@@ -765,11 +773,13 @@ class LeoRepository {
   }
 
   /// Save a sheet: id 0 creates it (on [date], in [warehouseId]), otherwise its lines become exactly [lines].
+  /// [status]: 'Draft' (still counting) or 'Unprocessed' (ready to be processed on the web); null keeps it.
   Future<CountSheet> saveStockCount({
     required int id,
     required int warehouseId,
     required DateTime date,
     String? notes,
+    String? status,
     required List<({int itemId, int countedQty, String notes})> lines,
     String? idempotencyKey,
   }) async {
@@ -777,6 +787,7 @@ class LeoRepository {
       'warehouseId': warehouseId,
       'date': '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}',
       'notes': notes,
+      if (status != null) 'status': status,
       'lines': [for (final l in lines) {'itemId': l.itemId, 'countedQty': l.countedQty, if (l.notes.isNotEmpty) 'notes': l.notes}],
     };
     final j = id == 0

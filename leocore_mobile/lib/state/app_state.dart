@@ -470,7 +470,14 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
         false,
       );
     } else {
-      r = await _repo.stockCountSheet(warehouseId: _countWarehouse, search: q, page: page, pageSize: size);
+      r = await _repo.stockCountSheet(
+        warehouseId: _countWarehouse,
+        search: q,
+        page: page,
+        pageSize: size,
+        date: countSheet?.date,
+        sheetId: countSheet?.id ?? 0,
+      );
     }
     for (final row in r.items) {
       // A line already on the sheet keeps the system quantity recorded when it was counted.
@@ -2298,8 +2305,14 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     notes.dispose();
     if (ok != true) return;
     if (edit && cur != null) {
+      final dateChanged = !DateUtils.isSameDay(cur.date, date);
       countSheet = cur.copyWith(date: date, notes: note);
       countDirty = true;
+      if (dateChanged) {
+        // Expected quantities are the stock of the count date: re-read them (counted lines refresh on Save).
+        _countRows.removeWhere((id, _) => !counts.containsKey(id));
+        countList.refresh();
+      }
       notifyListeners();
     } else {
       startCount(date: date, whId: w, notes: note);
@@ -2377,7 +2390,9 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Save the open sheet to the server UNPROCESSED (new sheets are created; otherwise its lines become exactly
   /// what is counted here). The web app processes it.
-  Future<void> saveCountSheet() async {
+  /// [status] 'Unprocessed' marks the counting done (ready to be processed on the web); 'Draft' = still counting;
+  /// null keeps the sheet's status (new sheets start as Draft).
+  Future<void> saveCountSheet({String? status}) async {
     final sheet = countSheet;
     if (sheet == null || submittingCount) return;
     if (sheet.id == 0 && counts.isEmpty) {
@@ -2386,6 +2401,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     }
     if (demoMode) {
       countDirty = false;
+      if (status != null) countSheet = sheet.copyWith(status: status);
       showToast(t('Count sheet saved'));
       notifyListeners();
       return;
@@ -2400,6 +2416,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
         warehouseId: sheet.warehouseId,
         date: sheet.date,
         notes: sheet.notes.isEmpty ? null : sheet.notes,
+        status: status,
         lines: [for (final e in counts.entries) (itemId: e.key, countedQty: e.value, notes: _countNotes[e.key] ?? '')],
         idempotencyKey: sheet.id == 0 ? _countIdemKey : null,
       );
@@ -2407,7 +2424,9 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       countDirty = false;
       _countIdemKey = null;
       countSheets = null; // the list changed
-      showToast('${r.number} ${t('saved. It is processed from the web app.')}');
+      showToast(r.ready
+          ? '${r.number} ${t('is ready to be processed on the web.')}'
+          : '${r.number} ${t('saved as a draft.')}');
       _refreshCountMeta(r.id);
     } on ApiException catch (e) {
       showToast(e.message);
@@ -2419,13 +2438,13 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  /// Who counted each line and when, as the server recorded it.
+  /// Who counted each line and when, and its expected quantity, as the server has them.
   Future<void> _refreshCountMeta(int id) async {
     try {
       final r = await _repo.stockCount(id);
       for (final l in r.lines) {
         countMeta[l.row.itemId] = (by: l.countedBy, at: l.countedAt);
-        _countRows.putIfAbsent(l.row.itemId, () => l.row);
+        _countRows[l.row.itemId] = l.row; // expected = stock of the count date, as the server sees it
       }
       notifyListeners();
     } catch (_) {/* the save itself succeeded */}

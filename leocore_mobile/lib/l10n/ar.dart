@@ -596,4 +596,9 @@ const Map<String, String> kArabic = {
   'deleted': 'تم الحذف',
   'Could not delete the count sheet': 'تعذر حذف ورقة الجرد',
   'Open or start a count sheet first': 'افتح ورقة جرد أو ابدأ واحدة أولاً',
+  'Process failed': 'فشلت المعالجة',
+  'Counting done - ready to process': 'انتهى الجرد - جاهز للمعالجة',
+  'Back to draft (still counting)': 'إرجاع إلى مسودة (الجرد مستمر)',
+  'is ready to be processed on the web.': 'جاهزة للمعالجة من تطبيق الويب.',
+  'saved as a draft.': 'حُفظت كمسودة.',
 };

@@ -123,9 +123,7 @@ class _SheetCard extends StatelessWidget {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           Expanded(child: Text(s.number, style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700))),
-          s.failed
-              ? Pill(context.tr('Post failed'), bg: lc.badbg, fg: lc.bad, size: 11)
-              : Pill(context.tr('Unprocessed'), bg: lc.warnbg, fg: lc.warn, size: 11),
+          _StatusPill(s),
         ]),
         const SizedBox(height: 4),
         Text('${DateFormat('dd MMM yyyy').format(s.date)}${where.isEmpty ? '' : ' · $where'}', style: TextStyle(fontSize: 12.5, color: lc.mut)),
@@ -143,6 +141,19 @@ class _SheetCard extends StatelessWidget {
           Padding(padding: const EdgeInsets.only(top: 4), child: Text(s.message, style: TextStyle(fontSize: 11.5, color: lc.bad))),
       ]),
     );
+  }
+}
+
+/// Draft = still counting; Unprocessed = counting done, waiting for the web app; Process failed = a web run failed.
+class _StatusPill extends StatelessWidget {
+  final CountSheet s;
+  const _StatusPill(this.s);
+  @override
+  Widget build(BuildContext context) {
+    final lc = context.lc;
+    if (s.failed) return Pill(context.tr('Process failed'), bg: lc.badbg, fg: lc.bad, size: 11);
+    if (s.ready) return Pill(context.tr('Unprocessed'), bg: lc.okbg, fg: lc.ok, size: 11);
+    return Pill(context.tr('Draft'), bg: lc.warnbg, fg: lc.warn, size: 11);
   }
 }
 
@@ -167,12 +178,21 @@ class _SheetView extends StatelessWidget {
                 if (app.countDirty)
                   Pill(context.tr('Unsaved'), bg: lc.warnbg, fg: lc.warn, size: 11)
                 else if (s.id > 0)
-                  Pill(context.tr('Saved'), bg: lc.okbg, fg: lc.ok, size: 11),
+                  _StatusPill(s),
                 if (app.mCountSubmit)
                   PopupMenuButton<String>(
                     icon: const Icon(Icons.more_vert),
-                    onSelected: (v) => v == 'edit' ? app.newCountSheet(edit: true) : app.deleteCountSheet(),
+                    onSelected: (v) => switch (v) {
+                      'edit' => app.newCountSheet(edit: true),
+                      'ready' => app.saveCountSheet(status: 'Unprocessed'),
+                      'draft' => app.saveCountSheet(status: 'Draft'),
+                      _ => app.deleteCountSheet(),
+                    },
                     itemBuilder: (_) => [
+                      if (!s.ready)
+                        PopupMenuItem(value: 'ready', child: Text(context.tr('Counting done - ready to process'))),
+                      if (s.ready)
+                        PopupMenuItem(value: 'draft', child: Text(context.tr('Back to draft (still counting)'))),
                       PopupMenuItem(value: 'edit', child: Text(context.tr('Date & notes'))),
                       PopupMenuItem(value: 'delete', child: Text(context.tr('Delete sheet'), style: TextStyle(color: lc.bad))),
                     ],
