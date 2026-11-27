@@ -107,7 +107,7 @@ class _LabelsScreenState extends State<LabelsScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                                    Text(p.barcode.isEmpty ? p.code : p.barcode, style: TextStyle(fontSize: 11.5, color: lc.mut)),
+                                    ItemCodes(code: p.code, supplierCode: p.supplierCode, barcode: p.barcode),
                                   ],
                                 ),
                               ),

@@ -113,7 +113,8 @@ class LowStockScreen extends StatelessWidget {
                   children: [
                     Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600)),
                     const SizedBox(height: 2),
-                    Text('${p.code} · ${context.tr('reorder')} $reorder ${context.tr('pcs')}', style: TextStyle(fontSize: 11.5, color: lc.mut)),
+                    ItemCodes(code: p.code, supplierCode: p.supplierCode, barcode: p.barcode),
+                    Text('${context.tr('reorder')} $reorder ${context.tr('pcs')}', style: TextStyle(fontSize: 11.5, color: lc.mut)),
                   ],
                 ),
               ),
@@ -163,7 +164,8 @@ class LowStockScreen extends StatelessWidget {
                     children: [
                       Text(r.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600)),
                       const SizedBox(height: 2),
-                      Text('${r.code} · ${r.onHand} ${context.tr('pcs on hand')}', style: TextStyle(fontSize: 11.5, color: lc.mut)),
+                      ItemCodes(code: r.code, supplierCode: r.supplierCode, barcode: r.barcode),
+                      Text('${r.onHand} ${context.tr('pcs on hand')}', style: TextStyle(fontSize: 11.5, color: lc.mut)),
                     ],
                   ),
                 ),
@@ -201,7 +203,8 @@ class LowStockScreen extends StatelessWidget {
                   children: [
                     Text(d.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600)),
                     const SizedBox(height: 2),
-                    Text('${d.code} · ${d.qty} ${context.tr('pcs on hand')}', style: TextStyle(fontSize: 11.5, color: lc.mut)),
+                    ItemCodes(code: d.code),
+                    Text('${d.qty} ${context.tr('pcs on hand')}', style: TextStyle(fontSize: 11.5, color: lc.mut)),
                   ],
                 ),
               ),

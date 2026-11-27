@@ -5,14 +5,14 @@ import '../utils/money.dart';
 /// the UI renders identical numbers. Swapped for API responses in a later pass.
 class MockData {
   static const List<Product> products = [
-    Product(id: 1, code: 'MLK-0421', name: 'Almarai Full Fat Milk 2L', brand: 'Almarai', cat: 'Dairy', unit: 'Bottle', price: 1.250, cost: 0.980, stock: 184, barcode: '6281007021234', wh: [('Main WH · Tubli', 120), ('Van 12 · Yousif', 24), ('Sitra Store', 40)]),
-    Product(id: 2, code: 'SGR-1105', name: 'Al Osra Sugar 5kg', brand: 'Al Osra', cat: 'Grocery', unit: 'Bag', price: 2.100, cost: 1.720, stock: 312, barcode: '6281100554321', wh: [('Main WH · Tubli', 260), ('Van 12 · Yousif', 12), ('Sitra Store', 40)]),
-    Product(id: 3, code: 'CHK-0808', name: 'Sadia Frozen Chicken 1000g', brand: 'Sadia', cat: 'Frozen', unit: 'Piece', price: 1.450, cost: 1.180, stock: 96, barcode: '7891515308087', wh: [('Main WH · Tubli', 80), ('Van 12 · Yousif', 0), ('Sitra Store', 16)]),
-    Product(id: 4, code: 'TEA-0330', name: 'Lipton Yellow Label 200s', brand: 'Lipton', cat: 'Beverages', unit: 'Box', price: 2.850, cost: 2.310, stock: 58, barcode: '6281006543308', wh: [('Main WH · Tubli', 44), ('Van 12 · Yousif', 6), ('Sitra Store', 8)]),
-    Product(id: 5, code: 'WTR-0102', name: 'Aquafina Water 1.5L ×12', brand: 'Aquafina', cat: 'Beverages', unit: 'Shrink', price: 1.150, cost: 0.890, stock: 22, barcode: '6281036101020', wh: [('Main WH · Tubli', 18), ('Van 12 · Yousif', 4), ('Sitra Store', 0)]),
-    Product(id: 6, code: 'DET-0715', name: 'Tide Automatic 3kg', brand: 'Tide', cat: 'Household', unit: 'Box', price: 3.400, cost: 2.750, stock: 8, barcode: '6281031107157', wh: [('Main WH · Tubli', 8), ('Van 12 · Yousif', 0), ('Sitra Store', 0)]),
-    Product(id: 7, code: 'RCE-0207', name: 'Mahmood Basmati Rice 5kg', brand: 'Mahmood', cat: 'Grocery', unit: 'Bag', price: 4.950, cost: 4.050, stock: 145, barcode: '6281101020075', wh: [('Main WH · Tubli', 110), ('Van 12 · Yousif', 15), ('Sitra Store', 20)]),
-    Product(id: 8, code: 'OIL-0501', name: 'Noor Sunflower Oil 1.8L', brand: 'Noor', cat: 'Grocery', unit: 'Bottle', price: 1.980, cost: 1.610, stock: 0, barcode: '6281105010501', wh: [('Main WH · Tubli', 0), ('Van 12 · Yousif', 0), ('Sitra Store', 0)]),
+    Product(id: 1, code: 'MLK-0421', name: 'Almarai Full Fat Milk 2L', brand: 'Almarai', cat: 'Dairy', unit: 'Bottle', price: 1.250, cost: 0.980, stock: 184, barcode: '6281007021234', supplierCode: 'SUP-4107', wh: [('Main WH · Tubli', 120), ('Van 12 · Yousif', 24), ('Sitra Store', 40)]),
+    Product(id: 2, code: 'SGR-1105', name: 'Al Osra Sugar 5kg', brand: 'Al Osra', cat: 'Grocery', unit: 'Bag', price: 2.100, cost: 1.720, stock: 312, barcode: '6281100554321', supplierCode: 'SUP-4114', wh: [('Main WH · Tubli', 260), ('Van 12 · Yousif', 12), ('Sitra Store', 40)]),
+    Product(id: 3, code: 'CHK-0808', name: 'Sadia Frozen Chicken 1000g', brand: 'Sadia', cat: 'Frozen', unit: 'Piece', price: 1.450, cost: 1.180, stock: 96, barcode: '7891515308087', supplierCode: 'SUP-4121', wh: [('Main WH · Tubli', 80), ('Van 12 · Yousif', 0), ('Sitra Store', 16)]),
+    Product(id: 4, code: 'TEA-0330', name: 'Lipton Yellow Label 200s', brand: 'Lipton', cat: 'Beverages', unit: 'Box', price: 2.850, cost: 2.310, stock: 58, barcode: '6281006543308', supplierCode: 'SUP-4128', wh: [('Main WH · Tubli', 44), ('Van 12 · Yousif', 6), ('Sitra Store', 8)]),
+    Product(id: 5, code: 'WTR-0102', name: 'Aquafina Water 1.5L ×12', brand: 'Aquafina', cat: 'Beverages', unit: 'Shrink', price: 1.150, cost: 0.890, stock: 22, barcode: '6281036101020', supplierCode: 'SUP-4135', wh: [('Main WH · Tubli', 18), ('Van 12 · Yousif', 4), ('Sitra Store', 0)]),
+    Product(id: 6, code: 'DET-0715', name: 'Tide Automatic 3kg', brand: 'Tide', cat: 'Household', unit: 'Box', price: 3.400, cost: 2.750, stock: 8, barcode: '6281031107157', supplierCode: 'SUP-4142', wh: [('Main WH · Tubli', 8), ('Van 12 · Yousif', 0), ('Sitra Store', 0)]),
+    Product(id: 7, code: 'RCE-0207', name: 'Mahmood Basmati Rice 5kg', brand: 'Mahmood', cat: 'Grocery', unit: 'Bag', price: 4.950, cost: 4.050, stock: 145, barcode: '6281101020075', supplierCode: 'SUP-4149', wh: [('Main WH · Tubli', 110), ('Van 12 · Yousif', 15), ('Sitra Store', 20)]),
+    Product(id: 8, code: 'OIL-0501', name: 'Noor Sunflower Oil 1.8L', brand: 'Noor', cat: 'Grocery', unit: 'Bottle', price: 1.980, cost: 1.610, stock: 0, barcode: '6281105010501', supplierCode: 'SUP-4156', wh: [('Main WH · Tubli', 0), ('Van 12 · Yousif', 0), ('Sitra Store', 0)]),
   ];
 
   static const List<Customer> customers = [

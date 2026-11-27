@@ -129,7 +129,6 @@ class ProductRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final lc = context.lc;
-    final sub = product.brand.isEmpty ? product.code : '${product.code} · ${product.brand}';
     return LcCard(
       onTap: onTap,
       padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
@@ -145,7 +144,7 @@ class ProductRow extends StatelessWidget {
                 // Full product name — up to two lines so long names aren't cut off.
                 Text(product.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, height: 1.25)),
                 const SizedBox(height: 3),
-                Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: lc.mut)),
+                ItemCodes(code: product.code, supplierCode: product.supplierCode, barcode: product.barcode, size: 12),
                 const SizedBox(height: 6),
                 _ListStock(product.stock),
               ],

@@ -18,12 +18,14 @@ void main() {
 /// Root widget — owns the [AppState] store so the app is self-contained
 /// (both `main()` and widget tests can mount it directly).
 class LeoCoreApp extends StatelessWidget {
-  const LeoCoreApp({super.key});
+  /// Optional store factory (screenshot / test entry points); normally null.
+  final AppState Function()? create;
+  const LeoCoreApp({super.key, this.create});
 
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => AppState(),
+      create: (_) => create?.call() ?? AppState(),
       child: const _MaterialRoot(),
     );
   }

@@ -36,6 +36,7 @@ import '../models/permissions.dart';
 import '../models/models.dart';
 import '../models/reports.dart';
 import '../utils/money.dart';
+import '../utils/item_search.dart';
 import '../utils/scan_enhance.dart';
 import '../screens/scan_edit_screen.dart';
 import 'paged_list.dart';
@@ -387,10 +388,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       return PageResult(
         MockData.products.where((p) {
           final catOk = cat == 'All' || p.cat == cat;
-          final qOk = ql.isEmpty ||
-              p.name.toLowerCase().contains(ql) ||
-              p.code.toLowerCase().contains(ql) ||
-              p.barcode.contains(ql);
+          final qOk = itemMatches(ql, [p.name, p.code, p.barcode, p.supplierCode, p.brand, p.cat]);
           return catOk && qOk;
         }).toList(),
         false,
@@ -443,13 +441,18 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
         [
           for (final e in MockData.expected.entries)
             if (ql.isEmpty ||
-                MockData.byId(e.key).name.toLowerCase().contains(ql) ||
-                MockData.byId(e.key).code.toLowerCase().contains(ql))
+                itemMatches(ql, [
+                  MockData.byId(e.key).name,
+                  MockData.byId(e.key).code,
+                  MockData.byId(e.key).barcode,
+                  MockData.byId(e.key).supplierCode,
+                ]))
               CountSheetRow(
                 itemId: e.key,
                 code: MockData.byId(e.key).code,
                 name: MockData.byId(e.key).name,
                 barcode: MockData.byId(e.key).barcode,
+                supplierCode: MockData.byId(e.key).supplierCode,
                 expected: e.value,
               ),
         ],
@@ -1316,12 +1319,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   Timer? _pickDebounce;
 
   static bool _productMatches(Product p, String q) =>
-      p.id.toString() == q ||
-      p.code.toLowerCase().contains(q) ||
-      p.name.toLowerCase().contains(q) ||
-      p.brand.toLowerCase().contains(q) ||
-      p.cat.toLowerCase().contains(q) ||
-      p.barcode.toLowerCase().contains(q);
+      p.id.toString() == q || itemMatches(q, [p.name, p.code, p.barcode, p.supplierCode, p.brand, p.cat]);
 
   /// Loaded products matching the query by id, code, name, brand, category or
   /// barcode, plus server matches that aren't in the loaded page.
@@ -2026,7 +2024,10 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     scanFound = false;
     scanned = null;
     scanLoading = false;
-    _scanReturn = showNav ? screen : Screen.home;
+    // Back / close returns to where the scan started: stock count sheet,
+    // cash sale, quotation or a main tab (was Home for anything without the
+    // bottom bar).
+    if (screen != Screen.scan && screen != Screen.login) _scanReturn = screen;
     nav(Screen.scan);
   }
 
@@ -3247,10 +3248,14 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     final q = labelQuery.trim().toLowerCase();
     final all = products;
     if (q.isEmpty) return all;
-    return all
-        .where((p) => p.name.toLowerCase().contains(q) || p.code.toLowerCase().contains(q) || p.barcode.contains(q))
-        .toList();
+    final local = all.where((p) => itemMatches(q, [p.name, p.code, p.barcode, p.supplierCode])).toList();
+    // Plus server matches that aren't in the loaded page.
+    final seen = local.map((p) => p.id).toSet();
+    return [...local, ..._labelRemote.where((p) => seen.add(p.id))];
   }
+
+  List<Product> _labelRemote = const [];
+  Timer? _labelDebounce;
 
   void openLabels() {
     nav(Screen.labels);
@@ -3260,6 +3265,21 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   void setLabelQuery(String v) {
     labelQuery = v;
     notifyListeners();
+    _labelDebounce?.cancel();
+    final q = v.trim();
+    if (demoMode || q.isEmpty) {
+      _labelRemote = const [];
+      return;
+    }
+    _labelDebounce = Timer(const Duration(milliseconds: 350), () async {
+      try {
+        final rows = await _repo.products(search: q, pageSize: 50);
+        if (labelQuery.trim() == q) {
+          _labelRemote = rows;
+          notifyListeners();
+        }
+      } catch (_) {/* loaded matches still show */}
+    });
   }
 
   void setLabelTemplate(int id) {

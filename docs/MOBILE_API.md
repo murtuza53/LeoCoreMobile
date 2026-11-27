@@ -260,6 +260,10 @@ onResponse(res):
   scroll) — never assume one page is the whole list.
 - **Search is on the server.** Send what the user types as `?search=` (debounce ~300 ms, reset to page 1) and
   show the server's result — don't filter only the rows already on screen, which misses everything not yet loaded.
+- **Item search** (products, item picker, stock-count sheet): each word typed must appear **anywhere** in the item
+  **name, item code, barcode or supplier code** — `wheel` works like `*wheel*`, `front wheel` finds
+  "Wheel Front 10in", and a `*` inside a word matches anything (`wh*l`). Case is ignored. Item rows carry
+  `supplierCode` (products list and detail, count sheet, low / dead stock, scan lookup).
 - **Money/quantities:** decimals in the company base currency (BHD, 3 dp by default). VAT handling
   follows `pricesIncludeVat` on write requests.
 - **Dates:** ISO-8601 (`2026-08-15` or a full timestamp). Timestamps ending in `Z` are UTC — show them in local time.
@@ -290,7 +294,7 @@ onResponse(res):
 | Method | Path | Purpose / params |
 |---|---|---|
 | GET | `/menu` | Pages the user may see, with rights per page and a `permissions` map (version 2, §2) |
-| GET | `/products` | List. `?page&pageSize&search&categoryId&brandId` — `search` matches id, code, name, barcode, brand or category (§6) |
+| GET | `/products` | List. `?page&pageSize&search&categoryId&brandId` — `search`: item search (§4), also id, brand or category (§6) |
 | GET | `/products/{id}` | One product (§6) |
 | PATCH | `/products/{id}` | Edit product (scope `read write`) — §10 |
 | POST | `/products/{id}/images` | Upload images (§6) |
@@ -332,7 +336,7 @@ onResponse(res):
 | GET | `/inventory/stock-ledger` | `?itemId&warehouseId&page&pageSize` |
 | GET | `/inventory/low-stock` | `?threshold&warehouseId&page&pageSize` — `MobileStockAlerts` |
 | GET | `/inventory/dead-stock` | `?days&warehouseId&page&pageSize` — `MobileStockAlerts` |
-| GET | `/inventory/stock-count/sheet` | Count sheet. `?warehouseId&search&page&pageSize` |
+| GET | `/inventory/stock-count/sheet` | Count sheet. `?warehouseId&search&page&pageSize` — `search`: item search (§4); rows carry `supplierCode` |
 | POST | `/inventory/stock-count` | Submit a count — §10 |
 
 ### Barcode labels (§7)
@@ -388,7 +392,7 @@ onResponse(res):
       "id": 10104,
       "code": "10104",
       "name": "Shubbakh Sugar 1kg",
-      "barcode": "6291000000000",
+      "barcode": "6291000000000", "supplierCode": "SH-1KG",
       "price": 0.220,                                  // DefaultPrice, base currency
       "cost": 0.200,                                   // DefaultCost
       "brand": "Shubbakh",                             // string | null
@@ -793,6 +797,7 @@ Date params are `YYYY-MM-DD`; `from`/`to` default to the current month.
 
 | Version | Change | App action |
 |---|---|---|
+| **Next server update** (Nov 2026) | **Item search everywhere:** every word anywhere in name, item code, barcode or **supplier code** (`*` wildcard inside a word) for `/products` and `/inventory/stock-count/sheet`; `supplierCode` on product list/detail, count sheet and low / dead stock rows (§4) | Show item code, supplier code and barcode under item names; same match rule for offline/demo filtering |
 | **1.6.53** (Nov 2026) | **Limited roles & big lists:** app rules for roles with few pages (menu first, saved rights, no "show everything", `403` lists not re-requested, sales chart only with Reports; item search needs Products); customer / supplier `outstanding` reused for 60 s so paging and search are fast with thousands of parties (§2, §5) | Load the menu first and only permitted data; stop re-requesting refused lists; keep the full-access Home/More unchanged; chart only with Reports |
 | **1.6.53** (Nov 2026) | **Mobile permissions:** the role permission page has a **Mobile App** tab; `GET /menu` is **version 2** with `feature` + `rights` per page and a `permissions` map for every Mobile App feature; new menu pages `stock-alerts`, `finance-reports`, `quotations`; new feature **`MobileStockAlerts`** gates `/inventory/low-stock` and `/inventory/dead-stock` (carried over from Stock Ledger on upgrade) (§2) | Gate pages and buttons by feature rights; refresh the menu on resume |
 | **1.6.52** (Nov 2026) | **Sign-out fixes:** admins no longer refused on refresh (`MOBILE_ACCESS_DISABLED` every ~30 min); a refresh whose reply was lost is accepted again for 2 min; a refresh after a login elsewhere returns `SESSION_TERMINATED` naming the device; new token issued before the old is revoked; rate limits are per phone, and 429 uses the error envelope (`RATE_LIMITED`) (§1, §3) | Treat 429/5xx as retry, not sign-out |

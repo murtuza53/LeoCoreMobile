@@ -94,6 +94,7 @@ class StockRowData {
   final String code;
   final String name;
   final String barcode;
+  final String supplierCode;
   final int onHand;
   final int daysIdle;
   const StockRowData({
@@ -103,6 +104,7 @@ class StockRowData {
     required this.barcode,
     required this.onHand,
     this.daysIdle = 0,
+    this.supplierCode = '',
   });
 }
 
@@ -268,6 +270,7 @@ class CountSheetRow {
   final String code;
   final String name;
   final String barcode;
+  final String supplierCode;
   final int expected;
   const CountSheetRow({
     required this.itemId,
@@ -275,6 +278,7 @@ class CountSheetRow {
     required this.name,
     required this.barcode,
     required this.expected,
+    this.supplierCode = '',
   });
 }
 
@@ -292,7 +296,7 @@ class LeoRepository {
     return list.whereType<Map>().map((m) => mapProduct(m, fromList: true)).toList();
   }
 
-  /// One page of products. `search` matches id, code, name, barcode, brand
+  /// One page of products. `search` (each word, anywhere) matches id, code, name, barcode, supplier code, brand
   /// or category on the server.
   Future<PageResult<Product>> productsPage({String? search, int? categoryId, int page = 1, int pageSize = 50}) async {
     final r = await _client.getPage('/products', query: {
@@ -617,7 +621,7 @@ class LeoRepository {
 
   // ── Live stock count (sheet + submit) ──────────────────────────────────
   /// One page of the count sheet: stock items with the system quantity in
-  /// [warehouseId]. `search` matches code, name or barcode.
+  /// [warehouseId]. `search` (each word, anywhere) matches name, code, barcode or supplier code.
   Future<PageResult<CountSheetRow>> stockCountSheet({
     required int warehouseId,
     String? search,
@@ -638,6 +642,7 @@ class LeoRepository {
                 code: _s(m, ['code']),
                 name: _s(m, ['name']),
                 barcode: _s(m, ['barcode']),
+                supplierCode: _s(m, ['supplierCode']),
                 expected: _i(m, ['systemQty', 'expected', 'onHand']),
               ))
           .toList(),
@@ -744,6 +749,7 @@ class LeoRepository {
         code: _s(j, ['code']),
         name: _s(j, ['name'], 'Unnamed'),
         barcode: _s(j, ['barcode']),
+        supplierCode: _s(j, ['supplierCode']),
         onHand: _i(j, ['onHand']),
         daysIdle: _i(j, ['daysIdle']),
       );
@@ -803,6 +809,7 @@ class LeoRepository {
       cost: _d(j, ['cost', 'costPrice', 'avgCost', 'averageCost']),
       stock: onHand,
       barcode: _s(j, ['barcode']),
+      supplierCode: _s(j, ['supplierCode']),
       wh: wh,
       images: images,
     );

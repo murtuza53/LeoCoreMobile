@@ -185,7 +185,7 @@ class _CountRow extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(r.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, height: 1.25)),
-                    Text(r.code, style: TextStyle(fontSize: 11.5, color: lc.mut)),
+                    ItemCodes(code: r.code, supplierCode: r.supplierCode, barcode: r.barcode),
                   ],
                 ),
               ),

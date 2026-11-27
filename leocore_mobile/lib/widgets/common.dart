@@ -596,3 +596,53 @@ class BarTrack extends StatelessWidget {
     );
   }
 }
+
+/// Item code, supplier code and barcode on ONE line under an item name, each
+/// in its own colour and without labels. A value repeating one already shown
+/// is left out; a line too long for the row shrinks to fit instead of
+/// wrapping or being cut off.
+class ItemCodes extends StatelessWidget {
+  final String code;
+  final String supplierCode;
+  final String barcode;
+  final double size;
+  const ItemCodes({super.key, required this.code, this.supplierCode = '', this.barcode = '', this.size = 11.5});
+
+  /// Item code / supplier code / barcode colours (light, dark).
+  static Color codeColour(LcColors lc) => lc.tprim;
+  static Color supplierColour(Brightness b) => b == Brightness.dark ? const Color(0xFFE0A94F) : const Color(0xFFA05A00);
+  static Color barcodeColour(Brightness b) => b == Brightness.dark ? const Color(0xFF7FB2DB) : const Color(0xFF2F6690);
+
+  @override
+  Widget build(BuildContext context) {
+    final lc = context.lc;
+    final b = Theme.of(context).brightness;
+    final parts = <(String, Color)>[];
+    final seen = <String>{};
+    void add(String v, Color c) {
+      final t = v.trim();
+      if (t.isEmpty || !seen.add(t.toLowerCase())) return;
+      parts.add((t, c));
+    }
+
+    add(code, codeColour(lc));
+    add(supplierCode, supplierColour(b));
+    add(barcode, barcodeColour(b));
+    if (parts.isEmpty) return const SizedBox.shrink();
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: AlignmentDirectional.centerStart,
+      child: Text.rich(
+        TextSpan(children: [
+          for (var i = 0; i < parts.length; i++) ...[
+            if (i > 0) TextSpan(text: '  ·  ', style: TextStyle(color: lc.line)),
+            TextSpan(text: parts[i].$1, style: TextStyle(color: parts[i].$2)),
+          ],
+        ]),
+        maxLines: 1,
+        softWrap: false,
+        style: TextStyle(fontSize: size, fontWeight: FontWeight.w600, fontFeatures: const [FontFeature.tabularFigures()]),
+      ),
+    );
+  }
+}

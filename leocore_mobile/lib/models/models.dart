@@ -36,6 +36,9 @@ class Product {
   final int stock;
   final String barcode;
 
+  /// The supplier's own code for this item (Item Master > Supplier Code).
+  final String supplierCode;
+
   /// (warehouse name, quantity) pairs.
   final List<(String, int)> wh;
 
@@ -55,6 +58,7 @@ class Product {
     required this.barcode,
     required this.wh,
     this.images = const [],
+    this.supplierCode = '',
   });
 
   Product copyWith({int? stock, List<(String, int)>? wh, List<ProductImage>? images}) => Product(
@@ -70,6 +74,7 @@ class Product {
         barcode: barcode,
         wh: wh ?? this.wh,
         images: images ?? this.images,
+        supplierCode: supplierCode,
       );
 }
 

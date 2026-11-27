@@ -116,7 +116,6 @@ class _PickRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final lc = context.lc;
     final p = product;
-    final meta = [p.code, p.brand, p.cat].where((s) => s.isNotEmpty).join(' · ');
     return LcCard(
       onTap: onAdd,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -129,8 +128,7 @@ class _PickRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(p.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                if (meta.isNotEmpty)
-                  Text(meta, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11.5, color: lc.mut)),
+                ItemCodes(code: p.code, supplierCode: p.supplierCode, barcode: p.barcode),
                 const SizedBox(height: 4),
                 Row(children: [
                   Text(Money.fmt(p.price), style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
