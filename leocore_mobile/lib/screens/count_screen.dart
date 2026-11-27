@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../state/app_state.dart';
@@ -7,89 +8,204 @@ import '../api/repositories.dart';
 import '../widgets/common.dart';
 import '../widgets/paged_list_view.dart';
 
+/// Stock count: the list of UNPROCESSED count sheets on the server, and the open sheet. Sheets are saved to the ERP
+/// unprocessed; the web app processes them (adjusts stock). Processed sheets are not shown here.
 class CountScreen extends StatelessWidget {
   const CountScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
-    final lc = context.lc;
-
-    return Stack(
-      children: [
-        Column(
-          children: [
-            ScreenHeader(
-              title: context.tr('Stock count'),
-              subtitle: app.countWarehouseName,
-              onBack: () => app.nav(Screen.home),
-              actions: [
-                if (app.countStarted)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 4),
-                    decoration: BoxDecoration(color: lc.okbg, borderRadius: BorderRadius.circular(99)),
-                    child: Text('● ${context.tr('Counting')}', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: lc.ok)),
-                  ),
-              ],
-            ),
-            if (!app.countStarted)
-              Expanded(child: _StartPane(onStart: app.startCount))
-            else
-              Expanded(child: _CountList()),
-          ],
-        ),
-        if (app.countStarted)
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: Container(
-              padding: EdgeInsets.fromLTRB(16, 12, 16, 16 + MediaQuery.paddingOf(context).bottom),
-              decoration: BoxDecoration(color: lc.card, border: Border(top: BorderSide(color: lc.line))),
-              child: Row(
-                children: [
-                  IconChip(Icons.qr_code_scanner, size: 52, fg: lc.gold, border: Border.all(color: lc.gold, width: 1.5), onTap: app.openScan),
-                  const SizedBox(width: 10),
-                  Expanded(child: PrimaryButton('${context.tr('Submit count')} (${app.countedLines})', onTap: app.mCountSubmit ? app.submitCount : null, busy: app.submittingCount)),
-                ],
-              ),
-            ),
-          ),
-        if (app.countSubmitted) _CountDoneDialog(),
-      ],
-    );
+    return app.countStarted ? const _SheetView() : const _SheetList();
   }
 }
 
-class _StartPane extends StatelessWidget {
-  final VoidCallback onStart;
-  const _StartPane({required this.onStart});
+// ── List of unprocessed sheets ─────────────────────────────────────────
+class _SheetList extends StatelessWidget {
+  const _SheetList();
+
   @override
   Widget build(BuildContext context) {
+    final app = context.watch<AppState>();
     final lc = context.lc;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 36),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
+    if (app.countSheets == null && !app.countSheetsLoading && app.countSheetsError == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => app.loadCountSheets());
+    }
+    final sheets = app.countSheets ?? const <CountSheet>[];
+
+    Widget body;
+    if (app.countSheetsLoading && app.countSheets == null) {
+      body = const Center(child: CircularProgressIndicator());
+    } else if (app.countSheetsError != null && app.countSheets == null) {
+      body = Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text(app.countSheetsError!, textAlign: TextAlign.center, style: TextStyle(color: lc.mut)),
+            const SizedBox(height: 12),
+            IntrinsicWidth(child: OutlineButton2(context.tr('Retry'), height: 44, onTap: app.loadCountSheets)),
+          ]),
+        ),
+      );
+    } else if (sheets.isEmpty) {
+      body = RefreshIndicator(
+        onRefresh: app.loadCountSheets,
+        child: ListView(padding: const EdgeInsets.symmetric(horizontal: 36), children: [
+          const SizedBox(height: 70),
+          Center(
+            child: Container(
               width: 84,
               height: 84,
               alignment: Alignment.center,
               decoration: BoxDecoration(color: lc.goldbg, borderRadius: BorderRadius.circular(24), border: Border.all(color: lc.gold)),
               child: Icon(Icons.checklist_rounded, size: 38, color: lc.icon),
             ),
-            const SizedBox(height: 16),
-            Text(context.tr('Start a count session'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 16),
-            Text(context.tr('Scan items with the barcode button — expected quantities load from the selected warehouse and variances are highlighted as you go.'),
-                textAlign: TextAlign.center, style: TextStyle(fontSize: 13.5, height: 1.55, color: lc.mut)),
-            const SizedBox(height: 16),
-            IntrinsicWidth(child: PrimaryButton(context.tr('Start session'), onTap: onStart)),
+          ),
+          const SizedBox(height: 16),
+          Text(context.tr('No open count sheets'), textAlign: TextAlign.center, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 12),
+          Text(
+            context.tr('Start a count sheet for a date and warehouse, scan or search items and enter what you count. Saved sheets wait in the ERP until they are processed from the web app.'),
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13.5, height: 1.55, color: lc.mut),
+          ),
+        ]),
+      );
+    } else {
+      body = RefreshIndicator(
+        onRefresh: app.loadCountSheets,
+        child: ListView.separated(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
+          itemCount: sheets.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 8),
+          itemBuilder: (_, i) => _SheetCard(sheets[i]),
+        ),
+      );
+    }
+
+    return Stack(children: [
+      Column(children: [
+        ScreenHeader(
+          title: context.tr('Stock count'),
+          subtitle: context.tr('Unprocessed count sheets'),
+          onBack: () => app.nav(Screen.home),
+          actions: [if (app.countSheetsLoading && app.countSheets != null) const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))],
+        ),
+        Expanded(child: body),
+      ]),
+      if (app.mCountSubmit)
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: Container(
+            padding: EdgeInsets.fromLTRB(16, 12, 16, 16 + MediaQuery.paddingOf(context).bottom),
+            decoration: BoxDecoration(color: lc.card, border: Border(top: BorderSide(color: lc.line))),
+            child: PrimaryButton(context.tr('New count sheet'), icon: Icons.add, onTap: () => app.newCountSheet()),
+          ),
+        ),
+    ]);
+  }
+}
+
+class _SheetCard extends StatelessWidget {
+  final CountSheet s;
+  const _SheetCard(this.s);
+
+  @override
+  Widget build(BuildContext context) {
+    final app = context.read<AppState>();
+    final lc = context.lc;
+    final where = [s.branchName, s.warehouseName].where((x) => x.isNotEmpty).join(' · ');
+    return LcCard(
+      onTap: () => app.openCountSheet(s),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Expanded(child: Text(s.number, style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700))),
+          s.failed
+              ? Pill(context.tr('Post failed'), bg: lc.badbg, fg: lc.bad, size: 11)
+              : Pill(context.tr('Unprocessed'), bg: lc.warnbg, fg: lc.warn, size: 11),
+        ]),
+        const SizedBox(height: 4),
+        Text('${DateFormat('dd MMM yyyy').format(s.date)}${where.isEmpty ? '' : ' · $where'}', style: TextStyle(fontSize: 12.5, color: lc.mut)),
+        const SizedBox(height: 2),
+        Text(
+          [
+            '${s.lines} ${context.tr('items counted')}',
+            if (s.createdBy.isNotEmpty) '${context.tr('by')} ${s.createdBy}',
+            if (s.updatedAt != null) '${context.tr('updated')} ${DateFormat('dd MMM HH:mm').format(s.updatedAt!)}',
+          ].join(' · '),
+          style: TextStyle(fontSize: 11.5, color: lc.mut),
+        ),
+        if (s.notes.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 4), child: Text(s.notes, style: const TextStyle(fontSize: 12.5))),
+        if (s.failed && s.message.isNotEmpty)
+          Padding(padding: const EdgeInsets.only(top: 4), child: Text(s.message, style: TextStyle(fontSize: 11.5, color: lc.bad))),
+      ]),
+    );
+  }
+}
+
+// ── The open sheet ─────────────────────────────────────────────────────
+class _SheetView extends StatelessWidget {
+  const _SheetView();
+
+  @override
+  Widget build(BuildContext context) {
+    final app = context.watch<AppState>();
+    final lc = context.lc;
+    final s = app.countSheet!;
+    return Stack(
+      children: [
+        Column(
+          children: [
+            ScreenHeader(
+              title: s.id == 0 ? context.tr('New count sheet') : s.number,
+              subtitle: '${DateFormat('dd MMM yyyy').format(s.date)} · ${app.countWarehouseName}',
+              onBack: app.closeCountSheet,
+              actions: [
+                if (app.countDirty)
+                  Pill(context.tr('Unsaved'), bg: lc.warnbg, fg: lc.warn, size: 11)
+                else if (s.id > 0)
+                  Pill(context.tr('Saved'), bg: lc.okbg, fg: lc.ok, size: 11),
+                if (app.mCountSubmit)
+                  PopupMenuButton<String>(
+                    icon: const Icon(Icons.more_vert),
+                    onSelected: (v) => v == 'edit' ? app.newCountSheet(edit: true) : app.deleteCountSheet(),
+                    itemBuilder: (_) => [
+                      PopupMenuItem(value: 'edit', child: Text(context.tr('Date & notes'))),
+                      PopupMenuItem(value: 'delete', child: Text(context.tr('Delete sheet'), style: TextStyle(color: lc.bad))),
+                    ],
+                  ),
+              ],
+            ),
+            Expanded(child: _CountList()),
           ],
         ),
-      ),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: Container(
+            padding: EdgeInsets.fromLTRB(16, 12, 16, 16 + MediaQuery.paddingOf(context).bottom),
+            decoration: BoxDecoration(color: lc.card, border: Border(top: BorderSide(color: lc.line))),
+            child: Row(
+              children: [
+                IconChip(Icons.qr_code_scanner, size: 52, fg: lc.gold, border: Border.all(color: lc.gold, width: 1.5), onTap: app.openScan),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: PrimaryButton(
+                    '${context.tr('Save')} (${app.countedLines})',
+                    icon: Icons.cloud_upload_outlined,
+                    onTap: app.mCountSubmit && (app.countDirty || s.id == 0) ? app.saveCountSheet : null,
+                    busy: app.submittingCount,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -113,7 +229,7 @@ class _CountListState extends State<_CountList> {
     final app = context.watch<AppState>();
     final lc = context.lc;
     final list = app.countList;
-    list.ensureLoaded();
+    if (!app.countOnlyCounted) list.ensureLoaded();
     // A scan can set the search (to show the scanned item).
     if (_search.text != app.countQuery) {
       _search.value = TextEditingValue(text: app.countQuery, selection: TextSelection.collapsed(offset: app.countQuery.length));
@@ -134,6 +250,7 @@ class _CountListState extends State<_CountList> {
           ),
         );
 
+    final counted = app.countedRows;
     return Column(
       children: [
         Padding(
@@ -146,15 +263,33 @@ class _CountListState extends State<_CountList> {
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          child: SearchField(hint: context.tr('Search name, code or barcode'), controller: _search, onChanged: app.setCountQuery),
-        ),
-        Expanded(
-          child: PagedListView<CountSheetRow>(
-            list: list,
-            padding: const EdgeInsets.fromLTRB(16, 2, 16, 130),
-            emptyText: 'No matching items',
-            itemBuilder: (_, r) => _CountRow(r),
+          child: Segmented(
+            options: [context.tr('All items'), '${context.tr('Counted')} (${app.countedLines})'],
+            selected: app.countOnlyCounted ? 1 : 0,
+            onSelect: (i) => app.setCountOnlyCounted(i == 1),
           ),
+        ),
+        if (!app.countOnlyCounted)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: SearchField(hint: context.tr('Search name, code or barcode'), controller: _search, onChanged: app.setCountQuery),
+          ),
+        Expanded(
+          child: app.countOnlyCounted
+              ? (counted.isEmpty
+                  ? Center(child: Text(context.tr('Nothing counted on this sheet yet'), style: TextStyle(color: lc.mut)))
+                  : ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(16, 2, 16, 130),
+                      itemCount: counted.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      itemBuilder: (_, i) => _CountRow(counted[i]),
+                    ))
+              : PagedListView<CountSheetRow>(
+                  list: list,
+                  padding: const EdgeInsets.fromLTRB(16, 2, 16, 130),
+                  emptyText: 'No matching items',
+                  itemBuilder: (_, r) => _CountRow(r),
+                ),
         ),
       ],
     );
@@ -169,10 +304,11 @@ class _CountRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
     final lc = context.lc;
-    final exp = r.expected;
+    final exp = app.countExpected(r.itemId);
     final cnt = app.countValue(r.itemId);
     final v = cnt == null ? 0 : cnt - exp;
     final ok = v == 0;
+    final meta = app.countMeta[r.itemId];
     return LcCard(
       padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
       child: Column(
@@ -207,7 +343,7 @@ class _CountRow extends StatelessWidget {
               _StepBtn('−', border: lc.line, fg: lc.mut, onTap: () => app.decCount(r.itemId)),
               const SizedBox(width: 10),
               GestureDetector(
-                onTap: () => _typeQty(context, app),
+                onTap: () => _typeQty(context, app, exp),
                 child: Container(
                   width: 64,
                   height: 44,
@@ -224,13 +360,21 @@ class _CountRow extends StatelessWidget {
               _StepBtn('+', border: lc.prim, fg: lc.tprim, onTap: () => app.incCount(r.itemId)),
             ],
           ),
+          if (cnt != null && meta != null && meta.by.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                '${context.tr('Counted by')} ${meta.by}${meta.at != null ? ' · ${DateFormat('dd MMM HH:mm').format(meta.at!)}' : ''}',
+                style: TextStyle(fontSize: 11, color: lc.mut),
+              ),
+            ),
         ],
       ),
     );
   }
 
-  /// Type the counted quantity; "Not counted" leaves the item out of the count.
-  Future<void> _typeQty(BuildContext context, AppState app) async {
+  /// Type the counted quantity; "Not counted" takes the item off the sheet.
+  Future<void> _typeQty(BuildContext context, AppState app, int exp) async {
     final cur = app.countValue(r.itemId);
     final c = TextEditingController(text: cur?.toString() ?? '');
     final res = await showDialog<({int? qty})>(
@@ -241,7 +385,7 @@ class _CountRow extends StatelessWidget {
           controller: c,
           autofocus: true,
           keyboardType: TextInputType.number,
-          decoration: InputDecoration(labelText: context.tr('Counted quantity'), helperText: '${context.tr('Expected')}: ${r.expected}'),
+          decoration: InputDecoration(labelText: context.tr('Counted quantity'), helperText: '${context.tr('Expected')}: $exp'),
           onSubmitted: (v) => Navigator.pop(dctx, (qty: int.tryParse(v.trim()))),
         ),
         actions: [
@@ -277,49 +421,6 @@ class _StepBtn extends StatelessWidget {
         alignment: Alignment.center,
         decoration: BoxDecoration(borderRadius: BorderRadius.circular(11), border: Border.all(color: border, width: 1.5)),
         child: Text(label, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: fg)),
-      ),
-    );
-  }
-}
-
-class _CountDoneDialog extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final app = context.read<AppState>();
-    final lc = context.lc;
-    return Positioned.fill(
-      child: Container(
-        color: Colors.black.withValues(alpha: 0.45),
-        alignment: Alignment.center,
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 24),
-          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 26),
-          decoration: BoxDecoration(color: lc.card, borderRadius: BorderRadius.circular(18)),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 58,
-                height: 58,
-                decoration: BoxDecoration(color: lc.okbg, shape: BoxShape.circle),
-                child: Icon(Icons.check, size: 28, color: lc.ok),
-              ),
-              const SizedBox(height: 12),
-              Text(context.tr('Count submitted'), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 8),
-              Text(
-                  [
-                    if (app.countDocNumber != null && app.countDocNumber!.isNotEmpty) app.countDocNumber!,
-                    '${app.countedLines} ${context.tr('items counted')}',
-                    '${app.demoMode ? app.countVar : app.countAdjusted} ${context.tr('stock adjusted')}',
-                  ].join(' · '),
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 13, height: 1.5, color: lc.mut)),
-              const SizedBox(height: 16),
-              IntrinsicWidth(child: PrimaryButton(context.tr('Done'), height: 46, onTap: app.closeCountDone)),
-            ],
-          ),
-        ),
       ),
     );
   }

@@ -222,7 +222,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   bool reportsLoading = false;
   /// Real last-7-days sales trend for the Home chart (live mode).
   List<({String label, double total})>? homeTrend;
-  List<({int id, String code, String name})> _warehouses = [];
+  List<WarehouseOpt> _warehouses = [];
   int warehouseId = 0;
 
   // ── appearance & role ──────────────────────────────────────────────
@@ -269,18 +269,29 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   // ── scan ───────────────────────────────────────────────────────────
   bool scanFound = false;
 
-  // ── stock count (demo-only; no server endpoint yet) ────────────────
-  bool countStarted = false;
-  bool countSubmitted = false;
-  /// Counted quantity per item — only items the user actually counted. An
-  /// item that isn't here is left alone on submit (never zeroed).
+  // ── stock count sheets ──────────────────────────────────────────────
+  // Sheets live on the server UNPROCESSED (Draft / Failed); the phone lists, opens, edits and deletes them, and only
+  // the web app processes (posts) a sheet. Processed sheets never show here.
+  List<CountSheet>? countSheets; // null = not loaded yet
+  bool countSheetsLoading = false;
+  String? countSheetsError;
+
+  /// The open sheet; null = the list of sheets is shown. id 0 = new, saved on the server at the first Save.
+  CountSheet? countSheet;
+  bool get countStarted => countSheet != null;
+  bool countDirty = false;
+  bool countOnlyCounted = false;
+
+  /// Counted quantity per item on the open sheet (only items actually counted).
   Map<int, int> counts = {};
+  final Map<int, String> _countNotes = {};
+
+  /// Who counted each saved line and when (from the server).
+  final Map<int, ({String by, DateTime? at})> countMeta = {};
   final Map<int, CountSheetRow> _countRows = {};
   int _countWarehouse = 0;
   String countQuery = '';
   bool submittingCount = false;
-  String? countDocNumber;
-  int countAdjusted = 0;
   String? _countIdemKey;
 
   // ── low / dead stock ───────────────────────────────────────────────
@@ -462,7 +473,8 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       r = await _repo.stockCountSheet(warehouseId: _countWarehouse, search: q, page: page, pageSize: size);
     }
     for (final row in r.items) {
-      _countRows[row.itemId] = row;
+      // A line already on the sheet keeps the system quantity recorded when it was counted.
+      _countRows.putIfAbsent(row.itemId, () => row);
     }
     return r;
   }, onChanged: notifyListeners, idOf: (x) => x.itemId);
@@ -538,7 +550,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   List<Customer> get suppliers => _suppliers ?? const [];
 
   /// Warehouses for the company/warehouse switcher.
-  List<({int id, String code, String name})> get warehouseOptions => _warehouses;
+  List<WarehouseOpt> get warehouseOptions => _warehouses;
 
   /// Company/workspace label for the header + switcher.
   String get companyLabel {
@@ -594,10 +606,22 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   int get countVar => counts.entries.where((e) => e.value != countExpected(e.key)).length;
   String get countWarehouseName {
     if (demoMode) return 'Main WH · Tubli';
+    final s = countSheet;
+    if (s != null && s.warehouseName.isNotEmpty) return s.branchName.isEmpty ? s.warehouseName : '${s.branchName} · ${s.warehouseName}';
     for (final w in _warehouses) {
-      if (w.id == _countWarehouse) return w.name;
+      if (w.id == _countWarehouse) return w.branch.isEmpty ? w.name : '${w.branch} · ${w.name}';
     }
     return wh;
+  }
+
+  /// The counted lines of the open sheet (for the "Counted" view), item name order.
+  List<CountSheetRow> get countedRows {
+    final rows = [
+      for (final id in counts.keys)
+        _countRows[id] ?? CountSheetRow(itemId: id, code: '', name: productById(id).name, barcode: '', expected: 0),
+    ];
+    rows.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    return rows;
   }
 
   /// Unit price of a line: the user's manual price, else the list price.
@@ -880,8 +904,8 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
         mDashboard ? _repo.kpis().catchError((_) => const KpiData()) : Future.value(const KpiData()),
         needItems ? _repo.categories().catchError((_) => <({int id, String name})>[]) : Future.value(<({int id, String name})>[]),
         needWarehouses
-            ? _repo.warehouses().catchError((_) => <({int id, String code, String name})>[])
-            : Future.value(<({int id, String code, String name})>[]),
+            ? _repo.warehouses().catchError((_) => <WarehouseOpt>[])
+            : Future.value(<WarehouseOpt>[]),
       ]);
       _products = results[0] as List<Product>;
       _customers = results[1] as List<Customer>;
@@ -889,7 +913,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       final cats = results[3] as List<({int id, String name})>;
       _liveCategories = [for (final c in cats) c.name];
       _categoryIds = {for (final c in cats) c.name: c.id};
-      _warehouses = results[4] as List<({int id, String code, String name})>;
+      _warehouses = results[4] as List<WarehouseOpt>;
       if (_warehouses.isNotEmpty) {
         warehouseId = _warehouses.first.id;
         wh = _warehouses.first.name;
@@ -970,10 +994,6 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       }
       return true;
     }
-    if (countSubmitted) {
-      closeCountDone();
-      return true;
-    }
 
     // 2) Screen-level back navigation.
     switch (screen) {
@@ -1010,13 +1030,20 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       case Screen.more:
       case Screen.suppliers:
       case Screen.statementPicker:
-      case Screen.count:
       case Screen.low:
       case Screen.reports:
         nav(Screen.home);
         return true;
       case Screen.scan:
         closeScan();
+        return true;
+      case Screen.count:
+        // An open sheet goes back to the list of sheets; the list goes Home.
+        if (countStarted) {
+          closeCountSheet();
+        } else {
+          nav(Screen.home);
+        }
         return true;
     }
   }
@@ -2085,22 +2112,26 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     nav(Screen.invoice);
   }
 
-  /// Scanned during a count: +1 for that item, and show it in the list (its
-  /// expected quantity comes with the row).
+  /// Scanned during a count: +1 for that item on the open sheet, and show it in the list (its expected quantity
+  /// comes with the row). With no sheet open, the Stock Count page opens so one can be started or picked.
   void countScanned() {
     final p = scanned;
-    countSubmitted = false;
     scanFound = false;
     if (p != null && countStarted) {
       counts[p.id] = (counts[p.id] ?? 0) + 1;
+      countDirty = true;
       _countIdemKey = null;
       if (!_countRows.containsKey(p.id)) {
         countQuery = p.code.isNotEmpty ? p.code : p.name;
+        countOnlyCounted = false;
         countList.search = countQuery;
         countList.refresh();
       }
+      nav(Screen.count);
+      return;
     }
-    nav(Screen.count);
+    goCount();
+    showToast(t('Open or start a count sheet first'));
   }
 
   // stock alerts (low / dead)
@@ -2129,30 +2160,185 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
 
   // stock count
   void goCount() {
-    countSubmitted = false;
     nav(Screen.count);
+    if (!countStarted) loadCountSheets();
   }
 
-  void startCount() {
+  Future<void> loadCountSheets() async {
+    if (demoMode) {
+      countSheets ??= [];
+      notifyListeners();
+      return;
+    }
+    countSheetsLoading = true;
+    countSheetsError = null;
+    notifyListeners();
+    try {
+      countSheets = await _repo.stockCounts();
+    } on ApiException catch (e) {
+      countSheetsError = e.message;
+    } catch (_) {
+      countSheetsError = t('Could not load the count sheets');
+    } finally {
+      countSheetsLoading = false;
+      notifyListeners();
+    }
+  }
+
+  String _whName(int id) => [for (final w in _warehouses) if (w.id == id) w.name].firstOrNull ?? wh;
+  String _whBranch(int id) => [for (final w in _warehouses) if (w.id == id) w.branch].firstOrNull ?? '';
+
+  void _resetCountLines() {
+    _countRows.clear();
+    _countNotes.clear();
+    countMeta.clear();
+    countQuery = '';
+    countOnlyCounted = false;
+    _countIdemKey = null;
+    countList.reset();
+  }
+
+  /// Start a new sheet for [date] in warehouse [whId] (default: today, the current warehouse). It is created on the
+  /// server at the first Save.
+  void startCount({DateTime? date, int? whId, String notes = ''}) {
+    var w = whId ?? 0;
     if (!demoMode) {
-      final w = warehouseId > 0 ? warehouseId : (_warehouses.isNotEmpty ? _warehouses.first.id : 0);
+      if (w <= 0) w = warehouseId > 0 ? warehouseId : (_warehouses.isNotEmpty ? _warehouses.first.id : 0);
       if (w <= 0) {
         showToast(t('Select a warehouse first'));
         return;
       }
-      _countWarehouse = w;
     }
+    _countWarehouse = w;
+    final d = date ?? DateTime.now();
+    countSheet = CountSheet(
+      id: 0,
+      number: '',
+      date: DateTime(d.year, d.month, d.day),
+      warehouseId: w,
+      warehouseName: demoMode ? '' : _whName(w),
+      branchName: demoMode ? '' : _whBranch(w),
+      notes: notes,
+    );
+    _resetCountLines();
     counts = demoMode ? {1: 118, 3: 96, 5: 19, 6: 8} : {};
-    _countRows.clear();
-    countQuery = '';
-    countDocNumber = null;
-    countAdjusted = 0;
-    _countIdemKey = null;
-    countList.reset();
-    countStarted = true;
-    countSubmitted = false;
+    countDirty = demoMode;
     notifyListeners();
     countList.ensureLoaded();
+  }
+
+  /// Ask for the date, branch / warehouse and a note, then start the sheet. With [edit], change the open sheet's
+  /// date and note instead (its warehouse is fixed once created).
+  Future<void> newCountSheet({bool edit = false}) async {
+    final ctx = navigatorKey.currentContext;
+    if (ctx == null) return;
+    final cur = countSheet;
+    var date = edit && cur != null ? cur.date : DateTime.now();
+    var w = edit && cur != null ? cur.warehouseId : (warehouseId > 0 ? warehouseId : (_warehouses.isNotEmpty ? _warehouses.first.id : 0));
+    final notes = TextEditingController(text: edit && cur != null ? cur.notes : '');
+    final ok = await showDialog<bool>(
+      context: ctx,
+      builder: (dctx) => StatefulBuilder(
+        builder: (dctx, setS) => AlertDialog(
+          title: Text(t(edit ? 'Count sheet details' : 'New count sheet'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(t('Count date'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 4),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.event, size: 18),
+                label: Text(DateFormat('dd MMM yyyy').format(date)),
+                onPressed: () async {
+                  final picked = await showDatePicker(
+                    context: dctx,
+                    initialDate: date,
+                    firstDate: DateTime(2000),
+                    lastDate: DateTime.now().add(const Duration(days: 366)),
+                  );
+                  if (picked != null) setS(() => date = picked);
+                },
+              ),
+              const SizedBox(height: 12),
+              Text(t('Branch / warehouse'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+              if (demoMode)
+                const Padding(padding: EdgeInsets.only(top: 6), child: Text('Main HQ · Main WH'))
+              else if (edit)
+                Padding(padding: const EdgeInsets.only(top: 6), child: Text(countWarehouseName))
+              else
+                DropdownButton<int>(
+                  isExpanded: true,
+                  value: _warehouses.any((x) => x.id == w) ? w : null,
+                  hint: Text(t('Select a warehouse')),
+                  items: [
+                    for (final x in _warehouses)
+                      DropdownMenuItem(
+                        value: x.id,
+                        child: Text(x.branch.isEmpty ? x.name : '${x.branch} · ${x.name}', overflow: TextOverflow.ellipsis),
+                      ),
+                  ],
+                  onChanged: (v) => setS(() => w = v ?? w),
+                ),
+              const SizedBox(height: 8),
+              TextField(controller: notes, decoration: InputDecoration(labelText: t('Notes (optional)')), maxLines: 2, minLines: 1),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dctx, false), child: Text(t('Cancel'))),
+            TextButton(
+              onPressed: () => Navigator.pop(dctx, true),
+              child: Text(t(edit ? 'OK' : 'Start counting'), style: const TextStyle(fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
+      ),
+    );
+    final note = notes.text.trim();
+    notes.dispose();
+    if (ok != true) return;
+    if (edit && cur != null) {
+      countSheet = cur.copyWith(date: date, notes: note);
+      countDirty = true;
+      notifyListeners();
+    } else {
+      startCount(date: date, whId: w, notes: note);
+    }
+  }
+
+  /// Open an unprocessed sheet from the server with its counted lines.
+  Future<void> openCountSheet(CountSheet sheet) async {
+    if (demoMode || countSheetsLoading) return;
+    countSheetsLoading = true;
+    notifyListeners();
+    try {
+      final r = await _repo.stockCount(sheet.id);
+      _resetCountLines();
+      countSheet = r.sheet;
+      _countWarehouse = r.sheet.warehouseId;
+      counts = {for (final l in r.lines) l.row.itemId: l.counted};
+      for (final l in r.lines) {
+        _countRows[l.row.itemId] = l.row;
+        if (l.notes.isNotEmpty) _countNotes[l.row.itemId] = l.notes;
+        countMeta[l.row.itemId] = (by: l.countedBy, at: l.countedAt);
+      }
+      countDirty = false;
+      countOnlyCounted = r.lines.isNotEmpty;
+      countList.ensureLoaded();
+    } on ApiException catch (e) {
+      showToast(e.message);
+      if (e.status == 404) loadCountSheets();
+    } catch (_) {
+      showToast(t('Could not open the count sheet'));
+    } finally {
+      countSheetsLoading = false;
+      notifyListeners();
+    }
+  }
+
+  void setCountOnlyCounted(bool v) {
+    countOnlyCounted = v;
+    notifyListeners();
   }
 
   void setCountQuery(String v) {
@@ -2162,6 +2348,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
 
   void incCount(int id) {
     counts[id] = (counts[id] ?? 0) + 1;
+    countDirty = true;
     _countIdemKey = null;
     notifyListeners();
   }
@@ -2170,86 +2357,141 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     final v = counts[id];
     if (v == null) return;
     counts[id] = v > 0 ? v - 1 : 0;
+    countDirty = true;
     _countIdemKey = null;
     notifyListeners();
   }
 
-  /// Typed quantity; null clears the item (it won't be submitted).
+  /// Typed quantity; null takes the item off the sheet.
   void setCount(int id, int? qty) {
     if (qty == null) {
       counts.remove(id);
+      _countNotes.remove(id);
     } else {
       counts[id] = qty < 0 ? 0 : qty;
     }
+    countDirty = true;
     _countIdemKey = null;
     notifyListeners();
   }
 
-  /// Posts the count to the ERP. Only counted items are sent; the server
-  /// adjusts stock in the count's warehouse for every difference.
-  Future<void> submitCount() async {
-    if (submittingCount) return;
-    if (counts.isEmpty) {
+  /// Save the open sheet to the server UNPROCESSED (new sheets are created; otherwise its lines become exactly
+  /// what is counted here). The web app processes it.
+  Future<void> saveCountSheet() async {
+    final sheet = countSheet;
+    if (sheet == null || submittingCount) return;
+    if (sheet.id == 0 && counts.isEmpty) {
       showToast(t('Count at least one item first'));
       return;
     }
-    final ctx = navigatorKey.currentContext;
-    if (ctx == null) return;
-    final ok = await showDialog<bool>(
-      context: ctx,
-      builder: (dctx) => AlertDialog(
-        title: Text(t('Submit stock count?'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-        content: Text(
-          '${t('Items counted')}: $countedLines\n'
-          '${t('With a difference')}: $countVar\n'
-          '${t('Warehouse')}: $countWarehouseName\n\n'
-          '${t('Stock is adjusted in the ERP for every difference. Items you did not count are left unchanged.')}',
-          style: const TextStyle(fontSize: 13.5, height: 1.5),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dctx, false), child: Text(t('Cancel'))),
-          TextButton(
-            onPressed: () => Navigator.pop(dctx, true),
-            child: Text(t('Submit'), style: const TextStyle(fontWeight: FontWeight.w700)),
-          ),
-        ],
-      ),
-    );
-    if (ok != true) return;
     if (demoMode) {
-      countSubmitted = true;
+      countDirty = false;
+      showToast(t('Count sheet saved'));
       notifyListeners();
       return;
     }
     submittingCount = true;
     notifyListeners();
-    // Same key on retry, so a timeout can't post the count twice.
-    _countIdemKey ??= _newIdemKey();
+    // Same key on retry, so a timeout can't create the sheet twice.
+    if (sheet.id == 0) _countIdemKey ??= _newIdemKey();
     try {
-      final r = await _repo.submitStockCount(
-        warehouseId: _countWarehouse,
-        lines: [for (final e in counts.entries) (itemId: e.key, countedQty: e.value)],
-        idempotencyKey: _countIdemKey!,
+      final r = await _repo.saveStockCount(
+        id: sheet.id,
+        warehouseId: sheet.warehouseId,
+        date: sheet.date,
+        notes: sheet.notes.isEmpty ? null : sheet.notes,
+        lines: [for (final e in counts.entries) (itemId: e.key, countedQty: e.value, notes: _countNotes[e.key] ?? '')],
+        idempotencyKey: sheet.id == 0 ? _countIdemKey : null,
       );
-      countDocNumber = r.number;
-      countAdjusted = r.adjustedLines;
-      countSubmitted = true;
+      countSheet = sheet.copyWith(id: r.id, number: r.number, status: r.status, lines: r.lines);
+      countDirty = false;
       _countIdemKey = null;
+      countSheets = null; // the list changed
+      showToast('${r.number} ${t('saved. It is processed from the web app.')}');
+      _refreshCountMeta(r.id);
     } on ApiException catch (e) {
       showToast(e.message);
     } catch (_) {
-      showToast(t('Could not submit the count'));
+      showToast(t('Could not save the count sheet'));
     } finally {
       submittingCount = false;
       notifyListeners();
     }
   }
 
-  void closeCountDone() {
-    countStarted = false;
-    countSubmitted = false;
+  /// Who counted each line and when, as the server recorded it.
+  Future<void> _refreshCountMeta(int id) async {
+    try {
+      final r = await _repo.stockCount(id);
+      for (final l in r.lines) {
+        countMeta[l.row.itemId] = (by: l.countedBy, at: l.countedAt);
+        _countRows.putIfAbsent(l.row.itemId, () => l.row);
+      }
+      notifyListeners();
+    } catch (_) {/* the save itself succeeded */}
+  }
+
+  /// Back from an open sheet to the list of sheets; unsaved counts need a confirmation.
+  Future<void> closeCountSheet() async {
+    if (countDirty && counts.isNotEmpty) {
+      final ctx = navigatorKey.currentContext;
+      if (ctx == null) return;
+      final leave = await showDialog<bool>(
+        context: ctx,
+        builder: (dctx) => AlertDialog(
+          title: Text(t('Discard unsaved counts?'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          content: Text(t('Changes since the last Save will be lost.')),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dctx, false), child: Text(t('Keep counting'))),
+            TextButton(onPressed: () => Navigator.pop(dctx, true), child: Text(t('Discard'), style: const TextStyle(fontWeight: FontWeight.w700))),
+          ],
+        ),
+      );
+      if (leave != true) return;
+    }
+    countSheet = null;
     counts = {};
-    nav(Screen.home);
+    countDirty = false;
+    _resetCountLines();
+    notifyListeners();
+    loadCountSheets();
+  }
+
+  /// Delete the open (unprocessed) sheet.
+  Future<void> deleteCountSheet() async {
+    final sheet = countSheet;
+    final ctx = navigatorKey.currentContext;
+    if (sheet == null || ctx == null) return;
+    final ok = await showDialog<bool>(
+      context: ctx,
+      builder: (dctx) => AlertDialog(
+        title: Text(t('Delete this count sheet?'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+        content: Text('${sheet.number.isEmpty ? t('New count sheet') : sheet.number} · ${counts.length} ${t('items counted')}'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dctx, false), child: Text(t('Cancel'))),
+          TextButton(onPressed: () => Navigator.pop(dctx, true), child: Text(t('Delete'), style: const TextStyle(fontWeight: FontWeight.w700))),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    if (sheet.id > 0 && !demoMode) {
+      try {
+        await _repo.deleteStockCount(sheet.id);
+        showToast('${sheet.number} ${t('deleted')}');
+      } on ApiException catch (e) {
+        showToast(e.message);
+        if (e.status != 404 && e.status != 409) return;
+      } catch (_) {
+        showToast(t('Could not delete the count sheet'));
+        return;
+      }
+    }
+    countDirty = false;
+    countSheet = null;
+    counts = {};
+    _resetCountLines();
+    notifyListeners();
+    loadCountSheets();
   }
 
   // low / dead stock

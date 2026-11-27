@@ -264,6 +264,104 @@ class QuotationDetail {
   }
 }
 
+/// A warehouse the user can pick (branch = the branch it belongs to; '' on older servers).
+typedef WarehouseOpt = ({int id, String code, String name, String branch});
+
+/// An UNPROCESSED stock count sheet on the server (Draft, or a web post that Failed). The phone can open, edit and
+/// delete it; only the web app processes (posts) it. [id] 0 = a new sheet not saved yet.
+class CountSheet {
+  final int id;
+  final String number;
+  final DateTime date;
+  final int warehouseId;
+  final String warehouseName;
+  final String branchName;
+  final String notes;
+  final String status;
+  final String message;
+  final int lines;
+  final String createdBy;
+  final DateTime? updatedAt;
+  final String updatedBy;
+  const CountSheet({
+    required this.id,
+    required this.number,
+    required this.date,
+    required this.warehouseId,
+    this.warehouseName = '',
+    this.branchName = '',
+    this.notes = '',
+    this.status = 'Draft',
+    this.message = '',
+    this.lines = 0,
+    this.createdBy = '',
+    this.updatedAt,
+    this.updatedBy = '',
+  });
+
+  bool get failed => status == 'Failed';
+
+  CountSheet copyWith({int? id, String? number, DateTime? date, int? warehouseId, String? warehouseName, String? branchName, String? notes, String? status, int? lines}) =>
+      CountSheet(
+        id: id ?? this.id,
+        number: number ?? this.number,
+        date: date ?? this.date,
+        warehouseId: warehouseId ?? this.warehouseId,
+        warehouseName: warehouseName ?? this.warehouseName,
+        branchName: branchName ?? this.branchName,
+        notes: notes ?? this.notes,
+        status: status ?? this.status,
+        message: message,
+        lines: lines ?? this.lines,
+        createdBy: createdBy,
+        updatedAt: updatedAt,
+        updatedBy: updatedBy,
+      );
+
+  static DateTime? _dt(dynamic v) => v is String && v.isNotEmpty ? DateTime.tryParse(v)?.toLocal() : null;
+
+  factory CountSheet.fromJson(Map j) => CountSheet(
+        id: _i(j, ['id']),
+        number: _s(j, ['number']),
+        date: DateTime.tryParse(_s(j, ['date'])) ?? DateTime.now(),
+        warehouseId: _i(j, ['warehouseId']),
+        warehouseName: _s(j, ['warehouseName']),
+        branchName: _s(j, ['branchName']),
+        notes: _s(j, ['notes']),
+        status: _s(j, ['status'], 'Draft'),
+        message: _s(j, ['message']),
+        lines: j['lines'] is List ? (j['lines'] as List).length : _i(j, ['lines']),
+        createdBy: _s(j, ['createdBy']),
+        updatedAt: _dt(j['updatedAt']),
+        updatedBy: _s(j, ['updatedBy']),
+      );
+}
+
+/// A counted line of a [CountSheet]: who counted it and when (local time).
+class CountSheetLine {
+  final CountSheetRow row;
+  final int counted;
+  final String notes;
+  final String countedBy;
+  final DateTime? countedAt;
+  const CountSheetLine({required this.row, required this.counted, this.notes = '', this.countedBy = '', this.countedAt});
+
+  factory CountSheetLine.fromJson(Map m) => CountSheetLine(
+        row: CountSheetRow(
+          itemId: _i(m, ['itemId']),
+          code: _s(m, ['code']),
+          name: _s(m, ['name']),
+          barcode: _s(m, ['barcode']),
+          supplierCode: _s(m, ['supplierCode']),
+          expected: _i(m, ['systemQty']),
+        ),
+        counted: _i(m, ['countedQty']),
+        notes: _s(m, ['notes']),
+        countedBy: _s(m, ['countedBy']),
+        countedAt: CountSheet._dt(m['countedAt']),
+      );
+}
+
 /// A row of the stock-count sheet.
 class CountSheetRow {
   final int itemId;
@@ -650,23 +748,44 @@ class LeoRepository {
     );
   }
 
-  Future<({String number, int adjustedLines})> submitStockCount({
-    required int warehouseId,
-    String? notes,
-    required List<({int itemId, int countedQty})> lines,
-    required String idempotencyKey,
-  }) async {
-    final j = await _client.postJson(
-      '/inventory/stock-count',
-      idempotencyKey: idempotencyKey,
-      body: {
-        'warehouseId': warehouseId,
-        if (notes != null) 'notes': notes,
-        'lines': [for (final l in lines) {'itemId': l.itemId, 'countedQty': l.countedQty}],
-      },
-    );
-    return (number: _s(j, ['number', 'documentNumber']), adjustedLines: _i(j, ['adjustedLines']));
+  // ── Count sheets (unprocessed; processed only on the web) ───────────────
+  /// Every unprocessed count sheet, newest date first.
+  Future<List<CountSheet>> stockCounts() async {
+    final list = await _client.getList('/inventory/stock-counts');
+    return list.whereType<Map>().map(CountSheet.fromJson).toList();
   }
+
+  /// One sheet with its counted lines. 404 = processed or deleted meanwhile.
+  Future<({CountSheet sheet, List<CountSheetLine> lines})> stockCount(int id) async {
+    final j = await _client.getJson('/inventory/stock-counts/$id');
+    return (
+      sheet: CountSheet.fromJson(j),
+      lines: [for (final l in (j['lines'] is List ? j['lines'] as List : const [])) if (l is Map) CountSheetLine.fromJson(l)],
+    );
+  }
+
+  /// Save a sheet: id 0 creates it (on [date], in [warehouseId]), otherwise its lines become exactly [lines].
+  Future<CountSheet> saveStockCount({
+    required int id,
+    required int warehouseId,
+    required DateTime date,
+    String? notes,
+    required List<({int itemId, int countedQty, String notes})> lines,
+    String? idempotencyKey,
+  }) async {
+    final body = {
+      'warehouseId': warehouseId,
+      'date': '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}',
+      'notes': notes,
+      'lines': [for (final l in lines) {'itemId': l.itemId, 'countedQty': l.countedQty, if (l.notes.isNotEmpty) 'notes': l.notes}],
+    };
+    final j = id == 0
+        ? await _client.postJson('/inventory/stock-count', idempotencyKey: idempotencyKey, body: body)
+        : await _client.putJson('/inventory/stock-counts/$id', body: body);
+    return CountSheet.fromJson(j);
+  }
+
+  Future<void> deleteStockCount(int id) => _client.deleteJson('/inventory/stock-counts/$id');
 
   static List<ProductImage> mapProductImages(dynamic raw) {
     if (raw is! List) return const [];
@@ -726,11 +845,11 @@ class LeoRepository {
     return KpiData.fromJson(j);
   }
 
-  Future<List<({int id, String code, String name})>> warehouses() async {
+  Future<List<WarehouseOpt>> warehouses() async {
     final list = await _client.getList('/warehouses');
     return list
         .whereType<Map>()
-        .map((m) => (id: _i(m, ['id']), code: _s(m, ['code']), name: _s(m, ['name'], 'Warehouse')))
+        .map((m) => (id: _i(m, ['id']), code: _s(m, ['code']), name: _s(m, ['name'], 'Warehouse'), branch: _s(m, ['branchName'])))
         .toList();
   }
 
