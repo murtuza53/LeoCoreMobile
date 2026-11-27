@@ -336,8 +336,12 @@ onResponse(res):
 | GET | `/inventory/stock-ledger` | `?itemId&warehouseId&page&pageSize` |
 | GET | `/inventory/low-stock` | `?threshold&warehouseId&page&pageSize` — `MobileStockAlerts` |
 | GET | `/inventory/dead-stock` | `?days&warehouseId&page&pageSize` — `MobileStockAlerts` |
-| GET | `/inventory/stock-count/sheet` | Count sheet. `?warehouseId&search&page&pageSize` — `search`: item search (§4); rows carry `supplierCode` |
-| POST | `/inventory/stock-count` | Submit a count — §10 |
+| GET | `/inventory/stock-count/sheet` | Items to count. `?warehouseId&search&page&pageSize&date&sheetId` — `search`: item search (§4); `systemQty` = stock at the end of `date` (default today), leaving out `sheetId`'s own movements; rows carry `supplierCode`, `uomCode` (base unit) and `units` — §10 |
+| GET | `/inventory/stock-counts` | Open count sheets (Draft / Unprocessed / Failed) — §10 |
+| GET | `/inventory/stock-counts/{id}` | One open sheet with its lines (one line per item **and** unit) — §10 |
+| POST | `/inventory/stock-count` | Create a count sheet (Draft or Unprocessed; never processed) — §10 |
+| PUT | `/inventory/stock-counts/{id}` | Edit an open sheet: date, warehouse, notes, status and the **full** line list — §10 |
+| DELETE | `/inventory/stock-counts/{id}` | Delete an open sheet — §10 |
 
 ### Barcode labels (§7)
 | Method | Path | Purpose |
@@ -399,6 +403,7 @@ onResponse(res):
       "category": "Sugar",                             // string | null
       "imageUrl": "/Files/Pictures/3f2c….jpg",         // primary picture, full size | null
       "thumbUrl": "/Files/Thumb/3f2c….jpg?s=256",      // 256 px thumbnail | null
+      "uom": "Ea",                                     // base unit that onHand is in | null
       "onHand": 134.000                                // stock, base unit, all warehouses (may be 0 or negative)
     }
   ]
@@ -732,10 +737,42 @@ Date params are `YYYY-MM-DD`; `from`/`to` default to the current month.
 }
 ```
 
-**POST `/inventory/stock-count`**  (Idempotency-Key required)
-```json
-{ "warehouseId": 1, "notes": null, "lines": [ { "itemId": 101, "countedQty": 48 } ] }
+**Stock count sheets.** A phone never processes a count: it saves a sheet as **Draft** (still counting) or
+**Unprocessed** (counting done); the web app processes it **as of the sheet date** (system quantity and cost of
+that day; the adjustment and journal are dated that day). Processed sheets disappear from the phone. `statusLabel`
+is the text to show. Expected quantities (`systemQty`) are always the stock at the end of the sheet date.
+
+**Units.** An item can be counted in any of its units (`units`: the base unit first with `factor` 1, then its
+conversions). Send one line per item **and** unit (e.g. 5 PKT and 4 PCS of the same item); the server stores the
+base quantity (`quantity × factor`) and totals the item in its base unit when the sheet is processed. A unit the
+item doesn't have is refused (`400`). A line without `uomId` is read as `countedQty` in the base unit (older apps).
+Differences are per item: compare the item's base total with `systemQty`.
+
+**POST `/inventory/stock-count`**  (Idempotency-Key required) — **PUT `/inventory/stock-counts/{id}`** takes the same
+body; lines not sent are removed, `status` not sent keeps the sheet's status.
+```jsonc
+{ "warehouseId": 1, "date": "2026-11-05", "status": "Draft", "notes": null,      // status: Draft | Unprocessed
+  "lines": [ { "itemId": 101, "uomId": 7,  "quantity": 5, "notes": null },        // 5 PKT (×12)
+             { "itemId": 101, "uomId": 3,  "quantity": 4 },                       // 4 PCS (base)
+             { "itemId": 102, "countedQty": 48 } ] }                              // older apps: base unit
 ```
+Reply: `{ id, number, status, statusLabel, date, lines, withDifference, message }` (`withDifference` counts items).
+
+**GET `/inventory/stock-count/sheet`** row and **GET `/inventory/stock-counts/{id}`** line
+```jsonc
+// sheet row
+{ "id": 101, "code": "101", "name": "Tissue", "barcode": "…", "supplierCode": null, "systemQty": 19,
+  "uomCode": "PCS", "units": [ { "id": 3, "code": "PCS", "factor": 1, "isBase": true },
+                               { "id": 7, "code": "PKT", "factor": 12, "isBase": false } ] }
+// sheet line (detail)
+{ "itemId": 101, "code": "101", "name": "Tissue", "systemQty": 19, "countedQty": 60,   // countedQty: base unit
+  "uomId": 7, "uomCode": "PKT", "factor": 12, "quantity": 5,                          // as counted
+  "baseUomCode": "PCS", "units": [ … ], "notes": null,
+  "countedBy": "ali", "countedAt": "2026-11-05T08:12:00Z" }
+```
+**GET `/inventory/stock-counts`**: `{ items: [ { id, number, date, warehouseId, warehouseName, branchId, branchName,
+notes, status, statusLabel, message, lines, createdBy, createdAt, updatedBy, updatedAt } ] }`.
+A sheet that is no longer open answers `404 NOT_FOUND` (GET) or `409 NOT_EDITABLE` (PUT / DELETE).
 
 **POST `/receipts`**  (Idempotency-Key required)
 ```json
@@ -797,7 +834,8 @@ Date params are `YYYY-MM-DD`; `from`/`to` default to the current month.
 
 | Version | Change | App action |
 |---|---|---|
-| **Next server update** (Nov 2026) | **Item search everywhere:** every word anywhere in name, item code, barcode or **supplier code** (`*` wildcard inside a word) for `/products` and `/inventory/stock-count/sheet`; `supplierCode` on product list/detail, count sheet and low / dead stock rows (§4) | Show item code, supplier code and barcode under item names; same match rule for offline/demo filtering |
+| **1.6.64** (Nov 2026) | **Stock count sheets & units:** list / open / edit / delete open sheets (`GET/PUT/DELETE /inventory/stock-counts[/{id}]`); POST creates a **Draft** or **Unprocessed** sheet for a `date` and never processes; expected `systemQty` as of the sheet date; lines per item **and** unit (`uomId` + `quantity`), `units` / `uomCode` / `baseUomCode` on sheet rows and lines; `uom` on the `/products` list (§6, §10) | Unit picker when an item has more than one unit; show the unit next to expected and stock; send one line per item and unit |
+| **1.6.64** (Nov 2026) | **Item search everywhere:** every word anywhere in name, item code, barcode or **supplier code** (`*` wildcard inside a word) for `/products` and `/inventory/stock-count/sheet`; `supplierCode` on product list/detail, count sheet and low / dead stock rows (§4) | Show item code, supplier code and barcode under item names; same match rule for offline/demo filtering |
 | **1.6.53** (Nov 2026) | **Limited roles & big lists:** app rules for roles with few pages (menu first, saved rights, no "show everything", `403` lists not re-requested, sales chart only with Reports; item search needs Products); customer / supplier `outstanding` reused for 60 s so paging and search are fast with thousands of parties (§2, §5) | Load the menu first and only permitted data; stop re-requesting refused lists; keep the full-access Home/More unchanged; chart only with Reports |
 | **1.6.53** (Nov 2026) | **Mobile permissions:** the role permission page has a **Mobile App** tab; `GET /menu` is **version 2** with `feature` + `rights` per page and a `permissions` map for every Mobile App feature; new menu pages `stock-alerts`, `finance-reports`, `quotations`; new feature **`MobileStockAlerts`** gates `/inventory/low-stock` and `/inventory/dead-stock` (carried over from Stock Ledger on upgrade) (§2) | Gate pages and buttons by feature rights; refresh the menu on resume |
 | **1.6.52** (Nov 2026) | **Sign-out fixes:** admins no longer refused on refresh (`MOBILE_ACCESS_DISABLED` every ~30 min); a refresh whose reply was lost is accepted again for 2 min; a refresh after a login elsewhere returns `SESSION_TERMINATED` naming the device; new token issued before the old is revoked; rate limits are per phone, and 429 uses the error envelope (`RATE_LIMITED`) (§1, §3) | Treat 429/5xx as retry, not sign-out |
