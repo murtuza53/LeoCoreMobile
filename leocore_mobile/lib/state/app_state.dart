@@ -282,9 +282,37 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   bool countDirty = false;
   bool countOnlyCounted = false;
 
-  /// Counted quantity per item on the open sheet (only items actually counted).
-  Map<int, int> counts = {};
+  /// Counted quantities on the open sheet (only items actually counted): item id → (unit id → quantity in that
+  /// unit). An item can be counted in several units (5 Bag + 4 Kg); unit id 0 = the base unit when the server sent no
+  /// units for the item. [counts] gives each item's total in its base unit.
+  Map<int, Map<int, int>> countUnits = {};
   final Map<int, String> _countNotes = {};
+
+  /// The unit the + / − / typed quantity of an item applies to (default: its base unit).
+  final Map<int, int> _countActiveUnit = {};
+
+  /// Each counted item's total in its BASE unit (quantity × the unit's factor, all its units added).
+  Map<int, double> get counts => {for (final id in countUnits.keys) id: _countBaseTotal(id)};
+
+  double _countBaseTotal(int id) {
+    final row = _countRows[id];
+    var t = 0.0;
+    (countUnits[id] ?? const {}).forEach((u, q) => t += q * (row?.unit(u).factor ?? 1));
+    return t;
+  }
+
+  /// A unit id as stored: 0 (base, units not known yet) becomes the base unit's real id once the row is known.
+  int _countUnitKey(int id, int unitId) => unitId == 0 ? (_countRows[id]?.baseUnitId ?? 0) : unitId;
+
+  /// Fold a count kept under "0" (base, before the item's units were known) into its base unit.
+  void _normCountUnits(int id) {
+    final m = countUnits[id];
+    final base = _countRows[id]?.baseUnitId ?? 0;
+    if (m == null || base == 0 || !m.containsKey(0)) return;
+    final q = m.remove(0)!;
+    m[base] = (m[base] ?? 0) + q;
+    if (_countActiveUnit[id] == 0) _countActiveUnit[id] = base;
+  }
 
   /// Who counted each saved line and when (from the server).
   final Map<int, ({String by, DateTime? at})> countMeta = {};
@@ -482,6 +510,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     for (final row in r.items) {
       // A line already on the sheet keeps the system quantity recorded when it was counted.
       _countRows.putIfAbsent(row.itemId, () => row);
+      _normCountUnits(row.itemId);
     }
     return r;
   }, onChanged: notifyListeners, idOf: (x) => x.itemId);
@@ -608,9 +637,31 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
 
   // ── stock count / cart (demo dataset) ──────────────────────────────
   int countExpected(int id) => _countRows[id]?.expected ?? 0;
-  int? countValue(int id) => counts[id];
-  int get countedLines => counts.length;
-  int get countVar => counts.entries.where((e) => e.value != countExpected(e.key)).length;
+
+  /// The item's counted total in its base unit; null = not counted.
+  double? countValue(int id) => countUnits.containsKey(id) ? _countBaseTotal(id) : null;
+
+  /// The base unit's code of an item ("Kg"), for "Expected 19 Kg".
+  String countUom(int id) => _countRows[id]?.uom ?? '';
+
+  /// The units an item can be counted in (base first); fewer than two = no choice to make.
+  List<CountUnit> countUnitsOf(int id) => _countRows[id]?.units ?? const [];
+
+  /// The unit + / − / typing applies to for [id].
+  int countActiveUnit(int id) => _countActiveUnit[id] ?? _countRows[id]?.baseUnitId ?? 0;
+  CountUnit countActiveUnitInfo(int id) =>
+      _countRows[id]?.unit(countActiveUnit(id)) ?? CountUnit(id: 0, code: countUom(id), isBase: true);
+
+  /// Quantity counted for [id] in unit [unitId] (null = none in that unit).
+  int? countIn(int id, int unitId) => countUnits[id]?[_countUnitKey(id, unitId)];
+
+  void setCountUnit(int id, int unitId) {
+    _countActiveUnit[id] = unitId;
+    notifyListeners();
+  }
+
+  int get countedLines => countUnits.length;
+  int get countVar => countUnits.keys.where((id) => (_countBaseTotal(id) - countExpected(id)).abs() > 0.0005).length;
   String get countWarehouseName {
     if (demoMode) return 'Main WH · Tubli';
     final s = countSheet;
@@ -624,7 +675,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   /// The counted lines of the open sheet (for the "Counted" view), item name order.
   List<CountSheetRow> get countedRows {
     final rows = [
-      for (final id in counts.keys)
+      for (final id in countUnits.keys)
         _countRows[id] ?? CountSheetRow(itemId: id, code: '', name: productById(id).name, barcode: '', expected: 0),
     ];
     rows.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
@@ -2125,7 +2176,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     final p = scanned;
     scanFound = false;
     if (p != null && countStarted) {
-      counts[p.id] = (counts[p.id] ?? 0) + 1;
+      _addCount(p.id, 1);   // in the unit being counted for that item (default: its base unit)
       countDirty = true;
       _countIdemKey = null;
       if (!_countRows.containsKey(p.id)) {
@@ -2202,6 +2253,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     countQuery = '';
     countOnlyCounted = false;
     _countIdemKey = null;
+    _countActiveUnit.clear();
     countList.reset();
   }
 
@@ -2228,7 +2280,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       notes: notes,
     );
     _resetCountLines();
-    counts = demoMode ? {1: 118, 3: 96, 5: 19, 6: 8} : {};
+    countUnits = demoMode ? {1: {0: 118}, 3: {0: 96}, 5: {0: 19}, 6: {0: 8}} : {};
     countDirty = demoMode;
     notifyListeners();
     countList.ensureLoaded();
@@ -2310,7 +2362,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       countDirty = true;
       if (dateChanged) {
         // Expected quantities are the stock of the count date: re-read them (counted lines refresh on Save).
-        _countRows.removeWhere((id, _) => !counts.containsKey(id));
+        _countRows.removeWhere((id, _) => !countUnits.containsKey(id));
         countList.refresh();
       }
       notifyListeners();
@@ -2329,11 +2381,20 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       _resetCountLines();
       countSheet = r.sheet;
       _countWarehouse = r.sheet.warehouseId;
-      counts = {for (final l in r.lines) l.row.itemId: l.counted};
+      countUnits = {};
       for (final l in r.lines) {
-        _countRows[l.row.itemId] = l.row;
-        if (l.notes.isNotEmpty) _countNotes[l.row.itemId] = l.notes;
-        countMeta[l.row.itemId] = (by: l.countedBy, at: l.countedAt);
+        final id = l.row.itemId;
+        _countRows[id] = l.row;
+        // a line per unit: 5 Bag and 4 Kg of one item are two lines
+        final unit = l.uomId == 0 ? l.row.baseUnitId : l.uomId;
+        final m = countUnits.putIfAbsent(id, () => {});
+        m[unit] = (m[unit] ?? 0) + l.quantity;
+        _countActiveUnit.putIfAbsent(id, () => unit);
+        if (l.notes.isNotEmpty) _countNotes[id] = l.notes;
+        final cur = countMeta[id];
+        if (cur == null || (l.countedAt != null && (cur.at == null || l.countedAt!.isAfter(cur.at!)))) {
+          countMeta[id] = (by: l.countedBy, at: l.countedAt);
+        }
       }
       countDirty = false;
       countOnlyCounted = r.lines.isNotEmpty;
@@ -2359,29 +2420,42 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     countList.setSearch(v);
   }
 
+  /// +[by] in the item's active unit.
+  void _addCount(int id, int by) {
+    final u = _countUnitKey(id, countActiveUnit(id));
+    final m = countUnits.putIfAbsent(id, () => {});
+    final v = (m[u] ?? 0) + by;
+    m[u] = v < 0 ? 0 : v;
+  }
+
   void incCount(int id) {
-    counts[id] = (counts[id] ?? 0) + 1;
+    _addCount(id, 1);
     countDirty = true;
     _countIdemKey = null;
     notifyListeners();
   }
 
   void decCount(int id) {
-    final v = counts[id];
-    if (v == null) return;
-    counts[id] = v > 0 ? v - 1 : 0;
+    final u = _countUnitKey(id, countActiveUnit(id));
+    if (countUnits[id]?[u] == null) return;
+    _addCount(id, -1);
     countDirty = true;
     _countIdemKey = null;
     notifyListeners();
   }
 
-  /// Typed quantity; null takes the item off the sheet.
+  /// Typed quantity in the item's active unit; null takes that unit's count off the sheet (the item goes when it has
+  /// no unit left).
   void setCount(int id, int? qty) {
+    final u = _countUnitKey(id, countActiveUnit(id));
     if (qty == null) {
-      counts.remove(id);
-      _countNotes.remove(id);
+      countUnits[id]?.remove(u);
+      if (countUnits[id]?.isEmpty ?? false) {
+        countUnits.remove(id);
+        _countNotes.remove(id);
+      }
     } else {
-      counts[id] = qty < 0 ? 0 : qty;
+      countUnits.putIfAbsent(id, () => {})[u] = qty < 0 ? 0 : qty;
     }
     countDirty = true;
     _countIdemKey = null;
@@ -2395,7 +2469,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> saveCountSheet({String? status}) async {
     final sheet = countSheet;
     if (sheet == null || submittingCount) return;
-    if (sheet.id == 0 && counts.isEmpty) {
+    if (sheet.id == 0 && countUnits.isEmpty) {
       showToast(t('Count at least one item first'));
       return;
     }
@@ -2408,6 +2482,9 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     }
     submittingCount = true;
     notifyListeners();
+    for (final id in countUnits.keys) {
+      _normCountUnits(id);   // one entry for the base unit, never "0" and the base id side by side
+    }
     // Same key on retry, so a timeout can't create the sheet twice.
     if (sheet.id == 0) _countIdemKey ??= _newIdemKey();
     try {
@@ -2417,7 +2494,13 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
         date: sheet.date,
         notes: sheet.notes.isEmpty ? null : sheet.notes,
         status: status,
-        lines: [for (final e in counts.entries) (itemId: e.key, countedQty: e.value, notes: _countNotes[e.key] ?? '')],
+        // a line per item and unit (the server totals them in the base unit when the web processes the sheet)
+        lines: [
+          for (final id in countUnits.keys) ...[
+            for (final (i, u) in countUnits[id]!.entries.indexed)
+              (itemId: id, uomId: _countUnitKey(id, u.key), quantity: u.value, notes: i == 0 ? (_countNotes[id] ?? '') : ''),
+          ],
+        ],
         idempotencyKey: sheet.id == 0 ? _countIdemKey : null,
       );
       countSheet = sheet.copyWith(id: r.id, number: r.number, status: r.status, lines: r.lines);
@@ -2469,7 +2552,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       if (leave != true) return;
     }
     countSheet = null;
-    counts = {};
+    countUnits = {};
     countDirty = false;
     _resetCountLines();
     notifyListeners();
@@ -2507,7 +2590,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     }
     countDirty = false;
     countSheet = null;
-    counts = {};
+    countUnits = {};
     _resetCountLines();
     notifyListeners();
     loadCountSheets();

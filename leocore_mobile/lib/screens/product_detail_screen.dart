@@ -125,7 +125,8 @@ class ProductDetailScreen extends StatelessWidget {
                                     style: const TextStyle(
                                         fontSize: 13.5,
                                         fontWeight: FontWeight.w600)),
-                                Text('${p.wh[i].$2} ${context.tr('pcs')}',
+                                // in the item's own unit (base unit), e.g. "12 Kg"
+                                Text(p.stockUnit.isEmpty ? '${p.wh[i].$2} ${context.tr('pcs')}' : p.stockWithUnit(p.wh[i].$2),
                                     style: const TextStyle(
                                         fontSize: 13.5,
                                         fontWeight: FontWeight.w700)),

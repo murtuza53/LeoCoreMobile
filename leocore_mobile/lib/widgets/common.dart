@@ -194,8 +194,8 @@ class StockBadge extends StatelessWidget {
     final level = stockLevelOf(product.stock);
     final (label, bg, fg) = switch (level) {
       StockLevel.out => (context.tr('Out of stock'), lc.badbg, lc.bad),
-      StockLevel.low => ('${context.tr('Low')} · ${product.stock}', lc.warnbg, lc.warn),
-      StockLevel.inStock => ('${context.tr('In stock')} · ${product.stock}', lc.okbg, lc.ok),
+      StockLevel.low => ('${context.tr('Low')} · ${product.stockWithUnit(product.stock)}', lc.warnbg, lc.warn),
+      StockLevel.inStock => ('${context.tr('In stock')} · ${product.stockWithUnit(product.stock)}', lc.okbg, lc.ok),
     };
     return Pill(label, bg: bg, fg: fg, size: size);
   }

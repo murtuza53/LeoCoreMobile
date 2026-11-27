@@ -339,14 +339,16 @@ class CountSheet {
       );
 }
 
-/// A counted line of a [CountSheet]: who counted it and when (local time).
+/// A counted line of a [CountSheet]: the quantity in its unit ([uomId]; 0 = the base unit), who counted it and when
+/// (local time). One item can have a line per unit (5 Bag + 4 Kg).
 class CountSheetLine {
   final CountSheetRow row;
-  final int counted;
+  final int uomId;
+  final int quantity;
   final String notes;
   final String countedBy;
   final DateTime? countedAt;
-  const CountSheetLine({required this.row, required this.counted, this.notes = '', this.countedBy = '', this.countedAt});
+  const CountSheetLine({required this.row, required this.quantity, this.uomId = 0, this.notes = '', this.countedBy = '', this.countedAt});
 
   factory CountSheetLine.fromJson(Map m) => CountSheetLine(
         row: CountSheetRow(
@@ -356,15 +358,36 @@ class CountSheetLine {
           barcode: _s(m, ['barcode']),
           supplierCode: _s(m, ['supplierCode']),
           expected: _i(m, ['systemQty']),
+          uom: _s(m, ['baseUomCode', 'uomCode']),
+          units: CountUnit.listFrom(m['units']),
         ),
-        counted: _i(m, ['countedQty']),
+        uomId: _i(m, ['uomId']),
+        // older servers send only countedQty (base unit)
+        quantity: m['quantity'] != null ? _i(m, ['quantity']) : _i(m, ['countedQty']),
         notes: _s(m, ['notes']),
         countedBy: _s(m, ['countedBy']),
         countedAt: CountSheet._dt(m['countedAt']),
       );
 }
 
-/// A row of the stock-count sheet.
+/// A unit an item can be counted in: its base unit (factor 1) or a larger one (Bag of 15 Kg = factor 15).
+class CountUnit {
+  final int id;
+  final String code;
+  final double factor;
+  final bool isBase;
+  const CountUnit({required this.id, required this.code, this.factor = 1, this.isBase = false});
+
+  static List<CountUnit> listFrom(dynamic raw) => raw is List
+      ? [
+          for (final u in raw.whereType<Map>())
+            CountUnit(id: _i(u, ['id']), code: _s(u, ['code']), factor: _d(u, ['factor']) <= 0 ? 1 : _d(u, ['factor']), isBase: u['isBase'] == true)
+        ]
+      : const [];
+}
+
+/// A row of the stock-count sheet. [expected] and every total are in the base unit [uom]; [units] are the units it
+/// can be counted in (base first; empty from older servers = base only).
 class CountSheetRow {
   final int itemId;
   final String code;
@@ -372,6 +395,8 @@ class CountSheetRow {
   final String barcode;
   final String supplierCode;
   final int expected;
+  final String uom;
+  final List<CountUnit> units;
   const CountSheetRow({
     required this.itemId,
     required this.code,
@@ -379,7 +404,18 @@ class CountSheetRow {
     required this.barcode,
     required this.expected,
     this.supplierCode = '',
+    this.uom = '',
+    this.units = const [],
   });
+
+  /// The unit with [id] (0 or unknown = the base unit).
+  CountUnit unit(int id) =>
+      units.where((u) => u.id == id).firstOrNull ??
+      units.where((u) => u.isBase).firstOrNull ??
+      CountUnit(id: 0, code: uom, isBase: true);
+
+  /// The base unit's id (0 when the server sent no units).
+  int get baseUnitId => units.where((u) => u.isBase).firstOrNull?.id ?? 0;
 }
 
 class LeoRepository {
@@ -750,6 +786,8 @@ class LeoRepository {
                 barcode: _s(m, ['barcode']),
                 supplierCode: _s(m, ['supplierCode']),
                 expected: _i(m, ['systemQty', 'expected', 'onHand']),
+                uom: _s(m, ['uomCode', 'uom']),
+                units: CountUnit.listFrom(m['units']),
               ))
           .toList(),
       r.hasMore,
@@ -780,7 +818,7 @@ class LeoRepository {
     required DateTime date,
     String? notes,
     String? status,
-    required List<({int itemId, int countedQty, String notes})> lines,
+    required List<({int itemId, int uomId, int quantity, String notes})> lines,
     String? idempotencyKey,
   }) async {
     final body = {
@@ -788,7 +826,15 @@ class LeoRepository {
       'date': '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}',
       'notes': notes,
       if (status != null) 'status': status,
-      'lines': [for (final l in lines) {'itemId': l.itemId, 'countedQty': l.countedQty, if (l.notes.isNotEmpty) 'notes': l.notes}],
+      // One line per item AND unit: [quantity] is in that unit (uomId 0 = the base unit, sent as countedQty).
+      'lines': [
+        for (final l in lines)
+          {
+            'itemId': l.itemId,
+            if (l.uomId > 0) ...{'uomId': l.uomId, 'quantity': l.quantity} else 'countedQty': l.quantity,
+            if (l.notes.isNotEmpty) 'notes': l.notes,
+          }
+      ],
     };
     final j = id == 0
         ? await _client.postJson('/inventory/stock-count', idempotencyKey: idempotencyKey, body: body)

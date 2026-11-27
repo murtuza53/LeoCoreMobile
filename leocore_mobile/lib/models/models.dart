@@ -61,6 +61,13 @@ class Product {
     this.supplierCode = '',
   });
 
+  /// The unit stock is counted in (the item's base unit), for "12 Kg" next to a stock figure; empty when the
+  /// server didn't send one ([unit] then holds the placeholder 'Unit').
+  String get stockUnit => unit.isEmpty || unit == 'Unit' ? '' : unit;
+
+  /// "12 Kg" (or just "12" without a unit).
+  String stockWithUnit(int qty) => stockUnit.isEmpty ? '$qty' : '$qty $stockUnit';
+
   Product copyWith({int? stock, List<(String, int)>? wh, List<ProductImage>? images}) => Product(
         id: id,
         code: code,

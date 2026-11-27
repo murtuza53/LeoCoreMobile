@@ -146,7 +146,7 @@ class ProductRow extends StatelessWidget {
                 const SizedBox(height: 3),
                 ItemCodes(code: product.code, supplierCode: product.supplierCode, barcode: product.barcode, size: 12),
                 const SizedBox(height: 6),
-                _ListStock(product.stock),
+                _ListStock(product.stock, unit: product.stockUnit),
               ],
             ),
           ),
@@ -197,7 +197,8 @@ class _ProductThumb extends StatelessWidget {
 /// positive, and a muted dash when the list endpoint doesn't report stock.
 class _ListStock extends StatelessWidget {
   final int stock;
-  const _ListStock(this.stock);
+  final String unit;   // the item's base unit, e.g. "Kg" ("" = not sent)
+  const _ListStock(this.stock, {this.unit = ''});
   @override
   Widget build(BuildContext context) {
     final lc = context.lc;
@@ -213,7 +214,7 @@ class _ListStock extends StatelessWidget {
     final out = stock <= 0;
     final fg = out ? lc.bad : lc.ok;
     final bg = out ? lc.badbg : lc.okbg;
-    final label = out ? context.tr('Out of stock') : '$stock ${context.tr('in stock')}';
+    final label = out ? context.tr('Out of stock') : '$stock${unit.isEmpty ? '' : ' $unit'} ${context.tr('in stock')}';
     return Pill(label, bg: bg, fg: fg, size: 11);
   }
 }

@@ -8,6 +8,12 @@ import '../api/repositories.dart';
 import '../widgets/common.dart';
 import '../widgets/paged_list_view.dart';
 
+/// A quantity without needless decimals: 49 → "49", 29.734 → "29.734", 14.9 → "14.9".
+String fmtQty(num v) {
+  if (v == v.roundToDouble()) return v.round().toString();
+  return v.toStringAsFixed(3).replaceFirst(RegExp(r'0+$'), '').replaceFirst(RegExp(r'\.$'), '');
+}
+
 /// Stock count: the list of UNPROCESSED count sheets on the server, and the open sheet. Sheets are saved to the ERP
 /// unprocessed; the web app processes them (adjusts stock). Processed sheets are not shown here.
 class CountScreen extends StatelessWidget {
@@ -325,10 +331,17 @@ class _CountRow extends StatelessWidget {
     final app = context.watch<AppState>();
     final lc = context.lc;
     final exp = app.countExpected(r.itemId);
-    final cnt = app.countValue(r.itemId);
-    final v = cnt == null ? 0 : cnt - exp;
-    final ok = v == 0;
+    final uom = app.countUom(r.itemId);
+    final cnt = app.countValue(r.itemId);   // total in the base unit, all units added
+    final v = cnt == null ? 0.0 : cnt - exp;
+    final ok = v.abs() < 0.0005;
     final meta = app.countMeta[r.itemId];
+    // + / − / typing count in the ACTIVE unit; an item with several units shows a chip per unit
+    final units = app.countUnitsOf(r.itemId);
+    final active = app.countActiveUnitInfo(r.itemId);
+    final inActive = app.countIn(r.itemId, active.id);
+    final countedUnits = [for (final u in units) if (app.countIn(r.itemId, u.id) != null) u];
+    final showTotal = cnt != null && (countedUnits.length > 1 || (countedUnits.length == 1 && !countedUnits.first.isBase));
     return LcCard(
       padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
       child: Column(
@@ -345,7 +358,7 @@ class _CountRow extends StatelessWidget {
                   ],
                 ),
               ),
-              if (cnt != null) Pill('Δ ${v > 0 ? '+' : ''}$v', bg: ok ? lc.okbg : lc.badbg, fg: ok ? lc.ok : lc.bad, size: 11),
+              if (cnt != null) Pill('Δ ${v > 0 ? '+' : ''}${fmtQty(v)}${uom.isEmpty ? '' : ' $uom'}', bg: ok ? lc.okbg : lc.badbg, fg: ok ? lc.ok : lc.bad, size: 11),
             ],
           ),
           const SizedBox(height: 10),
@@ -356,14 +369,14 @@ class _CountRow extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(context.tr('Expected'), style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: lc.mut)),
-                    Text('$exp', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                    Text(uom.isEmpty ? '$exp' : '$exp $uom', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                   ],
                 ),
               ),
               _StepBtn('−', border: lc.line, fg: lc.mut, onTap: () => app.decCount(r.itemId)),
               const SizedBox(width: 10),
               GestureDetector(
-                onTap: () => _typeQty(context, app, exp),
+                onTap: () => _typeQty(context, app, exp, uom, active),
                 child: Container(
                   width: 64,
                   height: 44,
@@ -371,15 +384,53 @@ class _CountRow extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: lc.soft,
                     borderRadius: BorderRadius.circular(11),
-                    border: Border.all(color: cnt == null ? lc.line : lc.prim),
+                    border: Border.all(color: inActive == null ? lc.line : lc.prim),
                   ),
-                  child: Text(cnt == null ? '—' : '$cnt', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: cnt == null ? lc.mut : null)),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(inActive == null ? '—' : '$inActive',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, height: 1.1, color: inActive == null ? lc.mut : null)),
+                      if (active.code.isNotEmpty)
+                        Text(active.code, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 9.5, height: 1.1, color: lc.mut)),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(width: 10),
               _StepBtn('+', border: lc.prim, fg: lc.tprim, onTap: () => app.incCount(r.itemId)),
             ],
           ),
+          if (units.length > 1) ...[
+            const SizedBox(height: 8),
+            // Count in: one chip per unit (with what is counted in it); the chosen one is what + / − / typing change
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final u in units)
+                  ChoiceChip(
+                    visualDensity: VisualDensity.compact,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    selected: u.id == active.id,
+                    onSelected: (_) => app.setCountUnit(r.itemId, u.id),
+                    label: Text(
+                      '${u.code}${u.isBase ? '' : ' ×${fmtQty(u.factor)}'}'
+                      '${app.countIn(r.itemId, u.id) != null ? ' · ${app.countIn(r.itemId, u.id)}' : ''}',
+                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+          if (showTotal)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                '${context.tr('Total')}: ${[for (final u in countedUnits) '${app.countIn(r.itemId, u.id)} ${u.code}'].join(' + ')} = ${fmtQty(cnt)}${uom.isEmpty ? '' : ' $uom'}',
+                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: lc.ink),
+              ),
+            ),
           if (cnt != null && meta != null && meta.by.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 6),
@@ -393,9 +444,9 @@ class _CountRow extends StatelessWidget {
     );
   }
 
-  /// Type the counted quantity; "Not counted" takes the item off the sheet.
-  Future<void> _typeQty(BuildContext context, AppState app, int exp) async {
-    final cur = app.countValue(r.itemId);
+  /// Type the counted quantity in the active [unit]; "Not counted" takes that unit's count off the sheet.
+  Future<void> _typeQty(BuildContext context, AppState app, int exp, String uom, CountUnit unit) async {
+    final cur = app.countIn(r.itemId, unit.id);
     final c = TextEditingController(text: cur?.toString() ?? '');
     final res = await showDialog<({int? qty})>(
       context: context,
@@ -405,7 +456,10 @@ class _CountRow extends StatelessWidget {
           controller: c,
           autofocus: true,
           keyboardType: TextInputType.number,
-          decoration: InputDecoration(labelText: context.tr('Counted quantity'), helperText: '${context.tr('Expected')}: $exp'),
+          decoration: InputDecoration(
+            labelText: unit.code.isEmpty ? context.tr('Counted quantity') : '${context.tr('Counted quantity')} (${unit.code})',
+            helperText: '${context.tr('Expected')}: $exp${uom.isEmpty ? '' : ' $uom'}',
+          ),
           onSubmitted: (v) => Navigator.pop(dctx, (qty: int.tryParse(v.trim()))),
         ),
         actions: [
