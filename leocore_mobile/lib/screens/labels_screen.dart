@@ -81,7 +81,7 @@ class _LabelsScreenState extends State<LabelsScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: SearchField(
-                hint: context.tr('Search name, code or barcode'),
+                hint: context.tr('Search name, code, barcode or supplier code'),
                 controller: _search,
                 onChanged: app.setLabelQuery,
               ),

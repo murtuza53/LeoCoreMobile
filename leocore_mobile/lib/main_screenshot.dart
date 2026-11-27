@@ -2,7 +2,7 @@
 // without signing in to a server. NOT used by release builds (which build
 // lib/main.dart). Run:
 //   flutter run -t lib/main_screenshot.dart --dart-define=SHOT=count
-// SHOT: count | count_search | products | products_search;  QUERY: the search text
+// SHOT: count | count_search | products | products_search | product;  QUERY: the search text
 import 'package:flutter/material.dart';
 
 import 'main.dart';
@@ -20,6 +20,9 @@ void main() {
         case 'products_search':
           s.nav(Screen.products);
           if (shot == 'products_search') s.setQuery(query);
+        case 'product':
+          s.nav(Screen.products);
+          s.openProduct(2);
         default:
           s.startCount();
           s.nav(Screen.count);

@@ -1,0 +1,8 @@
+• Stock count sheets: save as Draft or Ready to process; open, edit or delete later
+• Count date and branch / warehouse on each sheet
+• Count in any unit (e.g. 2 Bag + 4 Kg), totalled in the stock unit
+• See who counted each line and when
+• Search by supplier code, item code, barcode or part of the name
+• Item code, supplier code and barcode under every item name
+• Stock shown with its unit
+• Scanner Back returns to the screen you came from

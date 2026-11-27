@@ -59,7 +59,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
               const SizedBox(height: 12),
               Row(
                 children: [
-                  Expanded(child: SearchField(hint: context.tr('Search name, code, barcode, brand or category'), controller: _search, onChanged: app.setQuery)),
+                  Expanded(child: SearchField(hint: context.tr('Search name, code, barcode, supplier code, brand or category'), controller: _search, onChanged: app.setQuery)),
                   const SizedBox(width: 10),
                   GestureDetector(
                     onTap: app.openFilter,

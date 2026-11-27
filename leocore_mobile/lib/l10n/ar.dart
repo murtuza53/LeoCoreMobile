@@ -51,7 +51,7 @@ const Map<String, String> kArabic = {
   'No sales in the last 7 days': 'لا مبيعات خلال آخر 7 أيام',
 
   // ── Products & product detail ──────────────────────────────────────
-  'Search name, code or barcode': 'ابحث بالاسم أو الرمز أو الباركود',
+  'Search name, code, barcode or supplier code': 'ابحث بالاسم أو الرمز أو الباركود أو رمز المورد',
   'No products found': 'لا توجد منتجات',
   'Try a different name or barcode, or clear the category filter.': 'جرّب اسماً أو باركود مختلفاً، أو امسح مرشّح الفئة.',
   'Clear': 'مسح',
@@ -135,7 +135,7 @@ const Map<String, String> kArabic = {
   'Update could not be started': 'تعذّر بدء التحديث',
   'Hide zero balances': 'إخفاء الأرصدة الصفرية',
   'Sort by balance': 'ترتيب حسب الرصيد',
-  'Search name, code, barcode, brand or category': 'ابحث بالاسم أو الرمز أو الباركود أو العلامة أو الفئة',
+  'Search name, code, barcode, supplier code, brand or category': 'ابحث بالاسم أو الرمز أو الباركود أو رمز المورد أو العلامة أو الفئة',
   'Search name, phone, VAT number or ID': 'ابحث بالاسم أو الهاتف أو الرقم الضريبي أو المعرّف',
   'No matching suppliers': 'لا يوجد موردون مطابقون',
   'Search number, customer or reference': 'ابحث بالرقم أو العميل أو المرجع',

@@ -298,7 +298,7 @@ class _CountListState extends State<_CountList> {
         if (!app.countOnlyCounted)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: SearchField(hint: context.tr('Search name, code or barcode'), controller: _search, onChanged: app.setCountQuery),
+            child: SearchField(hint: context.tr('Search name, code, barcode or supplier code'), controller: _search, onChanged: app.setCountQuery),
           ),
         Expanded(
           child: app.countOnlyCounted

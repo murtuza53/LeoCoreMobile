@@ -493,6 +493,11 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
                 barcode: MockData.byId(e.key).barcode,
                 supplierCode: MockData.byId(e.key).supplierCode,
                 expected: e.value,
+                uom: MockData.byId(e.key).unit,
+                // demo: the sugar can also be counted in cartons of 10
+                units: e.key == 2
+                    ? const [CountUnit(id: 21, code: 'Bag', isBase: true), CountUnit(id: 22, code: 'Ctn10', factor: 10)]
+                    : const [],
               ),
         ],
         false,
