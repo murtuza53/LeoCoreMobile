@@ -1,0 +1,3 @@
+• Stock count: remove any counted item from the Counted tab (bin button)
+• New count sheet: branch and warehouse shown on two lines, so long names are no longer cut off
+• Stock count sheets in Draft / Ready to process, counting in any unit, and supplier-code search (from 2.13.2)
