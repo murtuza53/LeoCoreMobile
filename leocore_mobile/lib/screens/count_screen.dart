@@ -308,7 +308,7 @@ class _CountListState extends State<_CountList> {
                       padding: const EdgeInsets.fromLTRB(16, 2, 16, 130),
                       itemCount: counted.length,
                       separatorBuilder: (_, __) => const SizedBox(height: 8),
-                      itemBuilder: (_, i) => _CountRow(counted[i]),
+                      itemBuilder: (_, i) => _CountRow(counted[i], removable: true),
                     ))
               : PagedListView<CountSheetRow>(
                   list: list,
@@ -324,7 +324,9 @@ class _CountListState extends State<_CountList> {
 
 class _CountRow extends StatelessWidget {
   final CountSheetRow r;
-  const _CountRow(this.r);
+  /// Counted tab: a delete button takes the item off the sheet.
+  final bool removable;
+  const _CountRow(this.r, {this.removable = false});
 
   @override
   Widget build(BuildContext context) {
@@ -359,6 +361,15 @@ class _CountRow extends StatelessWidget {
                 ),
               ),
               if (cnt != null) Pill('Δ ${v > 0 ? '+' : ''}${fmtQty(v)}${uom.isEmpty ? '' : ' $uom'}', bg: ok ? lc.okbg : lc.badbg, fg: ok ? lc.ok : lc.bad, size: 11),
+              if (removable && cnt != null)
+                IconButton(
+                  tooltip: context.tr('Remove'),
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                  icon: Icon(Icons.delete_outline, size: 22, color: lc.bad),
+                  onPressed: () => _confirmRemove(context, app),
+                ),
             ],
           ),
           const SizedBox(height: 10),
@@ -442,6 +453,21 @@ class _CountRow extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _confirmRemove(BuildContext context, AppState app) async {
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (d) => AlertDialog(
+        title: Text(context.tr('Remove this item from the sheet?'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+        content: Text(r.name),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(d, false), child: Text(context.tr('Cancel'))),
+          TextButton(onPressed: () => Navigator.pop(d, true), child: Text(context.tr('Remove'), style: TextStyle(color: context.lc.bad, fontWeight: FontWeight.w700))),
+        ],
+      ),
+    );
+    if (yes == true) app.removeCounted(r.itemId);
   }
 
   /// Type the counted quantity in the active [unit]; "Not counted" takes that unit's count off the sheet.

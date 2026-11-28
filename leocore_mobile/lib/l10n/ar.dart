@@ -576,6 +576,7 @@ const Map<String, String> kArabic = {
   'Date & notes': 'التاريخ والملاحظات',
   'Delete sheet': 'حذف الورقة',
   'All items': 'كل الأصناف',
+  'Remove this item from the sheet?': 'حذف هذا الصنف من ورقة الجرد؟',
   'Nothing counted on this sheet yet': 'لم يتم جرد أي صنف في هذه الورقة بعد',
   'Counted by': 'جرده',
   'Could not load the count sheets': 'تعذر تحميل أوراق الجرد',

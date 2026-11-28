@@ -2333,14 +2333,11 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
               else
                 DropdownButton<int>(
                   isExpanded: true,
+                  itemHeight: null, // two-line entries: branch, then warehouse
                   value: _warehouses.any((x) => x.id == w) ? w : null,
                   hint: Text(t('Select a warehouse')),
                   items: [
-                    for (final x in _warehouses)
-                      DropdownMenuItem(
-                        value: x.id,
-                        child: Text(x.branch.isEmpty ? x.name : '${x.branch} · ${x.name}', overflow: TextOverflow.ellipsis),
-                      ),
+                    for (final x in _warehouses) DropdownMenuItem(value: x.id, child: _WarehouseChoice(x)),
                   ],
                   onChanged: (v) => setS(() => w = v ?? w),
                 ),
@@ -2462,6 +2459,16 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     } else {
       countUnits.putIfAbsent(id, () => {})[u] = qty < 0 ? 0 : qty;
     }
+    countDirty = true;
+    _countIdemKey = null;
+    notifyListeners();
+  }
+
+  /// Take an item off the sheet altogether: every unit counted for it and its note. It is removed from the
+  /// server copy at the next Save.
+  void removeCounted(int id) {
+    if (countUnits.remove(id) == null) return;
+    _countNotes.remove(id);
     countDirty = true;
     _countIdemKey = null;
     notifyListeners();
@@ -3919,4 +3926,34 @@ class AppPage {
 
   /// Opens the page (the More action where there is one).
   void open() => (moreTap ?? homeTap!)();
+}
+
+/// A branch / warehouse choice on two lines, so long branch names are not cut off: the branch in bold, then
+/// the warehouse with its short code (when it has one that differs from its name).
+class _WarehouseChoice extends StatelessWidget {
+  final WarehouseOpt w;
+  const _WarehouseChoice(this.w);
+
+  @override
+  Widget build(BuildContext context) {
+    final code = w.code.trim();
+    final wh = code.isEmpty || code.toLowerCase() == w.name.trim().toLowerCase() ? w.name : '${w.name} ($code)';
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (w.branch.isNotEmpty)
+            Text(w.branch, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+          Text(wh,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: w.branch.isEmpty
+                  ? const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)
+                  : TextStyle(fontSize: 12.5, color: Theme.of(context).hintColor)),
+        ],
+      ),
+    );
+  }
 }
